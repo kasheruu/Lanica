@@ -45,12 +45,7 @@ const cloudinaryConfig = {
   uploadPreset: "ml_lanica",
 };
 
-// Meshy API Configuration
-// SECURITY WARNING: In frontend JS, putting your API Key exposes it to anyone.
-// Best practice is to use a backend server. Use this for testing/development.
-const meshyConfig = {
-  apiKey: "msy_MjNcfrt0xvjdoYRrI843GqmvI0yFDNe9dZfH", // e.g., msy_xxxxxxxxxxxxxxxxxxx
-};
+const MESHY_API_BASE = "/api/meshy-image-to-3d";
 
 let currentUser = null;
 
@@ -258,9 +253,7 @@ async function uploadImage(file, path) {
 async function waitForMeshyModelUrl(taskId, maxAttempts = 40, delayMs = 3000) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const statusRes = await fetch(`https://api.meshy.ai/v1/image-to-3d/${taskId}`, {
-        headers: { Authorization: `Bearer ${meshyConfig.apiKey}` },
-      });
+      const statusRes = await fetch(`${MESHY_API_BASE}/${encodeURIComponent(taskId)}`);
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         const status = String(statusData.status || "").toUpperCase();
@@ -279,6 +272,23 @@ async function waitForMeshyModelUrl(taskId, maxAttempts = 40, delayMs = 3000) {
     await new Promise((r) => setTimeout(r, delayMs));
   }
   return { status: "PENDING", modelUrl: null };
+}
+
+async function createMeshyTask(imageUrl) {
+  const response = await fetch(MESHY_API_BASE, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ image_url: imageUrl, enable_pbr: true }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to start Meshy API");
+  }
+
+  return response.json();
 }
 
 // Add / Update Product
@@ -329,9 +339,6 @@ productForm.addEventListener("submit", async (e) => {
 
     // Automatically trigger Meshy.ai API only when a NEW transparent background image was uploaded.
     if (shouldRegenerateMeshy) {
-      if (meshyConfig.apiKey === "YOUR_MESHY_API_KEY") {
-        throw new Error("Meshy API key is missing. Cannot regenerate 3D model.");
-      }
       if (!meshySourceImageUrl) {
         throw new Error("Transparent background image is required for Meshy generation.");
       }
@@ -339,20 +346,7 @@ productForm.addEventListener("submit", async (e) => {
         ? "Regenerating 3D Model..."
         : "Starting 3D Generation...";
       try {
-        // Send Cloudinary URL of the transparent image to Meshy image-to-3d endpoint
-        const payload = { image_url: meshySourceImageUrl, enable_pbr: true };
-
-        const meshyResponse = await fetch("https://api.meshy.ai/v1/image-to-3d", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${meshyConfig.apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (meshyResponse.ok) {
-          const meshyData = await meshyResponse.json();
+        const meshyData = await createMeshyTask(meshySourceImageUrl);
           meshyTaskId = meshyData.result; // Fresh Task ID returned by Meshy
           meshyStatus = "PENDING";
           console.log("Meshy 3D Generation started! Task ID:", meshyTaskId);
@@ -364,9 +358,7 @@ productForm.addEventListener("submit", async (e) => {
           while (isGenerating && pollAttempts < 10) {
             pollAttempts += 1;
             try {
-              const statusRes = await fetch(`https://api.meshy.ai/v1/image-to-3d/${meshyTaskId}`, {
-                headers: { Authorization: `Bearer ${meshyConfig.apiKey}` },
-              });
+              const statusRes = await fetch(`${MESHY_API_BASE}/${encodeURIComponent(meshyTaskId)}`);
 
               if (statusRes.ok) {
                 const statusData = await statusRes.json();
@@ -393,10 +385,6 @@ productForm.addEventListener("submit", async (e) => {
               isGenerating = false;
             }
           }
-        } else {
-          console.error("Meshy error:", await meshyResponse.text());
-          throw new Error("Failed to start Meshy API");
-        }
       } catch (err) {
         console.error("Failed to generate 3D model", err);
         alert("Failed to generate 3D model: " + err.message);
@@ -509,11 +497,9 @@ async function fetchLatestMeshyTaskId(productId) {
 }
 
 async function pollMeshyAndLoad(taskId, attempt = 0) {
-  const response = await fetch(`https://api.meshy.ai/v1/image-to-3d/${taskId}`, {
-    headers: { Authorization: `Bearer ${meshyConfig.apiKey}` },
-  });
+  const response = await fetch(`${MESHY_API_BASE}/${encodeURIComponent(taskId)}`);
 
-  if (!response.ok) throw new Error("Failed to fetch status. Check your API Key.");
+  if (!response.ok) throw new Error("Failed to fetch Meshy status.");
 
   const data = await response.json();
   const status = String(data.status || "").toUpperCase();
