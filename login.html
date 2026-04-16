@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lanica | Admin Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="login.css" />
+    <script type="module" src="login.js" defer></script>
+  </head>
+  <body class="login-body">
+    <div class="login-container">
+      <div class="login-card">
+        <h1 class="logo">Lanica.</h1>
+        <p class="login-subtitle">Admin / Staff Access</p>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label for="admin-email">Email Address</label>
+            <input type="email" id="admin-email" required placeholder="admin@lanica.com" />
+          </div>
+          <div class="form-group">
+            <label for="admin-pwd">Password</label>
+            <input type="password" id="admin-pwd" required placeholder="••••••••" />
+          </div>
+          <div id="login-error" class="error-msg"></div>
+          <button type="submit" class="btn-primary login-btn">Sign In</button>
+        </form>
+        <a href="index.html" class="back-link">Return to Home</a>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lanica | Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <script
+      type="module"
+      src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"
+    ></script>
+    <!-- Include Firebase Web SDK -->
+    <script type="module" src="admin.js" defer></script>
+    <link rel="stylesheet" href="admin.css" />
+    <link rel="stylesheet" href="style.css" />
+    <!-- Fallback for base resets -->
+  </head>
+
+  <body class="admin-body">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2 class="logo">Lanica. <span class="admin-badge">Admin</span></h2>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" id="nav-inventory" data-section="inventory">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          Inventory
+        </a>
+        <a href="#" class="nav-item" id="nav-orders" data-section="orders">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          Orders
+        </a>
+        <a href="#" class="nav-item" id="nav-users" data-section="users">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          Users
+        </a>
+        <a href="index.html" class="nav-item">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Back to Site
+        </a>
+        <a href="#" class="nav-item" id="logout-btn" style="margin-top: auto">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          Sign Out
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+      <div id="inventory-section" class="admin-section">
+        <header class="admin-header">
+          <h1>Inventory Management</h1>
+          <button id="add-product-btn" class="btn-primary">Add New Product</button>
+        </header>
+
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Products</h3>
+            <p class="stat-value" id="total-products">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Low Stock Items</h3>
+            <p class="stat-value" id="low-stock">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Total Value</h3>
+            <p class="stat-value" id="total-value">₱0</p>
+          </div>
+        </div>
+
+        <div class="analytics-grid">
+          <div class="analytics-card">
+            <h3>Inventory Health</h3>
+            <div class="analytics-kpis">
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Total Units</span>
+                <strong id="analytics-total-units">0</strong>
+              </div>
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Out of Stock</span>
+                <strong id="analytics-out-of-stock">0</strong>
+              </div>
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Avg Price</span>
+                <strong id="analytics-avg-price">₱0.00</strong>
+              </div>
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Avg Stock / Product</span>
+                <strong id="analytics-avg-stock">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="analytics-card">
+            <h3>Stock by Material</h3>
+            <div id="analytics-material-bars" class="analytics-bars"></div>
+          </div>
+
+          <div class="analytics-card analytics-card-wide">
+            <h3>Stock by Category</h3>
+            <div id="analytics-category-bars" class="analytics-bars"></div>
+          </div>
+
+          <div class="analytics-card analytics-card-wide">
+            <h3>Low Stock Watchlist</h3>
+            <div id="analytics-low-stock-list" class="analytics-watchlist"></div>
+          </div>
+        </div>
+
+      <div class="table-container">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 0 10px;
+          "
+        >
+          <h3 style="margin: 0; font-size: 1.1rem; color: #1f2937">Product List</h3>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <label for="category-filter" style="font-size: 0.9rem; font-weight: 500; color: #4b5563"
+              >Filter Category:</label
+            >
+            <select
+              id="category-filter"
+              style="
+                padding: 8px 12px;
+                border-radius: 8px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                background: white;
+                font-family: inherit;
+                font-size: 0.9rem;
+                outline: none;
+                cursor: pointer;
+                min-width: 150px;
+              "
+            >
+              <option value="All">All Categories</option>
+              <option value="Sofa">Sofa</option>
+              <option value="Chair">Chair</option>
+              <option value="Table">Table</option>
+              <option value="Lighting">Lighting</option>
+              <option value="Decor">Decor</option>
+            </select>
+          </div>
+        </div>
+        <table class="inventory-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Material</th>
+              <th>Stock</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-list">
+            <!-- Products will be dynamically loaded here from Firebase -->
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 20px">Loading inventory...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
+
+      <!-- Inventory Form Modal (Hidden by default) -->
+      <div id="product-modal" class="modal-overlay">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 id="modal-title">Add New Product</h2>
+            <button id="close-modal" class="btn-close">&times;</button>
+          </div>
+          <form id="product-form">
+            <input type="hidden" id="product-id" />
+            <div class="form-group">
+              <label for="product-name">Product Name</label>
+              <input type="text" id="product-name" required placeholder="e.g. Aura Cloud Sofa" />
+            </div>
+            <div class="form-group">
+              <label for="product-description">Description</label>
+              <textarea
+                id="product-description"
+                rows="3"
+                placeholder="Enter product description here"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 6px;
+                  border: 1px solid rgba(0, 0, 0, 0.1);
+                  font-family: inherit;
+                  font-size: 0.85rem;
+                  resize: none;
+                  overflow: hidden;
+                  background: #fff;
+                "
+              ></textarea>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="product-category">Category</label>
+                <select id="product-category" required>
+                  <option value="Sofa">Sofa</option>
+                  <option value="Bed">Bed</option>
+                  <option value="Living Room">Living Room</option>
+                  <option value="Bedroom">Bedroom</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="product-price">Price (₱)</label>
+                <input type="number" id="product-price" required min="0" step="0.01" />
+              </div>
+              <div class="form-group">
+                <label for="product-stock">Stock</label>
+                <input type="number" id="product-stock" required min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label for="product-material">Material</label>
+                <select id="product-material" required>
+                  <option value="Fabric">Fabric</option>
+                  <option value="Leather">Leather</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="product-size">Size / Dimensions</label>
+                <input type="text" id="product-size" required placeholder="e.g. 72 x 36 x 30 in" />
+              </div>
+              <div class="form-group">
+                <label for="product-color">Hex Color</label>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <input
+                    type="color"
+                    id="product-color-picker"
+                    value="#ffffff"
+                    style="
+                      width: 44px;
+                      height: 44px;
+                      padding: 0;
+                      border: 1px solid rgba(0, 0, 0, 0.1);
+                      border-radius: 8px;
+                      cursor: pointer;
+                      background: none;
+                    "
+                  />
+                  <input
+                    type="text"
+                    id="product-color"
+                    required
+                    placeholder="e.g. #FFFFFF or White"
+                    style="flex: 1"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="img-iso">Thumbnail (White Background)</label>
+              <input type="file" id="img-iso" accept="image/*,video/*" required />
+            </div>
+            <div class="form-group">
+              <label for="img-bg">Meshy (Transparent Background)</label>
+              <input type="file" id="img-bg" accept="image/*,video/*" required />
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="cancel-btn" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Save Product</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 3D Viewer Modal -->
+      <div id="viewer-modal" class="modal-overlay">
+        <div
+          class="modal-content"
+          style="max-width: 800px; height: 80vh; display: flex; flex-direction: column"
+        >
+          <div class="modal-header">
+            <h2 id="viewer-title">3D Model Viewer</h2>
+            <button id="close-viewer-btn" class="btn-close">&times;</button>
+          </div>
+          <div
+            id="viewer-status"
+            class="viewer-status"
+          ></div>
+          <div id="viewer-loading" class="viewer-loading" aria-live="polite">
+            <div class="viewer-spinner" aria-hidden="true"></div>
+            <div id="viewer-loading-text" class="viewer-loading-text">Calibrating 3D object...</div>
+          </div>
+          <model-viewer
+            id="product-model-viewer"
+            style="
+              flex: 1;
+              width: 100%;
+              border-radius: 8px;
+              background-color: #f5f5f5;
+              display: block;
+            "
+            camera-controls
+            auto-rotate
+            shadow-intensity="1"
+            alt="Generated 3D Model"
+          >
+          </model-viewer>
+        </div>
+      </div>
+
+      <!-- Order Management -->
+      <div id="orders-section" class="admin-section is-hidden">
+        <header class="admin-header">
+          <h1>Order Management</h1>
+          <p class="admin-subtitle">
+            Admin workflow: review new orders, assign staff, and click <strong>Accept</strong>.
+            After acceptance, assigned staff will update shipping progress.
+          </p>
+        </header>
+
+        <div class="stats-grid orders-stats users-stats">
+          <div class="stat-card">
+            <h3>Pending</h3>
+            <p class="stat-value" id="orders-pending">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Accepted</h3>
+            <p class="stat-value" id="orders-processing">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Processing</h3>
+            <p class="stat-value" id="orders-shipped">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Shipped</h3>
+            <p class="stat-value" id="orders-delivered">0</p>
+          </div>
+        </div>
+
+        <div class="table-container orders-toolbar users-toolbar">
+          <div class="orders-toolbar-inner users-toolbar-inner">
+            <label for="orders-status-filter" class="orders-filter-label">Filter</label>
+            <select id="orders-status-filter" class="orders-filter-select">
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="processing">Processing</option>
+              <option value="shipped">Shipped</option>
+              <option value="declined">Declined</option>
+            </select>
+            <button id="toggle-batch-delete-mode-btn" class="btn-secondary" type="button">
+              Batch Delete Mode
+            </button>
+            <div id="batch-delete-controls" class="is-hidden" style="display:flex;align-items:center;gap:10px;">
+              <label class="orders-filter-label" style="display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" id="select-all-declined" />
+                Select all declined
+              </label>
+              <button id="batch-delete-declined-btn" class="btn-secondary" type="button" disabled>
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="inventory-table orders-table users-table">
+            <thead>
+              <tr>
+                <th id="orders-select-header" class="is-hidden">Select</th>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Assigned to</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="orders-list">
+              <tr>
+                <td colspan="8" style="text-align: center; padding: 20px">Loading orders…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-container" style="margin-top: 16px">
+          <div style="padding: 14px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.05)">
+            <h3 style="margin: 0; font-size: 1.05rem; color: #1f2937">Completed Transactions History</h3>
+            <p style="margin: 4px 0 0; font-size: 0.85rem; color: #6b7280">
+              Orders listed here are completed only after the customer clicks "Order Received" in the app.
+            </p>
+          </div>
+          <table class="inventory-table orders-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Staff Assigned</th>
+                <th>Completed At</th>
+              </tr>
+            </thead>
+            <tbody id="orders-history-list">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 20px">Loading completed history…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="users-section" class="admin-section is-hidden">
+        <header class="admin-header">
+          <h1>User Management</h1>
+          <p class="admin-subtitle">Manage account roles and account status from Firestore users data.</p>
+        </header>
+
+        <div class="stats-grid orders-stats">
+          <div class="stat-card">
+            <h3>Total Users</h3>
+            <p class="stat-value" id="users-total">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Admins</h3>
+            <p class="stat-value" id="users-admins">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Staff</h3>
+            <p class="stat-value" id="users-staff">0</p>
+          </div>
+          <div class="stat-card">
+            <h3>Inactive</h3>
+            <p class="stat-value" id="users-inactive">0</p>
+          </div>
+        </div>
+
+        <div class="table-container orders-toolbar">
+          <div class="orders-toolbar-inner">
+            <label for="users-role-filter" class="orders-filter-label">Filter</label>
+            <select id="users-role-filter" class="orders-filter-select">
+              <option value="all">All users</option>
+              <option value="admin">Admins</option>
+              <option value="staff">Staff</option>
+              <option value="customer">Customers</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="inventory-table orders-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>UID</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="users-list">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 20px">Loading users…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

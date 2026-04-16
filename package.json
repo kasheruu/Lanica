@@ -1,0 +1,27 @@
+{
+  "name": "lanica-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "express": "^5.2.1",
+    "jsdom": "^29.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "serve": "^14.2.6",
+    "wrangler": "^4.83.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "build:pages": "node scripts/prepare-pages.mjs",
+    "deploy:pages": "npm run build:pages && wrangler pages deploy public --project-name lanica-web",
+    "lint": "eslint . --ext .js,.mjs",
+    "format": "prettier --write .",
+    "check-format": "prettier --check ."
+  }
+}

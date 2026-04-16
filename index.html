@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lanica | Premium Furniture with AR</title>
+    <meta
+      name="description"
+      content="Discover premium, modern furniture at Lanica. Experience our products in your space before you buy with our cutting-edge AR application."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <header class="navbar">
+      <div class="logo">Lanica.</div>
+      <nav class="nav-links">
+        <a href="#collections">Collections</a>
+        <a href="#about">About us</a>
+        <a href="#ar-feature">AR Experience</a>
+      </nav>
+      <a href="#download" class="btn-download">
+        <span>Download App</span>
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M12 16L12 8"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M9 13L12 16L15 13"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M5 18H19"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </a>
+    </header>
+
+    <main>
+      <!-- Hero Section -->
+      <section class="hero slide-up">
+        <div class="hero-content">
+          <div class="badge">Next Generation Furniture</div>
+          <h1 class="hero-title">Visualize Reality.<br />Before Buying.</h1>
+          <p class="hero-subtitle">
+            Transform your space with our premium furniture collection using our cutting-edge
+            Augmented Reality app. See it in your room instantly.
+          </p>
+          <div class="hero-cta">
+            <a href="#download" class="btn-primary">Get The App Now</a>
+            <a href="#collections" class="btn-secondary">Explore Catalog</a>
+          </div>
+        </div>
+        <div class="hero-image-wrapper reveal">
+          <img
+            src="assets/hero_ar_furniture.png"
+            alt="AR Furniture Experience"
+            class="hero-image"
+          />
+          <div class="ar-scanning-line"></div>
+          <div class="glass-card ar-floating-tag">
+            <div class="dot active"></div>
+            <span>Scanning Room...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Feature Section -->
+      <section id="ar-feature" class="features section-padding">
+        <div class="section-heading slide-up">
+          <h2 class="section-title">Why Guess? <span class="highlight">Just See It.</span></h2>
+        </div>
+        <div class="features-grid">
+          <div class="feature-card reveal" style="--delay: 0.1s">
+            <div class="icon-box">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
+            <h3>True to Scale</h3>
+            <p>
+              Our AR technology renders furniture at 100% accurate scale in your physical
+              environment.
+            </p>
+          </div>
+          <div class="feature-card reveal" style="--delay: 0.2s">
+            <div class="icon-box highlight">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                <path d="M2 12h20"></path>
+              </svg>
+            </div>
+            <h3>Lifelike Textures</h3>
+            <p>
+              Experience realistic fabrics, metal finishes, and wood grains reflecting natural
+              light.
+            </p>
+          </div>
+          <div class="feature-card reveal" style="--delay: 0.3s">
+            <div class="icon-box">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <h3>Instant Save</h3>
+            <p>Save multiple layout configurations and compare them to make the perfect choice.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Catalog / Collections -->
+      <section id="collections" class="product-showcase section-padding">
+        <div class="section-heading text-center slide-up">
+          <h2 class="section-title">New Arrivals</h2>
+          <p class="section-desc">Select a piece to imagine it in your home.</p>
+        </div>
+
+        <div class="products-grid">
+          <!-- Product 1 -->
+          <div class="product-card reveal" style="--delay: 0.1s">
+            <div class="product-image-container">
+              <img src="assets/product_sofa.png" alt="Aura Cloud Sofa" class="product-img" />
+              <button class="btn-ar-view">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+                  ></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                View in Room
+              </button>
+            </div>
+            <div class="product-info">
+              <h3>Aura Cloud Sofa</h3>
+              <p class="price">₱1,299</p>
+            </div>
+          </div>
+
+          <!-- Product 2 -->
+          <div class="product-card reveal" style="--delay: 0.2s">
+            <div class="product-image-container">
+              <img src="assets/product_chair.png" alt="Nox Lounge Chair" class="product-img" />
+              <button class="btn-ar-view">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+                  ></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                View in Room
+              </button>
+            </div>
+            <div class="product-info">
+              <h3>Nox Lounge Chair</h3>
+              <p class="price">₱599</p>
+            </div>
+          </div>
+
+          <!-- Product 3 -->
+          <div class="product-card reveal" style="--delay: 0.3s">
+            <div class="product-image-container">
+              <img src="assets/product_lamp.png" alt="Eclipse Floor Lamp" class="product-img" />
+              <button class="btn-ar-view">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+                  ></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                View in Room
+              </button>
+            </div>
+            <div class="product-info">
+              <h3>Eclipse Floor Lamp</h3>
+              <p class="price">₱249</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA / Download Section -->
+      <section id="download" class="cta-section reveal">
+        <div class="cta-container">
+          <div class="cta-content">
+            <h2>Ready to redesign your space?</h2>
+            <p>
+              Download the Lanica app on iOS or Android and start testing our furniture in your
+              living room today.
+            </p>
+            <div class="store-buttons">
+              <button class="store-btn">App Store</button>
+              <button class="store-btn">Google Play</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-content">
+        <div class="footer-brand">
+          <h2>Lanica.</h2>
+          <p>Bringing modern design into your reality.</p>
+        </div>
+        <div class="footer-links">
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms of Service</a>
+          <a href="https://facebook.com" target="_blank" class="fb-contact">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path
+                d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07z"
+              />
+            </svg>
+            Contact Us
+          </a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lanica. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

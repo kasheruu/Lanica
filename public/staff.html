@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lanica | Staff Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="admin.css" />
+    <link rel="stylesheet" href="staff.css" />
+    <script type="module" src="staff.js" defer></script>
+  </head>
+  <body class="admin-body">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2 class="logo">Lanica. <span class="admin-badge">Staff</span></h2>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" id="nav-orders">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          Orders
+        </a>
+        <a href="#" class="nav-item" id="nav-my-account">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M20 21a8 8 0 0 0-16 0"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          My Account
+        </a>
+        <a href="#" class="nav-item" id="logout-btn" style="margin-top: auto">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          Sign Out
+        </a>
+      </nav>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-header">
+        <div>
+          <h1>Staff Order Updates</h1>
+          <p class="admin-subtitle">
+            Update only your assigned accepted orders:
+            <strong>Accepted → Processing → Shipped → Delivered</strong>.
+            Your assignment name comes from your profile.
+          </p>
+        </div>
+        <button id="staff-account-chip" class="staff-account-chip" type="button">
+          <img
+            id="staff-avatar"
+            class="staff-avatar"
+            src="https://ui-avatars.com/api/?name=Staff&background=111827&color=fff&size=128"
+            alt="Staff profile"
+          />
+          <span class="staff-account-meta">
+            <strong id="staff-account-name">My Account</strong>
+            <small>Profile</small>
+          </span>
+        </button>
+      </header>
+
+      <div id="staff-orders-section">
+      <div class="stats-grid orders-stats">
+        <div class="stat-card">
+          <h3>Accepted</h3>
+          <p class="stat-value" id="staff-accepted">0</p>
+        </div>
+        <div class="stat-card">
+          <h3>Processing</h3>
+          <p class="stat-value" id="staff-processing">0</p>
+        </div>
+        <div class="stat-card">
+          <h3>Shipped</h3>
+          <p class="stat-value" id="staff-shipped">0</p>
+        </div>
+        <div class="stat-card">
+          <h3>Delivered</h3>
+          <p class="stat-value" id="staff-delivered">0</p>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="inventory-table orders-table">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Update</th>
+            </tr>
+          </thead>
+          <tbody id="staff-orders-list">
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 20px">Loading assigned orders…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-container" style="margin-top: 16px">
+        <div style="padding: 14px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.05)">
+          <h3 style="margin: 0; font-size: 1.05rem; color: #1f2937">Completed Transactions History</h3>
+          <p style="margin: 4px 0 0; font-size: 0.85rem; color: #6b7280">
+            Completed only when customer clicks "Order Received" in the app.
+          </p>
+        </div>
+        <table class="inventory-table orders-table">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Staff Assigned</th>
+              <th>Completed At</th>
+            </tr>
+          </thead>
+          <tbody id="staff-history-list">
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 20px">Loading completed history…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
+
+      <div id="staff-account-section" class="is-hidden">
+        <div class="table-container staff-profile-wrapper">
+          <div class="staff-profile-card">
+            <h3 style="margin: 0 0 10px; font-size: 1.05rem; color: #1f2937">My Account</h3>
+            <form id="staff-profile-form" class="staff-profile-form">
+              <div style="display: grid; grid-template-columns: 1fr 180px; gap: 12px; align-items: end">
+                <div class="form-group" style="margin: 0">
+                  <label for="staff-display-name">Name</label>
+                  <input
+                    type="text"
+                    id="staff-display-name"
+                    placeholder="e.g. Carlo D."
+                    required
+                  />
+                </div>
+                <button type="submit" id="staff-save-profile" class="btn-primary">Save</button>
+              </div>
+              <div id="staff-profile-hint" style="margin-top: 8px; font-size: 0.85rem; color: #6b7280">
+                This name appears in admin assignment.
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

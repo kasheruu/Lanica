@@ -1,0 +1,71 @@
+.staff-status-select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: white;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.staff-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px 6px 6px;
+  cursor: pointer;
+}
+
+.staff-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e5e7eb;
+}
+
+.staff-account-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.staff-account-meta strong {
+  font-size: 0.88rem;
+  color: #111827;
+}
+
+.staff-account-meta small {
+  font-size: 0.74rem;
+  color: #6b7280;
+}
+
+.staff-profile-card {
+  padding: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.staff-profile-wrapper {
+  max-width: 760px;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.staff-profile-form input {
+  padding: 12px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-family: "Outfit", sans-serif;
+  font-size: 1rem;
+}
+
+.staff-profile-form input:focus {
+  outline: none;
+  border-color: var(--clr-yellow);
+}
