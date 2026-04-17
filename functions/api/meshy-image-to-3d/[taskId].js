@@ -10,7 +10,13 @@ function jsonResponse(body, status = 200) {
 
 export async function onRequestGet(context) {
   try {
-    const apiKey = String(context.env.MESHY_API_KEY || context.env.MESHY_KEY || "").trim();
+    const apiKey = String(
+      context.env.MESHY_API_KEY ||
+        context.env.MESHY_KEY ||
+        context.env.MESHY_APIKEY ||
+        context.env.MESHY_API ||
+        ""
+    ).trim();
     if (!apiKey) {
       return jsonResponse(
         { error: "Meshy API key is not configured. Set MESHY_API_KEY (or MESHY_KEY)." },

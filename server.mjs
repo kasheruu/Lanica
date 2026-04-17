@@ -16,7 +16,9 @@ function sendMeshyError(res, message, status = 500) {
 
 app.post("/api/meshy-image-to-3d", async (req, res) => {
   try {
-    const apiKey = String(process.env.MESHY_API_KEY || process.env.MESHY_KEY || "").trim();
+    const apiKey = String(
+      process.env.MESHY_API_KEY || process.env.MESHY_KEY || process.env.MESHY_APIKEY || process.env.MESHY_API || ""
+    ).trim();
     if (!apiKey) {
       sendMeshyError(res, "Meshy API key is not configured on the server. Set MESHY_API_KEY (or MESHY_KEY).", 500);
       return;
@@ -53,7 +55,9 @@ app.post("/api/meshy-image-to-3d", async (req, res) => {
 
 app.get("/api/meshy-image-to-3d/:taskId", async (req, res) => {
   try {
-    const apiKey = String(process.env.MESHY_API_KEY || process.env.MESHY_KEY || "").trim();
+    const apiKey = String(
+      process.env.MESHY_API_KEY || process.env.MESHY_KEY || process.env.MESHY_APIKEY || process.env.MESHY_API || ""
+    ).trim();
     if (!apiKey) {
       sendMeshyError(res, "Meshy API key is not configured on the server. Set MESHY_API_KEY (or MESHY_KEY).", 500);
       return;
