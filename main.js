@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 </div>
                                 <div class="product-info">
                                     <h3>${product.name}</h3>
-                                    <p class="price">$${parseFloat(product.price).toLocaleString()}</p>
+                                    <p class="price">₱${parseFloat(product.price).toLocaleString()}</p>
                                 </div>
                             </div>
                         `;
