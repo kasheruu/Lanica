@@ -14,6 +14,8 @@
       type="module"
       src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <!-- Include Firebase Web SDK -->
     <script type="module" src="admin.js" defer></script>
     <link rel="stylesheet" href="admin.css" />
@@ -43,6 +45,21 @@
             <rect x="3" y="14" width="7" height="7"></rect>
           </svg>
           Inventory
+        </a>
+        <a href="#" class="nav-item" id="nav-analytics" data-section="analytics">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          Analytics
         </a>
         <a href="#" class="nav-item" id="nav-orders" data-section="orders">
           <svg
@@ -115,61 +132,6 @@
           <button id="add-product-btn" class="btn-primary">Add New Product</button>
         </header>
 
-        <!-- Stats Overview -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <h3>Total Products</h3>
-            <p class="stat-value" id="total-products">0</p>
-          </div>
-          <div class="stat-card">
-            <h3>Low Stock Items</h3>
-            <p class="stat-value" id="low-stock">0</p>
-          </div>
-          <div class="stat-card">
-            <h3>Total Value</h3>
-            <p class="stat-value" id="total-value">₱0</p>
-          </div>
-        </div>
-
-        <div class="analytics-grid">
-          <div class="analytics-card">
-            <h3>Inventory Health</h3>
-            <div class="analytics-kpis">
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Total Units</span>
-                <strong id="analytics-total-units">0</strong>
-              </div>
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Out of Stock</span>
-                <strong id="analytics-out-of-stock">0</strong>
-              </div>
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Avg Price</span>
-                <strong id="analytics-avg-price">₱0.00</strong>
-              </div>
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Avg Stock / Product</span>
-                <strong id="analytics-avg-stock">0</strong>
-              </div>
-            </div>
-          </div>
-
-          <div class="analytics-card">
-            <h3>Stock by Material</h3>
-            <div id="analytics-material-bars" class="analytics-bars"></div>
-          </div>
-
-          <div class="analytics-card analytics-card-wide">
-            <h3>Stock by Category</h3>
-            <div id="analytics-category-bars" class="analytics-bars"></div>
-          </div>
-
-          <div class="analytics-card analytics-card-wide">
-            <h3>Low Stock Watchlist</h3>
-            <div id="analytics-low-stock-list" class="analytics-watchlist"></div>
-          </div>
-        </div>
-
       <div class="table-container">
         <div
           style="
@@ -230,6 +192,97 @@
       </div>
       </div>
 
+      <div id="analytics-section" class="admin-section is-hidden">
+        <header class="admin-header">
+          <h1>Business Analytics</h1>
+          <button id="export-analytics-pdf-btn" class="btn-primary" type="button">Export PDF</button>
+        </header>
+
+        <div id="analytics-export-area">
+          <div class="stats-grid stats-grid-modern">
+            <div class="stat-card">
+              <h3>Total Products</h3>
+              <p class="stat-value" id="total-products">0</p>
+            </div>
+            <div class="stat-card">
+              <h3>Low Stock Items</h3>
+              <p class="stat-value" id="low-stock">0</p>
+            </div>
+            <div class="stat-card">
+              <h3>Total Value</h3>
+              <p class="stat-value" id="total-value">₱0</p>
+            </div>
+          </div>
+
+          <div class="analytics-grid analytics-grid-modern">
+            <div class="analytics-card">
+              <h3>Inventory Health</h3>
+              <div class="analytics-kpis">
+                <div class="analytics-kpi">
+                  <span class="analytics-kpi-label">Total Units</span>
+                  <strong id="analytics-total-units">0</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span class="analytics-kpi-label">Out of Stock</span>
+                  <strong id="analytics-out-of-stock">0</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span class="analytics-kpi-label">Avg Price</span>
+                  <strong id="analytics-avg-price">₱0.00</strong>
+                </div>
+                <div class="analytics-kpi">
+                  <span class="analytics-kpi-label">Avg Stock / Product</span>
+                  <strong id="analytics-avg-stock">0</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="analytics-card">
+              <h3>Stock by Material</h3>
+              <div id="analytics-material-bars" class="analytics-bars"></div>
+            </div>
+
+            <div class="analytics-card analytics-card-wide">
+              <h3>Stock by Category</h3>
+              <div id="analytics-category-bars" class="analytics-bars"></div>
+            </div>
+
+            <div class="analytics-card analytics-card-wide">
+              <h3>Low Stock Watchlist</h3>
+              <div id="analytics-low-stock-list" class="analytics-watchlist"></div>
+            </div>
+          </div>
+
+          <div class="analytics-card revenue-analytics-card" style="margin-bottom: 16px">
+            <div class="orders-analytics-header">
+              <h3 style="margin: 0">Revenue vs Profit</h3>
+              <div class="orders-date-range">
+                <label for="orders-date-start">From</label>
+                <input type="date" id="orders-date-start" />
+                <label for="orders-date-end">To</label>
+                <input type="date" id="orders-date-end" />
+              </div>
+            </div>
+            <div id="orders-date-validation" class="orders-date-validation" aria-live="polite"></div>
+            <div class="orders-analytics-legend">
+              <span class="orders-legend-item"><i class="orders-legend-dot revenue"></i>Revenue</span>
+              <span class="orders-legend-item"><i class="orders-legend-dot profit"></i>Profit</span>
+            </div>
+            <div class="orders-analytics-kpis">
+              <div class="orders-analytics-kpi">
+                <span>Total Revenue</span>
+                <strong id="orders-total-revenue">₱0.00</strong>
+              </div>
+              <div class="orders-analytics-kpi">
+                <span>Total Profit</span>
+                <strong id="orders-total-profit">₱0.00</strong>
+              </div>
+            </div>
+            <div id="orders-revenue-graph" class="orders-revenue-graph"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Inventory Form Modal (Hidden by default) -->
       <div id="product-modal" class="modal-overlay">
         <div class="modal-content">
@@ -276,6 +329,10 @@
                 <label for="product-price">Price (₱)</label>
                 <input type="number" id="product-price" required min="0" step="0.01" />
               </div>
+            <div class="form-group">
+              <label for="product-cost">Cost (₱)</label>
+              <input type="number" id="product-cost" required min="0" step="0.01" />
+            </div>
               <div class="form-group">
                 <label for="product-stock">Stock</label>
                 <input type="number" id="product-stock" required min="0" value="0" />

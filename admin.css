@@ -566,6 +566,150 @@
   padding: 12px 16px;
 }
 
+.orders-analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.orders-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.orders-date-range label {
+  font-size: 0.8rem;
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.orders-date-range input[type="date"] {
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 0.84rem;
+}
+
+.orders-analytics-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.orders-analytics-kpi {
+  background: #f9fafb;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.orders-analytics-kpi span {
+  display: block;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.orders-analytics-kpi strong {
+  display: block;
+  font-size: 1rem;
+  color: #111827;
+  margin-top: 4px;
+}
+
+.orders-revenue-graph {
+  display: grid;
+  align-items: end;
+  gap: 6px;
+  padding-bottom: 4px;
+  min-height: 220px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 8px;
+}
+
+.orders-revenue-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.orders-revenue-label {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  line-height: 1;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.orders-revenue-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 160px;
+  width: 100%;
+}
+
+.orders-revenue-fill {
+  width: 38%;
+  max-width: 18px;
+  border-radius: 6px 6px 0 0;
+  min-height: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.orders-revenue-fill.revenue {
+  background: linear-gradient(90deg, #0284c7, #0ea5e9);
+}
+
+.orders-revenue-fill.profit {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+}
+
+.orders-revenue-values {
+  font-size: 0.62rem;
+  color: #6b7280;
+  line-height: 1.2;
+  text-align: center;
+  min-height: 26px;
+  display: none;
+}
+
+.orders-revenue-row:hover .orders-revenue-values {
+  display: block;
+}
+
+.orders-revenue-label.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.orders-revenue-label.has-data {
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.orders-date-validation {
+  font-size: 0.8rem;
+  color: #6b7280;
+  min-height: 18px;
+  margin-bottom: 8px;
+}
+
+.orders-date-validation.is-error {
+  color: #b91c1c;
+}
+
 .orders-toolbar-inner {
   display: flex;
   align-items: center;
@@ -800,5 +944,18 @@
 
   .users-table td:nth-child(5) {
     max-width: 120px;
+  }
+
+  .orders-revenue-row {
+    gap: 4px;
+  }
+
+  .orders-revenue-bars {
+    height: 130px;
+  }
+
+  .orders-revenue-fill {
+    width: 40%;
+    max-width: 12px;
   }
 }

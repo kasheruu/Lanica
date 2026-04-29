@@ -86,6 +86,14 @@ const analyticsAvgStockEl = document.getElementById("analytics-avg-stock");
 const analyticsMaterialBarsEl = document.getElementById("analytics-material-bars");
 const analyticsCategoryBarsEl = document.getElementById("analytics-category-bars");
 const analyticsLowStockListEl = document.getElementById("analytics-low-stock-list");
+const ordersDateStartEl = document.getElementById("orders-date-start");
+const ordersDateEndEl = document.getElementById("orders-date-end");
+const ordersRevenueGraphEl = document.getElementById("orders-revenue-graph");
+const ordersTotalRevenueEl = document.getElementById("orders-total-revenue");
+const ordersTotalProfitEl = document.getElementById("orders-total-profit");
+const ordersDateValidationEl = document.getElementById("orders-date-validation");
+const exportAnalyticsPdfBtn = document.getElementById("export-analytics-pdf-btn");
+const analyticsExportArea = document.getElementById("analytics-export-area");
 
 // Color picker logic
 const colorPicker = document.getElementById("product-color-picker");
@@ -221,6 +229,7 @@ function applyCategoryFilter() {
   }
 
   renderInventory(filteredProducts);
+  renderRevenueGraph();
 }
 
 // Helper function to upload an image/video to Cloudinary and return its URL
@@ -402,6 +411,7 @@ productForm.addEventListener("submit", async (e) => {
       description: document.getElementById("product-description").value,
       category: document.getElementById("product-category").value,
       price: parseFloat(document.getElementById("product-price").value),
+      cost: parseFloat(document.getElementById("product-cost").value),
       stock,
       material,
       size: document.getElementById("product-size").value,
@@ -588,6 +598,8 @@ window.editProduct = (id, productJsonBase64) => {
     document.getElementById("product-description").value = product.description || "";
     document.getElementById("product-category").value = product.category;
     document.getElementById("product-price").value = product.price;
+    document.getElementById("product-cost").value =
+      product.cost != null && product.cost !== "" ? product.cost : 0;
 
     document.getElementById("product-stock").value = product.stock || 0;
     document.getElementById("product-material").value = product.material || "Fabric";
@@ -789,9 +801,11 @@ const usersAdminsEl = document.getElementById("users-admins");
 const usersStaffEl = document.getElementById("users-staff");
 const usersInactiveEl = document.getElementById("users-inactive");
 const navInventory = document.getElementById("nav-inventory");
+const navAnalytics = document.getElementById("nav-analytics");
 const navOrders = document.getElementById("nav-orders");
 const navUsers = document.getElementById("nav-users");
 const inventorySection = document.getElementById("inventory-section");
+const analyticsSection = document.getElementById("analytics-section");
 const ordersSection = document.getElementById("orders-section");
 const usersSection = document.getElementById("users-section");
 
@@ -1053,6 +1067,233 @@ function orderTimestampMs(o) {
   return 0;
 }
 
+function orderEventDate(order) {
+  const t =
+    order.orderReceivedAt ||
+    order.receivedAt ||
+    order.completedAt ||
+    order.updatedAt ||
+    order.createdAt ||
+    null;
+  if (!t) return null;
+  if (typeof t.toDate === "function") return t.toDate();
+  if (t.seconds) return new Date(t.seconds * 1000);
+  return null;
+}
+
+function formatPeso(value) {
+  return `₱${Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function dateToInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function diffDaysInclusive(start, end) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const startOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const endOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+  return Math.floor((endOnly - startOnly) / msPerDay) + 1;
+}
+
+function setDateValidationMessage(msg, isError = true) {
+  if (!ordersDateValidationEl) return;
+  ordersDateValidationEl.textContent = msg || "";
+  ordersDateValidationEl.classList.toggle("is-error", !!msg && isError);
+}
+
+function validateDateRange() {
+  if (!ordersDateStartEl || !ordersDateEndEl) return { valid: false };
+  if (!ordersDateStartEl.value || !ordersDateEndEl.value) {
+    setDateValidationMessage("Please select both start and end dates.");
+    return { valid: false };
+  }
+
+  const start = new Date(`${ordersDateStartEl.value}T00:00:00`);
+  const endDay = new Date(`${ordersDateEndEl.value}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(endDay.getTime())) {
+    setDateValidationMessage("Invalid date selected.");
+    return { valid: false };
+  }
+
+  if (start > endDay) {
+    setDateValidationMessage("Start date must be earlier than or equal to end date.");
+    return { valid: false };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (endDay > today) {
+    setDateValidationMessage("End date cannot be in the future.");
+    return { valid: false };
+  }
+
+  const days = diffDaysInclusive(start, endDay);
+  if (days > 366) {
+    setDateValidationMessage("Please select a range of 366 days or less.");
+    return { valid: false };
+  }
+
+  setDateValidationMessage("");
+  const end = new Date(endDay);
+  end.setHours(23, 59, 59, 999);
+  return { valid: true, start, end, days };
+}
+
+function getOrderRevenue(order) {
+  const total = Number(order.total != null ? order.total : order.totalAmount);
+  if (!Number.isNaN(total) && Number.isFinite(total)) return total;
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  return items.reduce((sum, item) => {
+    const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+    const unitPrice = Number(item.price || item.unitPrice || 0);
+    return sum + (Number.isFinite(unitPrice) ? unitPrice : 0) * qty;
+  }, 0);
+}
+
+function getOrderCost(order) {
+  const productById = new Map(allProducts.map((p) => [p.id, p]));
+  const items = Array.isArray(order.items) ? order.items : [];
+  return items.reduce((sum, item) => {
+    const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+    const product = item.productId ? productById.get(item.productId) : null;
+    const unitCost = Number(item.cost ?? item.productCost ?? product?.cost ?? 0);
+    return sum + (Number.isFinite(unitCost) ? unitCost : 0) * qty;
+  }, 0);
+}
+
+function getRevenueBuckets(orders, startDate, endDate, granularity) {
+  const buckets = [];
+  const keyOf = (dt) => {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    if (granularity === "month") return `${y}-${m}`;
+    if (granularity === "week") {
+      const startOfWeek = new Date(dt);
+      startOfWeek.setHours(0, 0, 0, 0);
+      const day = startOfWeek.getDay();
+      startOfWeek.setDate(startOfWeek.getDate() - day);
+      const swy = startOfWeek.getFullYear();
+      const swm = String(startOfWeek.getMonth() + 1).padStart(2, "0");
+      const swd = String(startOfWeek.getDate()).padStart(2, "0");
+      return `${swy}-${swm}-${swd}`;
+    }
+    return `${y}-${m}-${d}`;
+  };
+  const labelOf = (dt) => {
+    if (granularity === "month") return dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    if (granularity === "week") {
+      const end = new Date(dt);
+      end.setDate(end.getDate() + 6);
+      return `${dt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    }
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+  const seen = new Set();
+  let guard = 0;
+  while (cursor <= end && guard < 800) {
+    const key = keyOf(cursor);
+    if (!seen.has(key)) {
+      seen.add(key);
+      buckets.push({ key, label: labelOf(cursor), revenue: 0, profit: 0 });
+    }
+    if (granularity === "month") cursor.setMonth(cursor.getMonth() + 1, 1);
+    else if (granularity === "week") cursor.setDate(cursor.getDate() + 7);
+    else cursor.setDate(cursor.getDate() + 1);
+    guard += 1;
+  }
+
+  const indexByKey = new Map(buckets.map((b, idx) => [b.key, idx]));
+  orders.forEach((order) => {
+    if (!isOrderCompleted(order)) return;
+    const dt = orderEventDate(order);
+    if (!dt) return;
+    const ms = dt.getTime();
+    if (ms < startDate.getTime() || ms > endDate.getTime()) return;
+    const key = keyOf(dt);
+    const idx = indexByKey.get(key);
+    if (idx == null) return;
+
+    const revenue = getOrderRevenue(order);
+    const cost = getOrderCost(order);
+    buckets[idx].revenue += revenue;
+    buckets[idx].profit += revenue - cost;
+  });
+
+  return buckets;
+}
+
+function renderRevenueGraph() {
+  if (!ordersRevenueGraphEl) return;
+  const range = validateDateRange();
+  if (!range.valid) {
+    ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty">Please correct the date range.</div>`;
+    ordersRevenueGraphEl.style.gridTemplateColumns = "1fr";
+    if (ordersTotalRevenueEl) ordersTotalRevenueEl.textContent = formatPeso(0);
+    if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(0);
+    return;
+  }
+
+  const granularity = range.days > 180 ? "month" : range.days > 45 ? "week" : "day";
+  const buckets = getRevenueBuckets(allOrders, range.start, range.end, granularity);
+  const maxValue = Math.max(
+    1,
+    ...buckets.map((b) => Math.max(Number(b.revenue) || 0, Number(b.profit) || 0))
+  );
+  const totalRevenue = buckets.reduce((sum, b) => sum + b.revenue, 0);
+  const totalProfit = buckets.reduce((sum, b) => sum + b.profit, 0);
+
+  if (ordersTotalRevenueEl) ordersTotalRevenueEl.textContent = formatPeso(totalRevenue);
+  if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(totalProfit);
+
+  if (!buckets.length) {
+    ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty">No revenue data yet.</div>`;
+    ordersRevenueGraphEl.style.gridTemplateColumns = "1fr";
+    return;
+  }
+  ordersRevenueGraphEl.style.gridTemplateColumns = `repeat(${buckets.length}, minmax(0, 1fr))`;
+  const labelInterval = buckets.length > 36 ? 6 : buckets.length > 20 ? 3 : buckets.length > 12 ? 2 : 1;
+
+  ordersRevenueGraphEl.innerHTML = buckets
+    .map((bucket, index) => {
+      const revPct = Math.max(0, Math.min(100, (bucket.revenue / maxValue) * 100));
+      const profitPct = Math.max(0, Math.min(100, (Math.max(bucket.profit, 0) / maxValue) * 100));
+      const hasData = bucket.revenue > 0 || bucket.profit > 0;
+      const showLabel = index % labelInterval === 0 || index === buckets.length - 1;
+      return `<div class="orders-revenue-row">
+        <div class="orders-revenue-bars">
+          <div class="orders-revenue-fill revenue" style="height:${revPct.toFixed(1)}%" title="Revenue: ${escapeHtml(
+            formatPeso(bucket.revenue)
+          )}"></div>
+          <div class="orders-revenue-fill profit" style="height:${profitPct.toFixed(1)}%" title="Profit: ${escapeHtml(
+            formatPeso(bucket.profit)
+          )}"></div>
+        </div>
+        <span class="orders-revenue-label ${showLabel ? "is-visible" : ""} ${hasData ? "has-data" : ""}">${escapeHtml(
+          bucket.label
+        )}</span>
+        <div class="orders-revenue-values" title="Revenue: ${escapeHtml(formatPeso(bucket.revenue))} | Profit: ${escapeHtml(
+          formatPeso(bucket.profit)
+        )}">
+          ${hasData ? `R ${escapeHtml(formatPeso(bucket.revenue))}<br/>P ${escapeHtml(formatPeso(bucket.profit))}` : ""}
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
 function materialHint(m) {
   const x = (m == null ? "" : String(m)).toLowerCase();
   if (x.includes("leather")) return "leather";
@@ -1062,12 +1303,15 @@ function materialHint(m) {
 
 function showAdminSection(name) {
   const showInv = name === "inventory";
+  const showAnalytics = name === "analytics";
   const showOrders = name === "orders";
   const showUsers = name === "users";
   if (inventorySection) inventorySection.classList.toggle("is-hidden", !showInv);
+  if (analyticsSection) analyticsSection.classList.toggle("is-hidden", !showAnalytics);
   if (ordersSection) ordersSection.classList.toggle("is-hidden", !showOrders);
   if (usersSection) usersSection.classList.toggle("is-hidden", !showUsers);
   if (navInventory) navInventory.classList.toggle("active", showInv);
+  if (navAnalytics) navAnalytics.classList.toggle("active", showAnalytics);
   if (navOrders) navOrders.classList.toggle("active", showOrders);
   if (navUsers) navUsers.classList.toggle("active", showUsers);
 }
@@ -1076,6 +1320,12 @@ if (navInventory) {
   navInventory.addEventListener("click", (e) => {
     e.preventDefault();
     showAdminSection("inventory");
+  });
+}
+if (navAnalytics) {
+  navAnalytics.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("analytics");
   });
 }
 if (navOrders) {
@@ -1294,7 +1544,96 @@ function applyOrdersFilter() {
   renderOrdersList(rows);
   renderCompletedOrdersHistory(allOrders.filter((o) => isOrderCompleted(o)));
   updateOrderStats(allOrders);
+  renderRevenueGraph();
   syncBatchDeleteUi();
+}
+
+if (ordersDateStartEl && ordersDateEndEl) {
+  const now = new Date();
+  const defaultEnd = dateToInputValue(now);
+  const defaultStartDate = new Date(now);
+  defaultStartDate.setDate(defaultStartDate.getDate() - 29);
+  const defaultStart = dateToInputValue(defaultStartDate);
+
+  ordersDateStartEl.required = true;
+  ordersDateEndEl.required = true;
+  ordersDateStartEl.max = defaultEnd;
+  ordersDateEndEl.max = defaultEnd;
+
+  if (!ordersDateStartEl.value) ordersDateStartEl.value = defaultStart;
+  if (!ordersDateEndEl.value) ordersDateEndEl.value = defaultEnd;
+
+  ordersDateStartEl.addEventListener("change", renderRevenueGraph);
+  ordersDateEndEl.addEventListener("change", renderRevenueGraph);
+}
+
+async function exportAnalyticsAsPdf() {
+  if (!analyticsExportArea) {
+    alert("Analytics content is not available.");
+    return;
+  }
+
+  if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+    alert("PDF export library is not ready. Please refresh and try again.");
+    return;
+  }
+
+  const originalText = exportAnalyticsPdfBtn ? exportAnalyticsPdfBtn.textContent : "";
+  if (exportAnalyticsPdfBtn) {
+    exportAnalyticsPdfBtn.disabled = true;
+    exportAnalyticsPdfBtn.textContent = "Preparing PDF...";
+  }
+
+  try {
+    const canvas = await window.html2canvas(analyticsExportArea, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 8;
+    const usableWidth = pageWidth - margin * 2;
+    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+    heightLeft -= pageHeight - margin * 2;
+
+    while (heightLeft > 0) {
+      position = margin - (imgHeight - heightLeft);
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+      heightLeft -= pageHeight - margin * 2;
+    }
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+    pdf.save(`lanica-analytics-${stamp}.pdf`);
+  } catch (err) {
+    console.error("PDF export failed:", err);
+    alert("Failed to export analytics as PDF.");
+  } finally {
+    if (exportAnalyticsPdfBtn) {
+      exportAnalyticsPdfBtn.disabled = false;
+      exportAnalyticsPdfBtn.textContent = originalText || "Export PDF";
+    }
+  }
+}
+
+if (exportAnalyticsPdfBtn) {
+  exportAnalyticsPdfBtn.addEventListener("click", () => {
+    exportAnalyticsAsPdf();
+  });
 }
 
 function getVisibleDeclinedCheckboxes() {
