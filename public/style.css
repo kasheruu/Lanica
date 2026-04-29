@@ -35,6 +35,29 @@
 
 html {
   scroll-behavior: smooth;
+  font-size: 100%;
+}
+
+body {
+  min-width: 100vw;
+  min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero {
+  min-height: 100vh;
+  width: 100vw;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  padding: 120px var(--padding-x) 60px;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 body {

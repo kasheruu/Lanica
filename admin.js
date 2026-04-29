@@ -119,6 +119,78 @@ colorInput.addEventListener("input", (e) => {
   }
 });
 
+// --- Input Validation with Warnings ---
+const validationRules = [
+  { id: "product-name", max: 100, msg: "Product name cannot exceed 100 characters" },
+  { id: "product-description", max: 500, msg: "Description cannot exceed 500 characters" },
+  { id: "product-price", max: 99999999, msg: "Price cannot exceed ₱99,999,999" },
+  { id: "product-cost", max: 99999999, msg: "Cost cannot exceed ₱99,999,999" },
+  { id: "product-stock", max: 99999, msg: "Stock cannot exceed 99,999 units" },
+  { id: "product-size-w", max: 120, msg: "Width cannot exceed 120 inches" },
+  { id: "product-size-h", max: 120, msg: "Height cannot exceed 120 inches" },
+  { id: "product-size-d", max: 120, msg: "Depth cannot exceed 120 inches" },
+];
+
+function showWarning(input, message) {
+  // Remove existing warning
+  const existingWarning = input.parentNode.querySelector(".input-warning");
+  if (existingWarning) existingWarning.remove();
+
+  // Create warning element
+  const warning = document.createElement("div");
+  warning.className = "input-warning";
+  warning.textContent = message;
+  warning.style.cssText = `
+    color: #dc2626;
+    font-size: 0.75rem;
+    margin-top: 4px;
+    font-weight: 500;
+  `;
+  input.parentNode.appendChild(warning);
+  input.style.borderColor = "#dc2626";
+}
+
+function clearWarning(input) {
+  const warning = input.parentNode.querySelector(".input-warning");
+  if (warning) warning.remove();
+  input.style.borderColor = "";
+}
+
+validationRules.forEach((rule) => {
+  const input = document.getElementById(rule.id);
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    const value = input.value;
+    const length = value.length;
+
+    if (rule.id === "product-name" || rule.id === "product-description") {
+      // Character count validation
+      if (length > rule.max) {
+        showWarning(input, `${rule.msg} (${length}/${rule.max})`);
+      } else {
+        clearWarning(input);
+      }
+    } else {
+      // Number max validation
+      if (value && parseFloat(value) > rule.max) {
+        showWarning(input, rule.msg);
+        input.value = rule.max; // Cap at max
+      } else {
+        clearWarning(input);
+      }
+    }
+  });
+
+  input.addEventListener("blur", () => {
+    // Clear warning on blur but keep value capped
+    if (input.id.startsWith("product-size")) {
+      if (parseFloat(input.value) > rule.max) input.value = rule.max;
+    }
+    clearWarning(input);
+  });
+});
+
 // Modal state
 let isEditing = false;
 let currentEditId = null;
@@ -414,7 +486,7 @@ productForm.addEventListener("submit", async (e) => {
       cost: parseFloat(document.getElementById("product-cost").value),
       stock,
       material,
-      size: document.getElementById("product-size").value,
+      size: `${document.getElementById("product-size-w").value} × ${document.getElementById("product-size-h").value} × ${document.getElementById("product-size-d").value} in`,
       color: document.getElementById("product-color").value,
       images: { isoImage, bgImage },
       meshyTaskId: meshyTaskId,
@@ -603,7 +675,10 @@ window.editProduct = (id, productJsonBase64) => {
 
     document.getElementById("product-stock").value = product.stock || 0;
     document.getElementById("product-material").value = product.material || "Fabric";
-    document.getElementById("product-size").value = product.size || "";
+    const sizeParts = (product.size || "").split(" × ");
+    document.getElementById("product-size-w").value = sizeParts[0] || "72";
+    document.getElementById("product-size-h").value = sizeParts[1] || "72";
+    document.getElementById("product-size-d").value = sizeParts[2]?.replace(" in", "") || "12";
     document.getElementById("product-color").value = product.color || "";
 
     // When editing, files are not required
