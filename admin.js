@@ -45,10 +45,7 @@ const cloudinaryConfig = {
   uploadPreset: "ml_lanica",
 };
 
-const MESHY_API_BASE =
-  (["127.0.0.1", "localhost"].includes(window.location.hostname) && window.location.port && window.location.port !== "5000")
-    ? "http://127.0.0.1:5000/api/meshy-image-to-3d"
-    : "/api/meshy-image-to-3d";
+const MESHY_API_BASE = "/api/meshy-image-to-3d";
 
 let currentUser = null;
 
@@ -445,13 +442,26 @@ productForm.addEventListener("submit", async (e) => {
         ? "Regenerating 3D Model Variants..."
         : "Starting 3D Generation...";
       try {
+        // Always try to create original task
         const originalTask = await createMeshyTask(meshySourceImageUrl);
-        const redTask = await createMeshyTask(meshySourceImageUrl, "in premium red fabric/material");
-        const blueTask = await createMeshyTask(meshySourceImageUrl, "in premium navy blue fabric/material");
-
         meshyTaskId = originalTask.result;
-        meshyTaskIdRed = redTask.result;
-        meshyTaskIdBlue = blueTask.result;
+
+        // Try to create red variant (don't fail if it fails)
+        try {
+          const redTask = await createMeshyTask(meshySourceImageUrl, "in premium red fabric/material");
+          meshyTaskIdRed = redTask.result;
+        } catch (redErr) {
+          console.warn("Failed to create red variant Meshy task:", redErr.message);
+        }
+
+        // Try to create blue variant (don't fail if it fails)
+        try {
+          const blueTask = await createMeshyTask(meshySourceImageUrl, "in premium navy blue fabric/material");
+          meshyTaskIdBlue = blueTask.result;
+        } catch (blueErr) {
+          console.warn("Failed to create blue variant Meshy task:", blueErr.message);
+        }
+
         meshyStatus = "PENDING";
         console.log("Meshy 3D Generation started!", {
           original: meshyTaskId,
@@ -460,19 +470,26 @@ productForm.addEventListener("submit", async (e) => {
         });
 
         submitBtn.textContent = "Waiting for 3D model URLs...";
-        const [originalResult, redResult, blueResult] = await Promise.all([
-          waitForMeshyModelUrl(meshyTaskId, 40, 3000),
-          waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000),
-          waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000),
-        ]);
 
+        // Wait for original (required)
+        const originalResult = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         modelUrl = originalResult.modelUrl || null;
-        modelUrlRed = redResult.modelUrl || null;
-        modelUrlBlue = blueResult.modelUrl || null;
         meshyStatus = originalResult.status || meshyStatus;
+
+        // Wait for red variant if task was created
+        if (meshyTaskIdRed) {
+          const redResult = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
+          modelUrlRed = redResult.modelUrl || null;
+        }
+
+        // Wait for blue variant if task was created
+        if (meshyTaskIdBlue) {
+          const blueResult = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
+          modelUrlBlue = blueResult.modelUrl || null;
+        }
       } catch (err) {
-        console.error("Failed to generate 3D model variants", err);
-        alert("Failed to generate 3D model variants: " + err.message);
+        console.error("Failed to generate 3D model", err);
+        alert("Failed to generate 3D model: " + err.message);
         submitBtn.textContent = "Save Product";
         submitBtn.disabled = false;
         return; // ABORT SAVE
