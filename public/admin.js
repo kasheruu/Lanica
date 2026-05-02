@@ -394,9 +394,13 @@ productForm.addEventListener("submit", async (e) => {
 
   try {
     const transparentImageFile = document.getElementById("img-bg").files[0];
+    const redVariantImageFile = document.getElementById("img-red").files[0];
+    const blueVariantImageFile = document.getElementById("img-blue").files[0];
     const imageFiles = {
       isoImage: document.getElementById("img-iso").files[0],
       bgImage: transparentImageFile,
+      imgRed: redVariantImageFile,
+      imgBlue: blueVariantImageFile,
     };
 
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
@@ -424,7 +428,11 @@ productForm.addEventListener("submit", async (e) => {
     let meshyTaskIdBlue = isEditing ? productForm.dataset.meshyTaskIdBlue || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
-    const shouldRegenerateMeshy = !!transparentImageFile;
+    const shouldRegenerateMeshy = !!(
+      transparentImageFile ||
+      redVariantImageFile ||
+      blueVariantImageFile
+    );
     if (shouldRegenerateMeshy) {
       // Explicitly clear old task ids and URLs when a new transparent image is uploaded.
       meshyTaskId = null;

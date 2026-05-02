@@ -423,7 +423,11 @@ productForm.addEventListener("submit", async (e) => {
     let meshyTaskIdBlue = isEditing ? productForm.dataset.meshyTaskIdBlue || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
-    const shouldRegenerateMeshy = !!transparentImageFile;
+    const shouldRegenerateMeshy = !!(
+      transparentImageFile ||
+      redVariantImageFile ||
+      blueVariantImageFile
+    );
     if (shouldRegenerateMeshy) {
       // Explicitly clear old task ids and URLs when a new transparent image is uploaded.
       meshyTaskId = null;
