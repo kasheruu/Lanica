@@ -16,6 +16,9 @@ import {
   getAuth,
   onAuthStateChanged,
   signOut,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -106,31 +109,36 @@ function resolveCustomerDisplay(order) {
   const fullFromParts = pickFirstNonEmpty(`${first} ${last}`.trim());
 
   const fromAddress =
-    (order.shippingAddress && pickFirstNonEmpty(order.shippingAddress.fullName, order.shippingAddress.name)) ||
-    (order.deliveryAddress && pickFirstNonEmpty(order.deliveryAddress.fullName, order.deliveryAddress.name)) ||
+    (order.shippingAddress &&
+      pickFirstNonEmpty(order.shippingAddress.fullName, order.shippingAddress.name)) ||
+    (order.deliveryAddress &&
+      pickFirstNonEmpty(order.deliveryAddress.fullName, order.deliveryAddress.name)) ||
     (order.address && pickFirstNonEmpty(order.address.fullName, order.address.name)) ||
-    (order.shippingInfo && pickFirstNonEmpty(order.shippingInfo.fullName, order.shippingInfo.name)) ||
+    (order.shippingInfo &&
+      pickFirstNonEmpty(order.shippingInfo.fullName, order.shippingInfo.name)) ||
     (order.customer && pickFirstNonEmpty(order.customer.fullName, order.customer.name)) ||
     "";
 
-  return pickFirstNonEmpty(
-    order.customerNameResolved,
-    order.customerName,
-    order.customerFullName,
-    order.fullName,
-    order.name,
-    order.displayName,
-    order.orderedByName,
-    order.userName,
-    order.customerDisplayName,
-    order.orderByName,
-    order.buyerName,
-    fromAddress,
-    fullFromParts,
-    order.customerEmail,
-    order.email,
-    order.customerId
-  ) || "—";
+  return (
+    pickFirstNonEmpty(
+      order.customerNameResolved,
+      order.customerName,
+      order.customerFullName,
+      order.fullName,
+      order.name,
+      order.displayName,
+      order.orderedByName,
+      order.userName,
+      order.customerDisplayName,
+      order.orderByName,
+      order.buyerName,
+      fromAddress,
+      fullFromParts,
+      order.customerEmail,
+      order.email,
+      order.customerId
+    ) || "—"
+  );
 }
 
 async function fetchCustomerNameFromUsers(order) {
@@ -152,7 +160,8 @@ async function fetchCustomerNameFromUsers(order) {
     order.buyerEmail
   );
 
-  if (customerId && customerNameByUid.has(customerId)) return customerNameByUid.get(customerId) || "";
+  if (customerId && customerNameByUid.has(customerId))
+    return customerNameByUid.get(customerId) || "";
   if (customerEmail && customerNameByEmail.has(customerEmail))
     return customerNameByEmail.get(customerEmail) || "";
 
@@ -255,9 +264,16 @@ function normalizeOrderStatus(raw) {
   if (raw == null) return "pending";
   const s = String(raw).toLowerCase().trim();
   if (
-    ["pending", "accepted", "processing", "shipped", "delivered", "declined", "completed", "received"].includes(
-      s
-    )
+    [
+      "pending",
+      "accepted",
+      "processing",
+      "shipped",
+      "delivered",
+      "declined",
+      "completed",
+      "received",
+    ].includes(s)
   )
     return s;
   return "pending";
@@ -314,7 +330,7 @@ function renderOrders() {
   const visibleOrders = allAssignedOrders.filter(
     (o) =>
       !isOrderCompleted(o) &&
-    ["accepted", "processing", "shipped", "delivered"].includes(normalizeOrderStatus(o.status))
+      ["accepted", "processing", "shipped", "delivered"].includes(normalizeOrderStatus(o.status))
   );
 
   if (visibleOrders.length === 0) {
@@ -454,7 +470,8 @@ async function loadMyProfile() {
     const profilePhoto = data.photoURL || data.profilePic || currentUser.photoURL || "";
     displayNameInput.value = nm;
     if (staffAccountNameEl) {
-      staffAccountNameEl.textContent = nm || currentUser.displayName || currentUser.email || "My Account";
+      staffAccountNameEl.textContent =
+        nm || currentUser.displayName || currentUser.email || "My Account";
     }
     if (staffAvatarEl) {
       if (profilePhoto) {
@@ -547,6 +564,136 @@ if (profileForm && displayNameInput) {
       }
     }
   });
+}
+
+// Password Change Functionality
+const passwordForm = document.getElementById("staff-password-form");
+const currentPasswordInput = document.getElementById("staff-current-password");
+const newPasswordInput = document.getElementById("staff-new-password");
+const confirmPasswordInput = document.getElementById("staff-confirm-password");
+const updatePasswordBtn = document.getElementById("staff-update-password");
+const cancelPasswordBtn = document.getElementById("staff-cancel-password");
+const passwordMessageEl = document.getElementById("staff-password-message");
+
+if (passwordForm) {
+  passwordForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const currentPassword = currentPasswordInput.value;
+    const newPassword = newPasswordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
+
+    // Reset message
+    if (passwordMessageEl) {
+      passwordMessageEl.textContent = "";
+      passwordMessageEl.style.color = "#6b7280";
+    }
+
+    // Validation
+    if (newPassword.length < 8) {
+      if (passwordMessageEl) {
+        passwordMessageEl.textContent = "New password must be at least 8 characters long.";
+        passwordMessageEl.style.color = "#dc2626";
+      }
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      if (passwordMessageEl) {
+        passwordMessageEl.textContent = "New passwords do not match.";
+        passwordMessageEl.style.color = "#dc2626";
+      }
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      if (passwordMessageEl) {
+        passwordMessageEl.textContent = "New password must be different from current password.";
+        passwordMessageEl.style.color = "#dc2626";
+      }
+      return;
+    }
+
+    // Disable button during processing
+    if (updatePasswordBtn) {
+      updatePasswordBtn.disabled = true;
+      updatePasswordBtn.textContent = "Updating...";
+    }
+
+    try {
+      await changeStaffPassword(currentPassword, newPassword);
+
+      if (passwordMessageEl) {
+        passwordMessageEl.textContent = "Password updated successfully!";
+        passwordMessageEl.style.color = "#059669";
+      }
+
+      // Clear form
+      passwordForm.reset();
+
+      // Show success message briefly then clear
+      setTimeout(() => {
+        if (passwordMessageEl) {
+          passwordMessageEl.textContent = "";
+        }
+      }, 3000);
+    } catch (error) {
+      console.error("Password change error:", error);
+      if (passwordMessageEl) {
+        passwordMessageEl.textContent =
+          error.message || "Failed to update password. Please try again.";
+        passwordMessageEl.style.color = "#dc2626";
+      }
+    } finally {
+      if (updatePasswordBtn) {
+        updatePasswordBtn.disabled = false;
+        updatePasswordBtn.textContent = "Update Password";
+      }
+    }
+  });
+}
+
+if (cancelPasswordBtn) {
+  cancelPasswordBtn.addEventListener("click", () => {
+    if (passwordForm) {
+      passwordForm.reset();
+    }
+    if (passwordMessageEl) {
+      passwordMessageEl.textContent = "";
+      passwordMessageEl.style.color = "#6b7280";
+    }
+  });
+}
+
+// Password change function
+async function changeStaffPassword(currentPassword, newPassword) {
+  if (!currentUser) {
+    throw new Error("No authenticated user found");
+  }
+
+  try {
+    // Re-authenticate user with current password
+    const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+
+    await reauthenticateWithCredential(currentUser, credential);
+
+    // Update password
+    await updatePassword(currentUser, newPassword);
+  } catch (error) {
+    console.error("Password change error:", error);
+
+    let errorMessage = "Failed to update password. Please try again";
+
+    if (error?.code === "auth/wrong-password") {
+      errorMessage = "Current password is incorrect";
+    } else if (error?.code === "auth/too-many-requests") {
+      errorMessage = "Too many failed attempts. Please try again later";
+    } else if (error?.code === "auth/weak-password") {
+      errorMessage = "New password is too weak. Please choose a stronger password";
+    }
+
+    throw new Error(errorMessage, { cause: error });
+  }
 }
 
 if (staffAccountChip && displayNameInput) {

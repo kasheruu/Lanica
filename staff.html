@@ -182,6 +182,48 @@
             </form>
           </div>
         </div>
+
+        <div class="table-container staff-profile-wrapper" style="margin-top: 16px">
+          <div class="staff-profile-card">
+            <h3 style="margin: 0 0 10px; font-size: 1.05rem; color: #1f2937">Change Password</h3>
+            <form id="staff-password-form" class="staff-profile-form">
+              <div class="form-group">
+                <label for="staff-current-password">Current Password</label>
+                <input
+                  type="password"
+                  id="staff-current-password"
+                  placeholder="Enter current password"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="staff-new-password">New Password</label>
+                <input
+                  type="password"
+                  id="staff-new-password"
+                  placeholder="Enter new password (min 8 characters)"
+                  required
+                  minlength="8"
+                />
+              </div>
+              <div class="form-group">
+                <label for="staff-confirm-password">Confirm New Password</label>
+                <input
+                  type="password"
+                  id="staff-confirm-password"
+                  placeholder="Confirm new password"
+                  required
+                  minlength="8"
+                />
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 16px">
+                <button type="submit" id="staff-update-password" class="btn-primary">Update Password</button>
+                <button type="button" id="staff-cancel-password" class="btn-secondary">Cancel</button>
+              </div>
+              <div id="staff-password-message" style="margin-top: 12px; font-size: 0.85rem; color: #6b7280"></div>
+            </form>
+          </div>
+        </div>
       </div>
     </main>
   </body>
