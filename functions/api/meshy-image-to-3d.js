@@ -39,6 +39,7 @@ export async function onRequestPost(context) {
       body: JSON.stringify({
         image_url: imageUrl,
         enable_pbr: body?.enable_pbr !== false,
+        ...(body?.prompt ? { prompt: String(body.prompt).trim() } : {}),
       }),
     });
 

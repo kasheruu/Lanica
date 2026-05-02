@@ -35,17 +35,23 @@
 
 html {
   scroll-behavior: smooth;
-  font-size: 100%;
+  font-size: 100%; /* Scales with browser zoom */
 }
 
-body {
-  min-width: 100vw;
-  min-height: 100vh;
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+/* Zoom scaling from 25% to 500% */
+@media (zoom: 25%)  { html { font-size: 25%; } }
+@media (zoom: 50%)  { html { font-size: 50%; } }
+@media (zoom: 75%)  { html { font-size: 75%; } }
+@media (zoom: 90%)  { html { font-size: 90%; } }
+@media (zoom: 110%) { html { font-size: 110%; } }
+@media (zoom: 125%) { html { font-size: 125%; } }
+@media (zoom: 150%) { html { font-size: 150%; } }
+@media (zoom: 175%) { html { font-size: 175%; } }
+@media (zoom: 200%) { html { font-size: 200%; } }
+@media (zoom: 250%) { html { font-size: 250%; } }
+@media (zoom: 300%) { html { font-size: 300%; } }
+@media (zoom: 400%) { html { font-size: 400%; } }
+@media (zoom: 500%) { html { font-size: 500%; } }
 
 body {
   font-family: "Outfit", sans-serif;

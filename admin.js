@@ -45,7 +45,10 @@ const cloudinaryConfig = {
   uploadPreset: "ml_lanica",
 };
 
-const MESHY_API_BASE = "/api/meshy-image-to-3d";
+const MESHY_API_BASE =
+  (["127.0.0.1", "localhost"].includes(window.location.hostname) && window.location.port && window.location.port !== "5000")
+    ? "http://127.0.0.1:5000/api/meshy-image-to-3d"
+    : "/api/meshy-image-to-3d";
 
 let currentUser = null;
 
@@ -355,13 +358,21 @@ async function waitForMeshyModelUrl(taskId, maxAttempts = 40, delayMs = 3000) {
   return { status: "PENDING", modelUrl: null };
 }
 
-async function createMeshyTask(imageUrl) {
+async function createMeshyTask(imageUrl, prompt = null) {
+  const body = {
+    image_url: imageUrl,
+    enable_pbr: true,
+  };
+  if (prompt && prompt.trim()) {
+    body.prompt = prompt.trim();
+  }
+
   const response = await fetch(MESHY_API_BASE, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ image_url: imageUrl, enable_pbr: true }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -404,14 +415,21 @@ productForm.addEventListener("submit", async (e) => {
 
     // Keep previous Meshy artifacts only when we are NOT regenerating from a new transparent image.
     let meshyTaskId = isEditing ? productForm.dataset.meshyTaskId || null : null;
+    let meshyTaskIdRed = isEditing ? productForm.dataset.meshyTaskIdRed || null : null;
+    let meshyTaskIdBlue = isEditing ? productForm.dataset.meshyTaskIdBlue || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
+    let modelUrlRed = isEditing ? productForm.dataset.modelUrlRed || null : null;
+    let modelUrlBlue = isEditing ? productForm.dataset.modelUrlBlue || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
     const shouldRegenerateMeshy = !!transparentImageFile;
     if (shouldRegenerateMeshy) {
-      // Explicitly clear old task id so stale/expired ids are never kept
-      // when a new transparent image is uploaded during edit.
+      // Explicitly clear old task ids and URLs when a new transparent image is uploaded.
       meshyTaskId = null;
+      meshyTaskIdRed = null;
+      meshyTaskIdBlue = null;
       modelUrl = null;
+      modelUrlRed = null;
+      modelUrlBlue = null;
       meshyStatus = "PENDING";
     }
 
@@ -424,51 +442,37 @@ productForm.addEventListener("submit", async (e) => {
         throw new Error("Transparent background image is required for Meshy generation.");
       }
       submitBtn.textContent = isEditing
-        ? "Regenerating 3D Model..."
+        ? "Regenerating 3D Model Variants..."
         : "Starting 3D Generation...";
       try {
-        const meshyData = await createMeshyTask(meshySourceImageUrl);
-          meshyTaskId = meshyData.result; // Fresh Task ID returned by Meshy
-          meshyStatus = "PENDING";
-          console.log("Meshy 3D Generation started! Task ID:", meshyTaskId);
+        const originalTask = await createMeshyTask(meshySourceImageUrl);
+        const redTask = await createMeshyTask(meshySourceImageUrl, "in premium red fabric/material");
+        const blueTask = await createMeshyTask(meshySourceImageUrl, "in premium navy blue fabric/material");
 
-          // Poll best-effort to fetch fresh model URL, but do not abort the product save
-          // if Meshy status polling temporarily fails after token has already been consumed.
-          let isGenerating = true;
-          let pollAttempts = 0;
-          while (isGenerating && pollAttempts < 10) {
-            pollAttempts += 1;
-            try {
-              const statusRes = await fetch(`${MESHY_API_BASE}/${encodeURIComponent(meshyTaskId)}`);
+        meshyTaskId = originalTask.result;
+        meshyTaskIdRed = redTask.result;
+        meshyTaskIdBlue = blueTask.result;
+        meshyStatus = "PENDING";
+        console.log("Meshy 3D Generation started!", {
+          original: meshyTaskId,
+          red: meshyTaskIdRed,
+          blue: meshyTaskIdBlue,
+        });
 
-              if (statusRes.ok) {
-                const statusData = await statusRes.json();
-                const status = String(statusData.status || "").toUpperCase();
-                meshyStatus = status || meshyStatus;
-                if (status === "SUCCEEDED") {
-                  modelUrl =
-                    (statusData.model_urls && (statusData.model_urls.glb || statusData.model_urls.usdz)) || null;
-                  submitBtn.textContent = "3D Finished! Saving Product...";
-                  isGenerating = false;
-                } else if (status === "IN_PROGRESS" || status === "PENDING") {
-                  submitBtn.textContent = `Generating 3D: ${statusData.progress || 0}%...`;
-                  await new Promise((r) => setTimeout(r, 3000));
-                } else {
-                  // Failed/cancelled jobs should persist status, but still allow save.
-                  isGenerating = false;
-                }
-              } else {
-                // Stop polling but keep the new task id; viewer can continue polling later.
-                isGenerating = false;
-              }
-            } catch (pollErr) {
-              console.warn("Meshy status polling interrupted, saving with new task ID:", pollErr);
-              isGenerating = false;
-            }
-          }
+        submitBtn.textContent = "Waiting for 3D model URLs...";
+        const [originalResult, redResult, blueResult] = await Promise.all([
+          waitForMeshyModelUrl(meshyTaskId, 40, 3000),
+          waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000),
+          waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000),
+        ]);
+
+        modelUrl = originalResult.modelUrl || null;
+        modelUrlRed = redResult.modelUrl || null;
+        modelUrlBlue = blueResult.modelUrl || null;
+        meshyStatus = originalResult.status || meshyStatus;
       } catch (err) {
-        console.error("Failed to generate 3D model", err);
-        alert("Failed to generate 3D model: " + err.message);
+        console.error("Failed to generate 3D model variants", err);
+        alert("Failed to generate 3D model variants: " + err.message);
         submitBtn.textContent = "Save Product";
         submitBtn.disabled = false;
         return; // ABORT SAVE
@@ -490,7 +494,11 @@ productForm.addEventListener("submit", async (e) => {
       color: document.getElementById("product-color").value,
       images: { isoImage, bgImage },
       meshyTaskId: meshyTaskId,
+      meshyTaskIdRed: meshyTaskIdRed,
+      meshyTaskIdBlue: meshyTaskIdBlue,
       modelUrl: modelUrl,
+      modelUrlRed: modelUrlRed,
+      modelUrlBlue: modelUrlBlue,
       meshyStatus: meshyStatus,
       meshyRegeneratedAt: shouldRegenerateMeshy ? Timestamp.now() : null,
     };
@@ -503,16 +511,29 @@ productForm.addEventListener("submit", async (e) => {
       savedProductRef = await addDoc(productsCollection, productData);
     }
 
-    // Ensure regenerated products eventually store BOTH meshyTaskId and modelUrl.
-    // If modelUrl was not ready during the initial save, finalize it now.
-    if (shouldRegenerateMeshy && meshyTaskId && !modelUrl && savedProductRef) {
-      submitBtn.textContent = "Finalizing 3D model URL...";
-      const finalMeshy = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
-      await updateDoc(savedProductRef, {
-        meshyStatus: finalMeshy.status,
-        modelUrl: finalMeshy.modelUrl || null,
-        updatedAt: Timestamp.now(),
-      });
+    // Ensure regenerated products eventually store Meshy URLs for all variants.
+    if (shouldRegenerateMeshy && savedProductRef) {
+      const updates = {};
+      if (meshyTaskId && !modelUrl) {
+        submitBtn.textContent = "Finalizing original 3D model URL...";
+        const finalMeshy = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
+        updates.meshyStatus = finalMeshy.status;
+        updates.modelUrl = finalMeshy.modelUrl || null;
+      }
+      if (meshyTaskIdRed && !modelUrlRed) {
+        submitBtn.textContent = "Finalizing red variant URL...";
+        const finalRed = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
+        updates.modelUrlRed = finalRed.modelUrl || null;
+      }
+      if (meshyTaskIdBlue && !modelUrlBlue) {
+        submitBtn.textContent = "Finalizing blue variant URL...";
+        const finalBlue = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
+        updates.modelUrlBlue = finalBlue.modelUrl || null;
+      }
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = Timestamp.now();
+        await updateDoc(savedProductRef, updates);
+      }
     }
 
     window.closeModal();
@@ -696,7 +717,11 @@ window.editProduct = (id, productJsonBase64) => {
     // Store existing images so we don't overwrite with blank if no new file is selected
     productForm.dataset.existingImages = JSON.stringify(product.images || {});
     productForm.dataset.meshyTaskId = product.meshyTaskId || "";
+    productForm.dataset.meshyTaskIdRed = product.meshyTaskIdRed || "";
+    productForm.dataset.meshyTaskIdBlue = product.meshyTaskIdBlue || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
+    productForm.dataset.modelUrlRed = product.modelUrlRed || "";
+    productForm.dataset.modelUrlBlue = product.modelUrlBlue || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
 
     isEditing = true;
