@@ -410,9 +410,11 @@ productForm.addEventListener("submit", async (e) => {
     };
 
     // Upload all selected files concurrently
-    const [isoImage, bgImage] = await Promise.all([
+    const [isoImage, bgImage, redVariantImage, blueVariantImage] = await Promise.all([
       getImageUrl("isoImage"),
       getImageUrl("bgImage"),
+      getImageUrl("imgRed"),
+      getImageUrl("imgBlue"),
     ]);
 
     // Keep previous Meshy artifacts only when we are NOT regenerating from a new transparent image.
@@ -437,6 +439,8 @@ productForm.addEventListener("submit", async (e) => {
 
     // Meshy source should always be the transparent-background asset, never the thumbnail.
     const meshySourceImageUrl = bgImage || existingImages.bgImage || existingImages.frontBg || "";
+    const meshyRedVariantUrl = redVariantImage || existingImages.imgRed || "";
+    const meshyBlueVariantUrl = blueVariantImage || existingImages.imgBlue || "";
 
     // Automatically trigger Meshy.ai API only when a NEW transparent background image was uploaded.
     if (shouldRegenerateMeshy) {
@@ -451,18 +455,22 @@ productForm.addEventListener("submit", async (e) => {
         const originalTask = await createMeshyTask(meshySourceImageUrl);
         meshyTaskId = originalTask.result;
 
-        // Try to create red variant (don't fail if it fails)
+        // Try to create red variant using red variant image if uploaded
         try {
-          const redTask = await createMeshyTask(meshySourceImageUrl, "in premium red fabric/material");
-          meshyTaskIdRed = redTask.result;
+          if (meshyRedVariantUrl && !manualModelUrlRed) {
+            const redTask = await createMeshyTask(meshyRedVariantUrl);
+            meshyTaskIdRed = redTask.result;
+          }
         } catch (redErr) {
           console.warn("Failed to create red variant Meshy task:", redErr.message);
         }
 
-        // Try to create blue variant (don't fail if it fails)
+        // Try to create blue variant using blue variant image if uploaded
         try {
-          const blueTask = await createMeshyTask(meshySourceImageUrl, "in premium navy blue fabric/material");
-          meshyTaskIdBlue = blueTask.result;
+          if (meshyBlueVariantUrl && !manualModelUrlBlue) {
+            const blueTask = await createMeshyTask(meshyBlueVariantUrl);
+            meshyTaskIdBlue = blueTask.result;
+          }
         } catch (blueErr) {
           console.warn("Failed to create blue variant Meshy task:", blueErr.message);
         }
@@ -522,7 +530,7 @@ productForm.addEventListener("submit", async (e) => {
       material,
       size: `${document.getElementById("product-size-w").value} × ${document.getElementById("product-size-h").value} × ${document.getElementById("product-size-d").value} in`,
       color: document.getElementById("product-color").value,
-      images: { isoImage, bgImage },
+      images: { isoImage, bgImage, imgRed: redVariantImage, imgBlue: blueVariantImage },
       meshyTaskId: meshyTaskId,
       meshyTaskIdRed: meshyTaskIdRed,
       meshyTaskIdBlue: meshyTaskIdBlue,
