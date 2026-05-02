@@ -340,7 +340,8 @@ async function waitForMeshyModelUrl(taskId, maxAttempts = 40, delayMs = 3000) {
         const status = String(statusData.status || "").toUpperCase();
         if (status === "SUCCEEDED") {
           const url =
-            (statusData.model_urls && (statusData.model_urls.glb || statusData.model_urls.usdz)) || null;
+            (statusData.model_urls && (statusData.model_urls.glb || statusData.model_urls.usdz)) ||
+            null;
           return { status, modelUrl: url };
         }
         if (status === "FAILED" || status === "CANCELED" || status === "CANCELLED") {
@@ -398,8 +399,6 @@ productForm.addEventListener("submit", async (e) => {
     };
 
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
-    const manualModelUrlRed = document.getElementById("modelUrlRed").value.trim() || null;
-    const manualModelUrlBlue = document.getElementById("modelUrlBlue").value.trim() || null;
 
     // Helper to get URL: Check if new file uploaded, else keep existing
     const getImageUrl = async (key) => {
@@ -423,8 +422,6 @@ productForm.addEventListener("submit", async (e) => {
     let meshyTaskIdRed = isEditing ? productForm.dataset.meshyTaskIdRed || null : null;
     let meshyTaskIdBlue = isEditing ? productForm.dataset.meshyTaskIdBlue || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
-    let modelUrlRed = isEditing ? productForm.dataset.modelUrlRed || null : null;
-    let modelUrlBlue = isEditing ? productForm.dataset.modelUrlBlue || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
     const shouldRegenerateMeshy = !!transparentImageFile;
     if (shouldRegenerateMeshy) {
@@ -433,8 +430,6 @@ productForm.addEventListener("submit", async (e) => {
       meshyTaskIdRed = null;
       meshyTaskIdBlue = null;
       modelUrl = null;
-      modelUrlRed = null;
-      modelUrlBlue = null;
       meshyStatus = "PENDING";
     }
 
@@ -458,22 +453,22 @@ productForm.addEventListener("submit", async (e) => {
 
         // Try to create red variant using red variant image if uploaded
         try {
-          if (meshyRedVariantUrl && !manualModelUrlRed) {
+          if (meshyRedVariantUrl) {
             const redTask = await createMeshyTask(meshyRedVariantUrl);
             meshyTaskIdRed = redTask.result;
           }
-        } catch (redErr) {
-          console.warn("Failed to create red variant Meshy task:", redErr.message);
+        } catch (err) {
+          console.error("Failed to create red variant task:", err);
         }
 
         // Try to create blue variant using blue variant image if uploaded
         try {
-          if (meshyBlueVariantUrl && !manualModelUrlBlue) {
+          if (meshyBlueVariantUrl) {
             const blueTask = await createMeshyTask(meshyBlueVariantUrl);
             meshyTaskIdBlue = blueTask.result;
           }
-        } catch (blueErr) {
-          console.warn("Failed to create blue variant Meshy task:", blueErr.message);
+        } catch (err) {
+          console.error("Failed to create blue variant task:", err);
         }
 
         meshyStatus = "PENDING";
@@ -489,22 +484,6 @@ productForm.addEventListener("submit", async (e) => {
         const originalResult = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         modelUrl = originalResult.modelUrl || null;
         meshyStatus = originalResult.status || meshyStatus;
-
-        // Wait for red variant if task was created
-        if (meshyTaskIdRed) {
-          const redResult = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
-          modelUrlRed = redResult.modelUrl || null;
-        }
-
-        // Wait for blue variant if task was created
-        if (meshyTaskIdBlue) {
-          const blueResult = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
-          modelUrlBlue = blueResult.modelUrl || null;
-        }
-
-        // Keep manual variant URLs when provided.
-        modelUrlRed = manualModelUrlRed || modelUrlRed;
-        modelUrlBlue = manualModelUrlBlue || modelUrlBlue;
       } catch (err) {
         console.error("Failed to generate 3D model", err);
         alert("Failed to generate 3D model: " + err.message);
@@ -513,10 +492,6 @@ productForm.addEventListener("submit", async (e) => {
         return; // ABORT SAVE
       }
     }
-
-    // Keep manual variant URLs when generation is skipped.
-    modelUrlRed = manualModelUrlRed || modelUrlRed;
-    modelUrlBlue = manualModelUrlBlue || modelUrlBlue;
 
     const stock = parseInt(document.getElementById("product-stock").value, 10) || 0;
     const material = document.getElementById("product-material").value;
@@ -536,8 +511,6 @@ productForm.addEventListener("submit", async (e) => {
       meshyTaskIdRed: meshyTaskIdRed,
       meshyTaskIdBlue: meshyTaskIdBlue,
       modelUrl: modelUrl,
-      modelUrlRed: modelUrlRed,
-      modelUrlBlue: modelUrlBlue,
       meshyStatus: meshyStatus,
       meshyRegeneratedAt: shouldRegenerateMeshy ? Timestamp.now() : null,
     };
@@ -558,16 +531,6 @@ productForm.addEventListener("submit", async (e) => {
         const finalMeshy = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         updates.meshyStatus = finalMeshy.status;
         updates.modelUrl = finalMeshy.modelUrl || null;
-      }
-      if (meshyTaskIdRed && !modelUrlRed) {
-        submitBtn.textContent = "Finalizing red variant URL...";
-        const finalRed = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
-        updates.modelUrlRed = finalRed.modelUrl || null;
-      }
-      if (meshyTaskIdBlue && !modelUrlBlue) {
-        submitBtn.textContent = "Finalizing blue variant URL...";
-        const finalBlue = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
-        updates.modelUrlBlue = finalBlue.modelUrl || null;
       }
       if (Object.keys(updates).length > 0) {
         updates.updatedAt = Timestamp.now();
@@ -759,11 +722,7 @@ window.editProduct = (id, productJsonBase64) => {
     productForm.dataset.meshyTaskIdRed = product.meshhyTaskIdRed || "";
     productForm.dataset.meshyTaskIdBlue = product.meshhyTaskIdBlue || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
-    productForm.dataset.modelUrlRed = product.modelUrlRed || "";
-    productForm.dataset.modelUrlBlue = product.modelUrlBlue || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
-    document.getElementById("modelUrlRed").value = product.modelUrlRed || "";
-    document.getElementById("modelUrlBlue").value = product.modelUrlBlue || "";
 
     isEditing = true;
     currentEditId = id;
@@ -886,7 +845,9 @@ const updateStats = (products) => {
   let outOfStockCount = products.filter((p) => p.stock === 0).length;
   let totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0);
   const totalUnits = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-  const avgPrice = totalItems ? products.reduce((sum, p) => sum + (Number(p.price) || 0), 0) / totalItems : 0;
+  const avgPrice = totalItems
+    ? products.reduce((sum, p) => sum + (Number(p.price) || 0), 0) / totalItems
+    : 0;
   const avgStockPerProduct = totalItems ? totalUnits / totalItems : 0;
 
   const materialUnits = products.reduce((acc, p) => {
@@ -912,12 +873,15 @@ const updateStats = (products) => {
   if (analyticsOutOfStockEl) analyticsOutOfStockEl.textContent = String(outOfStockCount);
   if (analyticsAvgPriceEl) {
     analyticsAvgPriceEl.textContent =
-      "₱" + avgPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      "₱" +
+      avgPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   if (analyticsAvgStockEl) analyticsAvgStockEl.textContent = avgStockPerProduct.toFixed(1);
 
   const materialEntries = Object.entries(materialUnits).sort((a, b) => b[1] - a[1]);
-  const categoryEntries = Object.entries(categoryUnits).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const categoryEntries = Object.entries(categoryUnits)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
   renderBars(analyticsMaterialBarsEl, materialEntries, totalUnits);
   renderBars(analyticsCategoryBarsEl, categoryEntries, totalUnits);
   renderLowStockWatchlist(products);
@@ -1008,31 +972,36 @@ function resolveCustomerDisplay(order) {
   const fullFromParts = pickFirstNonEmpty(`${first} ${last}`.trim());
 
   const fromAddress =
-    (order.shippingAddress && pickFirstNonEmpty(order.shippingAddress.fullName, order.shippingAddress.name)) ||
-    (order.deliveryAddress && pickFirstNonEmpty(order.deliveryAddress.fullName, order.deliveryAddress.name)) ||
+    (order.shippingAddress &&
+      pickFirstNonEmpty(order.shippingAddress.fullName, order.shippingAddress.name)) ||
+    (order.deliveryAddress &&
+      pickFirstNonEmpty(order.deliveryAddress.fullName, order.deliveryAddress.name)) ||
     (order.address && pickFirstNonEmpty(order.address.fullName, order.address.name)) ||
-    (order.shippingInfo && pickFirstNonEmpty(order.shippingInfo.fullName, order.shippingInfo.name)) ||
+    (order.shippingInfo &&
+      pickFirstNonEmpty(order.shippingInfo.fullName, order.shippingInfo.name)) ||
     (order.customer && pickFirstNonEmpty(order.customer.fullName, order.customer.name)) ||
     "";
 
-  return pickFirstNonEmpty(
-    order.customerNameResolved,
-    order.customerName,
-    order.customerFullName,
-    order.fullName,
-    order.name,
-    order.displayName,
-    order.orderedByName,
-    order.userName,
-    order.customerDisplayName,
-    order.orderByName,
-    order.buyerName,
-    fromAddress,
-    fullFromParts,
-    order.customerEmail,
-    order.email,
-    order.customerId
-  ) || "—";
+  return (
+    pickFirstNonEmpty(
+      order.customerNameResolved,
+      order.customerName,
+      order.customerFullName,
+      order.fullName,
+      order.name,
+      order.displayName,
+      order.orderedByName,
+      order.userName,
+      order.customerDisplayName,
+      order.orderByName,
+      order.buyerName,
+      fromAddress,
+      fullFromParts,
+      order.customerEmail,
+      order.email,
+      order.customerId
+    ) || "—"
+  );
 }
 
 async function fetchCustomerNameFromUsers(order) {
@@ -1160,9 +1129,16 @@ function normalizeOrderStatus(raw) {
   if (raw == null) return "pending";
   const s = String(raw).toLowerCase().trim();
   if (
-    ["pending", "accepted", "processing", "shipped", "delivered", "declined", "completed", "received"].includes(
-      s
-    )
+    [
+      "pending",
+      "accepted",
+      "processing",
+      "shipped",
+      "delivered",
+      "declined",
+      "completed",
+      "received",
+    ].includes(s)
   )
     return s;
   return "pending";
@@ -1330,7 +1306,8 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
     return `${y}-${m}-${d}`;
   };
   const labelOf = (dt) => {
-    if (granularity === "month") return dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    if (granularity === "month")
+      return dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
     if (granularity === "week") {
       const end = new Date(dt);
       end.setDate(end.getDate() + 6);
@@ -1405,7 +1382,8 @@ function renderRevenueGraph() {
     return;
   }
   ordersRevenueGraphEl.style.gridTemplateColumns = `repeat(${buckets.length}, minmax(0, 1fr))`;
-  const labelInterval = buckets.length > 36 ? 6 : buckets.length > 20 ? 3 : buckets.length > 12 ? 2 : 1;
+  const labelInterval =
+    buckets.length > 36 ? 6 : buckets.length > 20 ? 3 : buckets.length > 12 ? 2 : 1;
 
   ordersRevenueGraphEl.innerHTML = buckets
     .map((bucket, index) => {
@@ -1488,7 +1466,12 @@ async function loadStaffMembers() {
     const snap = await getDocs(collection(db, "users"));
     staffMembers = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((u) => String(u.role || "").toLowerCase().trim() === "staff")
+      .filter(
+        (u) =>
+          String(u.role || "")
+            .toLowerCase()
+            .trim() === "staff"
+      )
       .map((u) => ({
         uid: u.uid || u.id,
         email: u.email || "",
@@ -1507,13 +1490,17 @@ async function loadStaffMembers() {
 loadStaffMembers();
 
 function normalizeUserRole(role) {
-  const r = String(role || "").trim().toLowerCase();
+  const r = String(role || "")
+    .trim()
+    .toLowerCase();
   if (r === "admin" || r === "staff" || r === "customer") return r;
   return "customer";
 }
 
 function normalizeUserStatus(status) {
-  const s = String(status || "").trim().toLowerCase();
+  const s = String(status || "")
+    .trim()
+    .toLowerCase();
   if (s === "inactive" || s === "disabled") return "inactive";
   return "active";
 }
@@ -1579,7 +1566,11 @@ function renderUsersList(users) {
 
 function applyUsersFilter() {
   let rows = allUsers;
-  if (usersFilterValue === "admin" || usersFilterValue === "staff" || usersFilterValue === "customer") {
+  if (
+    usersFilterValue === "admin" ||
+    usersFilterValue === "staff" ||
+    usersFilterValue === "customer"
+  ) {
     rows = rows.filter((u) => normalizeUserRole(u.role) === usersFilterValue);
   } else if (usersFilterValue === "inactive") {
     rows = rows.filter((u) => normalizeUserStatus(u.status) === "inactive");
@@ -1628,7 +1619,8 @@ if (usersListEl) {
     if (!row) return;
     const roleSelect = row.querySelector(".user-role-select");
     const statusSelect = row.querySelector(".user-status-select");
-    if (!(roleSelect instanceof HTMLSelectElement) || !(statusSelect instanceof HTMLSelectElement)) return;
+    if (!(roleSelect instanceof HTMLSelectElement) || !(statusSelect instanceof HTMLSelectElement))
+      return;
 
     const role = normalizeUserRole(roleSelect.value);
     const status = normalizeUserStatus(statusSelect.value);
@@ -1784,9 +1776,12 @@ function getVisibleDeclinedCheckboxes() {
 
 function syncBatchDeleteUi() {
   if (ordersSelectHeaderEl) ordersSelectHeaderEl.classList.toggle("is-hidden", !isBatchDeleteMode);
-  if (batchDeleteControlsEl) batchDeleteControlsEl.classList.toggle("is-hidden", !isBatchDeleteMode);
+  if (batchDeleteControlsEl)
+    batchDeleteControlsEl.classList.toggle("is-hidden", !isBatchDeleteMode);
   if (toggleBatchDeleteModeBtn) {
-    toggleBatchDeleteModeBtn.textContent = isBatchDeleteMode ? "Exit Batch Delete" : "Batch Delete Mode";
+    toggleBatchDeleteModeBtn.textContent = isBatchDeleteMode
+      ? "Exit Batch Delete"
+      : "Batch Delete Mode";
   }
 
   if (!isBatchDeleteMode) {
@@ -1838,7 +1833,8 @@ async function handleBatchDeleteDeclined() {
     .filter((o) => !!o);
 
   const validTargets = selectedOrders.filter(
-    (o) => normalizeOrderStatus(o.status) === "declined" && normalizeOrderAction(o.action) !== "delete"
+    (o) =>
+      normalizeOrderStatus(o.status) === "declined" && normalizeOrderAction(o.action) !== "delete"
   );
 
   if (validTargets.length === 0) {
@@ -1991,9 +1987,7 @@ function getOrderConnectionIssues(order) {
     return Number.isNaN(qty) || qty <= 0;
   }).length;
   if (invalidQtyCount > 0) {
-    issues.push(
-      `${invalidQtyCount} line${invalidQtyCount > 1 ? "s" : ""} with invalid quantity`
-    );
+    issues.push(`${invalidQtyCount} line${invalidQtyCount > 1 ? "s" : ""} with invalid quantity`);
   }
 
   return issues;
@@ -2097,7 +2091,7 @@ function renderOrdersList(orders) {
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                   </svg>
                 </button>`
-            : `<span style="font-size:0.82rem;color:#6b7280;">No action</span>`
+              : `<span style="font-size:0.82rem;color:#6b7280;">No action</span>`
         }
       </td>
     `;
