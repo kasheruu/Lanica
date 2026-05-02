@@ -394,6 +394,8 @@ productForm.addEventListener("submit", async (e) => {
     };
 
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
+    const manualModelUrlRed = document.getElementById("modelUrlRed").value.trim() || null;
+    const manualModelUrlBlue = document.getElementById("modelUrlBlue").value.trim() || null;
 
     // Helper to get URL: Check if new file uploaded, else keep existing
     const getImageUrl = async (key) => {
@@ -487,6 +489,10 @@ productForm.addEventListener("submit", async (e) => {
           const blueResult = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
           modelUrlBlue = blueResult.modelUrl || null;
         }
+
+        // Keep manual variant URLs when provided.
+        modelUrlRed = manualModelUrlRed || modelUrlRed;
+        modelUrlBlue = manualModelUrlBlue || modelUrlBlue;
       } catch (err) {
         console.error("Failed to generate 3D model", err);
         alert("Failed to generate 3D model: " + err.message);
@@ -495,6 +501,10 @@ productForm.addEventListener("submit", async (e) => {
         return; // ABORT SAVE
       }
     }
+
+    // Keep manual variant URLs when generation is skipped.
+    modelUrlRed = manualModelUrlRed || modelUrlRed;
+    modelUrlBlue = manualModelUrlBlue || modelUrlBlue;
 
     const stock = parseInt(document.getElementById("product-stock").value, 10) || 0;
     const material = document.getElementById("product-material").value;
@@ -733,13 +743,15 @@ window.editProduct = (id, productJsonBase64) => {
 
     // Store existing images so we don't overwrite with blank if no new file is selected
     productForm.dataset.existingImages = JSON.stringify(product.images || {});
-    productForm.dataset.meshyTaskId = product.meshyTaskId || "";
-    productForm.dataset.meshyTaskIdRed = product.meshyTaskIdRed || "";
-    productForm.dataset.meshyTaskIdBlue = product.meshyTaskIdBlue || "";
+    productForm.dataset.meshyTaskId = product.meshhyTaskId || "";
+    productForm.dataset.meshyTaskIdRed = product.meshhyTaskIdRed || "";
+    productForm.dataset.meshyTaskIdBlue = product.meshhyTaskIdBlue || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
     productForm.dataset.modelUrlRed = product.modelUrlRed || "";
     productForm.dataset.modelUrlBlue = product.modelUrlBlue || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
+    document.getElementById("modelUrlRed").value = product.modelUrlRed || "";
+    document.getElementById("modelUrlBlue").value = product.modelUrlBlue || "";
 
     isEditing = true;
     currentEditId = id;
