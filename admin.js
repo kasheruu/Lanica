@@ -20,6 +20,12 @@ import {
   onAuthStateChanged,
   signOut,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -36,14 +42,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// Cloudinary Configuration
-// SECURITY WARNING: In frontend JavaScript, NEVER use your API Key and Secret.
-// Anyone can view frontend code and steal them. Instead, use an "Unsigned Upload Preset".
-const cloudinaryConfig = {
-  cloudName: "daoz8m2oh",
-  uploadPreset: "ml_lanica",
-};
+const storage = getStorage(app);
 
 const MESHY_API_BASE = "/api/meshy-image-to-3d";
 
@@ -304,31 +303,26 @@ function applyCategoryFilter() {
   renderRevenueGraph();
 }
 
-// Helper function to upload an image/video to Cloudinary and return its URL
+// Helper function to upload an image/video to Firebase Storage and return its URL
 async function uploadImage(file, path) {
   if (!file) return null;
 
-  const url = `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/auto/upload`;
+  try {
+    // Create a unique filename
+    const uniqueName = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `products/${uniqueName}`);
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", cloudinaryConfig.uploadPreset);
+    // Upload file to Firebase Storage
+    const snapshot = await uploadBytes(storageRef, file);
 
-  // Optional: You can organize files into a folder
-  formData.append("folder", "lanica_products");
+    // Get download URL
+    const downloadURL = await getDownloadURL(snapshot.ref);
 
-  const response = await fetch(url, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    console.error("Cloudinary error response:", await response.text());
-    throw new Error("Failed to upload media to Cloudinary");
+    return downloadURL;
+  } catch (error) {
+    console.error("Firebase Storage error:", error);
+    throw new Error("Failed to upload media to Firebase Storage", { cause: error });
   }
-
-  const data = await response.json();
-  return data.secure_url; // Return the secure Cloudinary URL
 }
 
 async function waitForMeshyModelUrl(taskId, maxAttempts = 40, delayMs = 3000) {
