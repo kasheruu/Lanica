@@ -485,6 +485,16 @@ productForm.addEventListener("submit", async (e) => {
         const originalResult = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         modelUrl = originalResult.modelUrl || null;
         meshyStatus = originalResult.status || meshyStatus;
+
+        // Wait for red variant if task was created
+        if (meshyTaskIdRed) {
+          const redResult = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
+        }
+
+        // Wait for blue variant if task was created
+        if (meshyTaskIdBlue) {
+          const blueResult = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
+        }
       } catch (err) {
         console.error("Failed to generate 3D model", err);
         alert("Failed to generate 3D model: " + err.message);
@@ -532,6 +542,14 @@ productForm.addEventListener("submit", async (e) => {
         const finalMeshy = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         updates.meshyStatus = finalMeshy.status;
         updates.modelUrl = finalMeshy.modelUrl || null;
+      }
+      if (meshyTaskIdRed) {
+        submitBtn.textContent = "Finalizing red variant URL...";
+        const finalRed = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
+      }
+      if (meshyTaskIdBlue) {
+        submitBtn.textContent = "Finalizing blue variant URL...";
+        const finalBlue = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
       }
       if (Object.keys(updates).length > 0) {
         updates.updatedAt = Timestamp.now();
