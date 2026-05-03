@@ -49,11 +49,25 @@ async function getUserRole(user) {
 
 async function routeUserByRole(user) {
   const role = await getUserRole(user);
-  if (role === "staff") {
+
+  // Debug logging
+  console.log("=== LOGIN ROUTING DEBUG ===");
+  console.log("Login - User UID:", user.uid);
+  console.log("Login - User Email:", user.email);
+  console.log("Login - Detected Role:", role);
+  console.log("Login - Role type:", typeof role);
+
+  if (role === "admin") {
+    console.log("🔴 LOGIN - Routing admin user to admin page");
+    window.location.replace("/admin.html");
+  } else if (role === "staff") {
+    console.log("🔵 LOGIN - Routing staff user to staff page");
     window.location.replace("/staff.html");
-    return;
+  } else {
+    console.log("🟡 LOGIN - Unknown/missing role, defaulting to staff page");
+    console.log("Login - Role value:", JSON.stringify(role));
+    window.location.replace("/staff.html");
   }
-  window.location.replace("/admin.html");
 }
 
 // Check if user is already logged in

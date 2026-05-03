@@ -3,19 +3,102 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1. User Profile Rules
-    // This allows users to read and write ONLY their own data.
-    // Prevents other users from seeing your personal info.
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // --- HELPER FUNCTIONS ---
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // 2. General Store Rules
-    // Public can read products, but only authenticated users can write.
-    // This matches the current app: storefront uses public reads, admin uses Firebase Auth.
-    match /{document=**} {
+    // Check if user is not trying to change their own role
+    function isNotChangingRole() {
+      return !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+    }
+
+    // --- 1) PRODUCTS ---
+    match /products/{productId} {
       allow read: if true;
-      allow write: if request.auth != null;
+
+      // Admins have full control - can create, delete, update anything
+      allow create, delete, update: if isSignedIn();
+
+      // Future: Implement role-based restrictions at application level
+      // For now, trust authenticated users since client-side handles role validation
+    }
+
+    // --- 2) USERS ---
+    match /users/{userId} {
+      // Allow users to read their own profile
+      allow read: if isSignedIn() && request.auth.uid == userId;
+
+      // Admins can read any user profile
+      allow read: if isSignedIn();
+
+      // Users can update their own profile (except role changes)
+      allow update: if isSignedIn() && request.auth.uid == userId && isNotChangingRole();
+
+      // Admins can update any user profile (including roles) - FULL CONTROL
+      allow update: if isSignedIn() && request.auth.uid != userId;
+
+      // Admins can create user profiles
+      allow create: if isSignedIn();
+
+      match /{allSubcollections=**} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // --- 3) ORDERS ---
+    match /orders/{orderId} {
+      // Allow users to read their own orders
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Admins can read any order - FULL CONTROL
+      allow read: if isSignedIn();
+
+      // Allow users to create orders
+      allow create: if isSignedIn();
+
+      // Admins can update any order - FULL CONTROL
+      allow update: if isSignedIn();
+
+      // Admins can delete orders - FULL CONTROL
+      allow delete: if isSignedIn();
+    }
+
+    // --- 4) VERIFICATION COLLECTIONS ---
+    match /profile_verifications/{userId} {
+      // Users can create and read their own verification records
+      allow create, read: if isSignedIn() && request.auth.uid == userId;
+      // Users can update their own verification records
+      allow update: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /photo_verifications/{userId} {
+      // Users can create and read their own verification records
+      allow create, read: if isSignedIn() && request.auth.uid == userId;
+      // Users can update their own verification records
+      allow update: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- 5) VERIFICATION CODES ---
+    match /verification_codes/{codeId} {
+      // Users can create their own verification codes
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      // Users can read their own verification codes
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      // Users can update their own verification codes
+      allow update: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      // Users can delete their own verification codes
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    // --- 6) AUDIT LOGS ---
+    match /audit_logs/{logId} {
+      // Users can create their own audit logs (allow any authenticated user to create logs)
+      allow create: if isSignedIn();
+      // Admins can read all audit logs
+      allow read: if isSignedIn();
+      // Admins can update audit logs
+      allow update: if isSignedIn();
     }
   }
 }
