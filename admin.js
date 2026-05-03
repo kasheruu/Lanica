@@ -57,9 +57,39 @@ onAuthStateChanged(auth, async (user) => {
 
   currentUser = user;
   const role = await getUserRole(user);
-  if (role !== "admin") {
-    window.location.replace("/staff.html");
+
+  // Debug logging
+  console.log("=== ADMIN PAGE AUTH DEBUG ===");
+  console.log("Admin page - User UID:", user.uid);
+  console.log("Admin page - User Email:", user.email);
+  console.log("Admin page - Detected Role:", role);
+  console.log("Admin page - Role type:", typeof role);
+  console.log("Admin page - Current URL:", window.location.href);
+
+  // Only allow admin users on admin page
+  if (role === null || role === undefined || role === "") {
+    console.warn(" ADMIN PAGE - Role not found, redirecting to login");
+    window.location.replace("/login.html");
+    return;
+  } else if (role !== "admin") {
+    console.log(
+      " ADMIN PAGE - Non-admin user detected, redirecting to appropriate page. Role:",
+      role
+    );
+    if (role === "staff") {
+      console.log(" Redirecting staff user to staff page");
+      window.location.replace("/staff.html");
+    } else {
+      console.log(" Redirecting customer to main site");
+      window.location.replace("/index.html"); // Redirect customers to main site
+    }
+    return;
+  } else {
+    console.log(" ADMIN PAGE - Admin user confirmed, staying on admin page");
   }
+
+  // If role is null/undefined, stay on admin page and let the user see what happens
+  // This prevents the infinite redirect loop
 });
 
 const productsCollection = collection(db, "products");
@@ -945,22 +975,33 @@ const ORDERS_COLLECTION = collection(db, "orders");
 
 async function getUserRole(user) {
   if (!user) return null;
+
+  let role = null;
+
   try {
     const roleByUid = await getDoc(doc(db, "users", user.uid));
-    if (roleByUid.exists()) return (roleByUid.data().role || "").toLowerCase();
+    if (roleByUid.exists()) {
+      role = (roleByUid.data().role || "").toLowerCase();
+      console.log("Admin page - Role found by UID:", role);
+      return role;
+    }
   } catch (e) {
-    console.warn("Could not read user role by uid:", e);
+    console.warn("Admin page - Could not read user role by uid:", e);
   }
 
   try {
     const q = query(collection(db, "users"), where("email", "==", user.email || ""));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      return ((snap.docs[0].data() || {}).role || "").toLowerCase();
+      role = ((snap.docs[0].data() || {}).role || "").toLowerCase();
+      console.log("Admin page - Role found by email:", role);
+      return role;
     }
   } catch (e) {
-    console.warn("Could not read user role by email:", e);
+    console.warn("Admin page - Could not read user role by email:", e);
   }
+
+  console.log("Admin page - No role found for user, returning null");
   return null;
 }
 
@@ -1644,12 +1685,21 @@ if (usersListEl) {
     try {
       t.setAttribute("disabled", "true");
       t.textContent = "Saving...";
+
+      console.log("=== ROLE UPDATE DEBUG ===");
+      console.log("Updating user doc ID:", docId);
+      console.log("New role:", role);
+      console.log("New status:", status);
+      console.log("Current admin UID:", currentUser?.uid);
+
       await updateDoc(doc(db, "users", docId), {
         role,
         status,
         updatedAt: Timestamp.now(),
         updatedByUid: currentUser ? currentUser.uid : null,
       });
+
+      console.log("✅ Role update successful!");
       t.textContent = "Saved";
       setTimeout(() => {
         t.textContent = "Save";
