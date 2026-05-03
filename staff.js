@@ -984,6 +984,49 @@ function renderOrders() {
     if (st === "processing") updateOptions.push("shipped");
     if (st === "shipped") updateOptions.push("delivered");
 
+    // Calculate delivery estimate for current order
+    const deliveryEstimate = calculateEstimatedDeliveryTime(order);
+
+    // Handle display for manual overrides vs automatic estimates
+    let daysDisplay;
+    if (deliveryEstimate.isManual || deliveryEstimate.daysRange === "Custom") {
+      daysDisplay = `<span style="color: #dc2626;">📅 Manual</span>`;
+    } else {
+      daysDisplay = `(${deliveryEstimate.daysRange})`;
+    }
+
+    const deliveryDisplay =
+      st === "delivered"
+        ? '<span style="color: #059669; font-size: 0.85rem;">✅ Delivered</span>'
+        : `<div style="font-size: 0.82rem;">
+          <div style="color: #1f2937; font-weight: 500;">${deliveryEstimate.minDate}</div>
+          <div style="color: #6b7280; font-size: 0.75rem;">to ${deliveryEstimate.maxDate}</div>
+          <div style="color: #f59e0b; font-size: 0.7rem; margin-top: 2px;">${daysDisplay}</div>
+        </div>`;
+
+    // Create manual override input
+    const manualOverrideInput =
+      st !== "delivered"
+        ? `
+      <div style="display: flex; gap: 5px; align-items: center;">
+        <input
+          type="date"
+          class="manual-delivery-date"
+          data-order-id="${escapeHtml(order.id)}"
+          style="font-size: 0.75rem; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;"
+          min="${new Date().toISOString().split("T")[0]}"
+        />
+        <button
+          class="apply-manual-date-btn"
+          data-order-id="${escapeHtml(order.id)}"
+          style="font-size: 0.7rem; padding: 4px 8px; background: #f59e0b; color: white; border: none; border-radius: 4px; cursor: pointer;"
+        >
+          Apply
+        </button>
+      </div>
+    `
+        : '<span style="font-size:0.82rem;color:#6b7280;">N/A</span>';
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>
@@ -998,6 +1041,8 @@ function renderOrders() {
           st.charAt(0).toUpperCase() + st.slice(1)
         )}</span>
       </td>
+      <td>${deliveryDisplay}</td>
+      <td>${manualOverrideInput}</td>
       <td>
         ${
           updateOptions.length > 0
@@ -1050,14 +1095,338 @@ function renderCompletedHistory() {
   });
 }
 
+// Function to get location-based delivery times
+function getLocationBasedDeliveryTimes(address) {
+  if (!address) {
+    return { min: 3, max: 5 }; // Default for unknown locations
+  }
+
+  const addressString =
+    typeof address === "string"
+      ? address.toLowerCase()
+      : (address.city || address.province || address.municipality || "").toLowerCase();
+
+  // Define delivery zones based on location
+  const deliveryZones = {
+    // Local areas - fastest delivery
+    pila: { min: 1, max: 2 },
+    calamba: { min: 1, max: 2 },
+    cabuyao: { min: 1, max: 2 },
+    binan: { min: 1, max: 2 },
+    "santa rosa": { min: 1, max: 2 },
+
+    // Nearby Laguna cities - moderate delivery
+    "san pedro": { min: 2, max: 3 },
+    "los baños": { min: 2, max: 3 },
+    bay: { min: 2, max: 3 },
+    calauan: { min: 2, max: 3 },
+    liliw: { min: 2, max: 3 },
+    nagcarlan: { min: 2, max: 3 },
+    rizal: { min: 2, max: 3 },
+    magdalena: { min: 2, max: 3 },
+    luisiana: { min: 2, max: 3 },
+    majayjay: { min: 2, max: 3 },
+    pagsanjan: { min: 2, max: 3 },
+    paete: { min: 2, max: 3 },
+    kalayaan: { min: 2, max: 3 },
+    cavinti: { min: 2, max: 3 },
+
+    // Distant areas - longer delivery
+    "san pablo": { min: 3, max: 4 },
+    siniloan: { min: 3, max: 4 },
+    famy: { min: 3, max: 4 },
+    mabitac: { min: 3, max: 4 },
+    "sta. maria": { min: 3, max: 4 },
+    cavite: { min: 3, max: 4 },
+    batangas: { min: 3, max: 4 },
+    quezon: { min: 3, max: 4 },
+
+    // Metro Manila - standard delivery
+    manila: { min: 2, max: 3 },
+    "quezon city": { min: 2, max: 3 },
+    makati: { min: 2, max: 3 },
+    pasig: { min: 2, max: 3 },
+    taguig: { min: 2, max: 3 },
+    mandaluyong: { min: 2, max: 3 },
+    "san juan": { min: 2, max: 3 },
+    pasay: { min: 2, max: 3 },
+    paranaque: { min: 2, max: 3 },
+    muntinlupa: { min: 2, max: 3 },
+    "las pinas": { min: 2, max: 3 },
+    marikina: { min: 2, max: 3 },
+    malabon: { min: 2, max: 3 },
+    navotas: { min: 2, max: 3 },
+    valenzuela: { min: 2, max: 3 },
+    caloocan: { min: 2, max: 3 },
+
+    // Provincial areas - longer delivery
+    "batangas city": { min: 3, max: 5 },
+    lipa: { min: 3, max: 5 },
+    tanauan: { min: 3, max: 5 },
+    "sto. tomas": { min: 3, max: 5 },
+    bauan: { min: 3, max: 5 },
+    "san jose": { min: 3, max: 5 },
+    cuenca: { min: 3, max: 5 },
+    alitagtag: { min: 3, max: 5 },
+    balayan: { min: 3, max: 5 },
+    calaca: { min: 3, max: 5 },
+    lemery: { min: 3, max: 5 },
+    taal: { min: 3, max: 5 },
+    "san luis": { min: 3, max: 5 },
+    "san pascual": { min: 3, max: 5 },
+    "san nicolas": { min: 3, max: 5 },
+    tingloy: { min: 3, max: 5 },
+
+    // Quezon Province
+    lucena: { min: 3, max: 5 },
+    sariaya: { min: 3, max: 5 },
+    tayabas: { min: 3, max: 5 },
+    candelaria: { min: 3, max: 5 },
+    dolores: { min: 3, max: 5 },
+    tiaong: { min: 3, max: 5 },
+    "san antonio": { min: 3, max: 5 },
+    "padre burgos": { min: 3, max: 5 },
+    agdangan: { min: 3, max: 5 },
+    unisan: { min: 3, max: 5 },
+    "general nakar": { min: 4, max: 6 },
+    infanta: { min: 4, max: 6 },
+    real: { min: 4, max: 6 },
+    mauban: { min: 3, max: 5 },
+    sampaloc: { min: 4, max: 6 },
+    lucban: { min: 3, max: 5 },
+    pagsanjan: { min: 2, max: 3 },
+    majayjay: { min: 2, max: 3 },
+    luisiana: { min: 3, max: 5 },
+    cavinti: { min: 3, max: 5 },
+    famy: { min: 3, max: 4 },
+    mabitac: { min: 3, max: 4 },
+    siniloan: { min: 3, max: 4 },
+    kalayaan: { min: 2, max: 3 },
+    paete: { min: 2, max: 3 },
+    pakil: { min: 3, max: 5 },
+    pangil: { min: 3, max: 5 },
+    siniloan: { min: 3, max: 4 },
+    lumban: { min: 2, max: 3 },
+    cavinti: { min: 3, max: 5 },
+    baliuag: { min: 3, max: 5 },
+    "san miguel": { min: 4, max: 6 },
+    "san ildefonso": { min: 4, max: 6 },
+    "san rafael": { min: 4, max: 6 },
+    "dona remedios trinidad": { min: 4, max: 6 },
+    "san jose del monte": { min: 3, max: 5 },
+    meycauayan: { min: 3, max: 5 },
+    marilao: { min: 3, max: 5 },
+    obando: { min: 3, max: 5 },
+    bocaue: { min: 3, max: 5 },
+    balagtas: { min: 3, max: 5 },
+    guiguinto: { min: 3, max: 5 },
+    plaridel: { min: 3, max: 5 },
+    pandi: { min: 4, max: 6 },
+    angat: { min: 4, max: 6 },
+    norzagaray: { min: 4, max: 6 },
+  };
+
+  // Find matching location
+  for (const [location, timeRange] of Object.entries(deliveryZones)) {
+    if (addressString.includes(location)) {
+      return timeRange;
+    }
+  }
+
+  // Default for unknown locations
+  return { min: 3, max: 5 };
+}
+
+// Function to calculate estimated delivery time based on status and address
+function calculateEstimatedDeliveryTime(order, manualOverride = null) {
+  const now = new Date();
+  const status = normalizeOrderStatus(order.status);
+
+  // Use manual override if provided (from function parameter)
+  if (manualOverride && manualOverride.minDate && manualOverride.maxDate) {
+    return {
+      minDate: manualOverride.minDate,
+      maxDate: manualOverride.maxDate,
+      daysRange: manualOverride.daysRange || "Custom",
+      status: status,
+      isManual: true,
+    };
+  }
+
+  // Check for manual override stored in database
+  if (
+    order.manualDeliveryOverride &&
+    (order.manualOverrideApplied || order.estimatedDeliveryDays === "Custom")
+  ) {
+    return {
+      minDate: order.manualDeliveryOverride,
+      maxDate: order.manualDeliveryOverride,
+      daysRange: "Custom",
+      status: status,
+      isManual: true,
+    };
+  }
+
+  // Use stored estimates if available (but not manual overrides)
+  if (order.estimatedDeliveryMin && order.estimatedDeliveryMax && !order.manualOverrideApplied) {
+    return {
+      minDate: order.estimatedDeliveryMin,
+      maxDate: order.estimatedDeliveryMax,
+      daysRange: order.estimatedDeliveryDays || `${order.estimatedDeliveryDays}`,
+      status: status,
+      isManual: false,
+    };
+  }
+
+  // Get customer address
+  const customerAddress = order.shippingAddress || order.deliveryAddress || order.address || "";
+
+  // Base delivery times by status
+  const statusMultipliers = {
+    accepted: 1.0,
+    processing: 0.8,
+    shipped: 0.6,
+    delivered: 0,
+  };
+
+  // Get location-based delivery times
+  const locationTimes = getLocationBasedDeliveryTimes(customerAddress);
+  const multiplier = statusMultipliers[status] || 1.0;
+
+  // Calculate adjusted delivery times
+  const minDays = Math.ceil(locationTimes.min * multiplier);
+  const maxDays = Math.ceil(locationTimes.max * multiplier);
+
+  // Calculate estimated delivery date
+  const minDeliveryDate = new Date(now.getTime() + minDays * 24 * 60 * 60 * 1000);
+  const maxDeliveryDate = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
+
+  // Format dates for display
+  const formatDate = (date) => {
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  // Check for weekends (no delivery on Sundays)
+  const addWeekendBuffer = (date) => {
+    const day = date.getDay();
+    if (day === 0) {
+      // Sunday
+      return new Date(date.getTime() + 24 * 60 * 60 * 1000); // Add 1 day
+    }
+    return date;
+  };
+
+  const adjustedMinDate = addWeekendBuffer(minDeliveryDate);
+  const adjustedMaxDate = addWeekendBuffer(maxDeliveryDate);
+
+  return {
+    minDate: formatDate(adjustedMinDate),
+    maxDate: formatDate(adjustedMaxDate),
+    daysRange: `${minDays}-${maxDays} days`,
+    status: status,
+    location: customerAddress,
+    isManual: false,
+  };
+}
+
+// Function to apply manual delivery date override
+async function applyManualDeliveryDate(orderId, manualDate) {
+  try {
+    const orderRef = doc(db, "orders", orderId);
+    const currentOrder = allAssignedOrders.find((o) => o.id === orderId);
+
+    if (!currentOrder) {
+      throw new Error("Order not found");
+    }
+
+    // Create manual override object
+    const manualOverride = {
+      minDate: manualDate,
+      maxDate: manualDate,
+      daysRange: "Custom",
+      isManual: true,
+    };
+
+    // Calculate with manual override
+    const deliveryEstimate = calculateEstimatedDeliveryTime(currentOrder, manualOverride);
+
+    await updateDoc(orderRef, {
+      estimatedDeliveryMin: manualDate,
+      estimatedDeliveryMax: manualDate,
+      estimatedDeliveryDays: "Custom",
+      manualDeliveryOverride: manualDate,
+      manualOverrideApplied: true,
+      manualOverrideAppliedAt: Timestamp.now(),
+    });
+
+    console.log(`Manual delivery date applied for order ${orderId}: ${manualDate}`);
+
+    // Orders will refresh automatically via the real-time listener
+    // No need to manually reload as onSnapshot handles updates
+
+    return true;
+  } catch (e) {
+    console.error("Failed to apply manual delivery date:", e);
+    alert("Failed to apply manual delivery date.");
+    return false;
+  }
+}
+
+// Function to update order status in Firestore
 async function updateOrderStatus(orderId, newStatus) {
   try {
     const orderRef = doc(db, "orders", orderId);
-    await updateDoc(orderRef, {
+
+    // Get current order to check for manual override
+    const currentOrder = allAssignedOrders.find((o) => o.id === orderId);
+
+    // Calculate new delivery estimate
+    let deliveryEstimate;
+    if (
+      currentOrder &&
+      currentOrder.manualDeliveryOverride &&
+      !currentOrder.manualOverrideApplied
+    ) {
+      // Use existing manual override
+      const manualOverride = {
+        minDate: currentOrder.manualDeliveryOverride,
+        maxDate: currentOrder.manualDeliveryOverride,
+        daysRange: "Custom",
+        isManual: true,
+      };
+      deliveryEstimate = calculateEstimatedDeliveryTime(currentOrder, manualOverride);
+    } else {
+      // Calculate based on address and status
+      deliveryEstimate = calculateEstimatedDeliveryTime({
+        ...currentOrder,
+        status: newStatus,
+      });
+    }
+
+    // Prepare update data
+    const updateData = {
       status: newStatus,
       updatedAt: Timestamp.now(),
-      updatedByUid: currentUser ? currentUser.uid : null,
-    });
+      estimatedDeliveryMin: deliveryEstimate.minDate,
+      estimatedDeliveryMax: deliveryEstimate.maxDate,
+      estimatedDeliveryDays: deliveryEstimate.daysRange,
+    };
+
+    // Preserve manual override fields if they exist
+    if (currentOrder && currentOrder.manualDeliveryOverride) {
+      updateData.manualDeliveryOverride = currentOrder.manualDeliveryOverride;
+      updateData.manualOverrideApplied = true;
+    }
+
+    await updateDoc(orderRef, updateData);
+
+    console.log(
+      `Order ${orderId} updated to ${newStatus} with delivery estimate: ${deliveryEstimate.minDate} - ${deliveryEstimate.maxDate}`
+    );
   } catch (e) {
     console.error("Failed to update order:", e);
     alert("Failed to update order status.");
@@ -2377,6 +2746,34 @@ if (ordersListEl) {
     const val = t.value;
     if (!id || !val) return;
     updateOrderStatus(id, val);
+  });
+
+  // Add event listener for manual override buttons
+  ordersListEl.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!t.classList.contains("apply-manual-date-btn")) return;
+
+    const orderId = t.getAttribute("data-order-id");
+    if (!orderId) return;
+
+    // Find the corresponding date input
+    const dateInput = document.querySelector(`.manual-delivery-date[data-order-id="${orderId}"]`);
+    if (!dateInput) return;
+
+    const selectedDate = dateInput.value;
+    if (!selectedDate) {
+      alert("Please select a delivery date first.");
+      return;
+    }
+
+    // Confirm the manual override
+    if (
+      confirm(
+        `Set manual delivery date to ${selectedDate}?\n\nThis will override the automatic delivery estimate.`
+      )
+    ) {
+      applyManualDeliveryDate(orderId, selectedDate);
+    }
   });
 }
 
