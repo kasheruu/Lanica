@@ -3,6 +3,8 @@ import {
   getFirestore,
   collection,
   getDocs,
+  getDoc,
+  doc,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -57,9 +59,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <div class="product-card reveal" style="--delay: ${delay}s">
                                 <div class="product-image-container">
                                     <img src="${displayImage}" alt="${product.name}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-                                    <button class="btn-ar-view">
+                                    <button class="btn-ar-view" data-product-id="${doc.id}">
                                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                                        View in Room
+                                        View Model
                                     </button>
                                 </div>
                                 <div class="product-info">
@@ -166,7 +168,7 @@ function bindARButtons() {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
-    newBtn.addEventListener("click", (e) => {
+    newBtn.addEventListener("click", async (e) => {
       e.preventDefault();
       const originalText = newBtn.innerHTML;
       newBtn.innerHTML = `<div class="dot active"></div> Loading 3D Model...`;
@@ -175,17 +177,53 @@ function bindARButtons() {
       const productCard = newBtn.closest(".product-card");
       const productName = productCard.querySelector("h3")?.textContent || "Product";
       const productImage = productCard.querySelector(".product-img")?.src || "";
+      const productId = newBtn.getAttribute("data-product-id");
 
       // Create and show 3D model viewer modal
-      show3DModelViewer(productName, productImage, newBtn, originalText);
+      await show3DModelViewer(productName, productImage, productId, newBtn, originalText);
     });
   });
 }
 
-function show3DModelViewer(productName, productImage, button, originalButtonText) {
+async function show3DModelViewer(productName, productImage, productId, button, originalButtonText) {
+  // Fetch product data from Firebase
+  let modelUrl = null;
+  let has3DModel = false;
+
+  if (productId) {
+    try {
+      const productDoc = await getDoc(doc(db, "products", productId));
+      if (productDoc.exists()) {
+        const productData = productDoc.data();
+        modelUrl = productData.modelUrl;
+        has3DModel = !!modelUrl;
+      }
+    } catch (error) {
+      console.error("Error fetching product data:", error);
+    }
+  }
+
   // Create modal overlay
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "model-viewer-overlay";
+
+  const viewerContent = has3DModel
+    ? `<model-viewer
+         src="/api/meshy-glb?url=${encodeURIComponent(modelUrl)}"
+         style="width: 100%; height: 100%;"
+         camera-controls
+         auto-rotate
+         shadow-intensity="1"
+         alt="${productName} 3D Model">
+       </model-viewer>`
+    : `<div class="model-placeholder">
+        <img src="${productImage}" alt="${productName}" class="model-image">
+        <div class="no-3d-message">
+          <p>3D model not available for this product</p>
+          <p class="fallback-text">Showing 2D preview</p>
+        </div>
+       </div>`;
+
   modalOverlay.innerHTML = `
     <div class="model-viewer-modal">
       <div class="model-viewer-header">
@@ -199,43 +237,28 @@ function show3DModelViewer(productName, productImage, button, originalButtonText
       </div>
       <div class="model-viewer-content">
         <div class="model-viewer-canvas">
-          <div class="model-placeholder">
-            <img src="${productImage}" alt="${productName}" class="model-image">
-            <div class="model-controls">
-              <div class="control-info">
-                <p><strong>View-Only Mode</strong></p>
-                <p>Use mouse to rotate • Scroll to zoom</p>
-              </div>
-              <div class="control-buttons">
-                <button class="control-btn" id="reset-view">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                    <path d="M3 3v5h5"></path>
-                  </svg>
-                  Reset View
-                </button>
-                <button class="control-btn" id="toggle-rotation">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
-                    <path d="M21 3v5h-5"></path>
-                  </svg>
-                  Auto Rotate
-                </button>
-              </div>
-            </div>
-          </div>
+          ${viewerContent}
         </div>
         <div class="model-viewer-info">
           <div class="product-details">
             <h4>${productName}</h4>
-            <p>Experience this furniture piece in 3D. Rotate to view from different angles and zoom to see details.</p>
+            <p>${
+              has3DModel
+                ? "Experience this furniture piece in 3D. Rotate to view from different angles and zoom to see details."
+                : "This product doesn't have a 3D model available yet. You're viewing a 2D preview."
+            }</p>
             <div class="viewing-tips">
               <h5>Viewing Tips:</h5>
               <ul>
-                <li>Click and drag to rotate the model</li>
-                <li>Use scroll wheel to zoom in/out</li>
-                <li>Double-click to reset view</li>
-                <li>This is a view-only experience</li>
+                ${
+                  has3DModel
+                    ? `<li>Click and drag to rotate the model</li>
+                     <li>Use scroll wheel to zoom in/out</li>
+                     <li>Double-click to reset view</li>
+                     <li>This is a view-only experience</li>`
+                    : `<li>Check back later for 3D model availability</li>
+                     <li>Contact us for more details</li>`
+                }
               </ul>
             </div>
           </div>
@@ -337,6 +360,7 @@ function show3DModelViewer(productName, productImage, button, originalButtonText
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-direction: column;
       }
 
       .model-image {
@@ -345,61 +369,25 @@ function show3DModelViewer(productName, productImage, button, originalButtonText
         object-fit: contain;
         border-radius: var(--border-radius);
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s ease;
       }
 
-      .model-image:hover {
-        transform: scale(1.02);
-      }
-
-      .model-controls {
+      .no-3d-message {
         position: absolute;
         bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: var(--clr-white);
-        padding: 20px 30px;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 15px 25px;
+        border-radius: 8px;
         text-align: center;
       }
 
-      .control-info p {
-        margin: 0 0 10px 0;
-        font-size: 0.9rem;
-        color: var(--clr-text-muted);
+      .no-3d-message p {
+        margin: 5px 0;
       }
 
-      .control-info p strong {
-        color: var(--clr-yellow);
-        font-weight: 600;
-      }
-
-      .control-buttons {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-        margin-top: 15px;
-      }
-
-      .control-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 16px;
-        background: var(--clr-yellow);
-        border: none;
-        border-radius: 8px;
-        color: var(--clr-text-main);
-        font-weight: 500;
+      .fallback-text {
         font-size: 0.85rem;
-        cursor: pointer;
-        transition: all var(--transition-fast);
-      }
-
-      .control-btn:hover {
-        background: var(--clr-yellow-hover);
-        transform: translateY(-2px);
+        opacity: 0.8;
       }
 
       .model-viewer-info {
@@ -489,79 +477,6 @@ function show3DModelViewer(productName, productImage, button, originalButtonText
     }
   };
   document.addEventListener("keydown", escapeHandler);
-
-  // Add interactive controls
-  let isRotating = false;
-  let rotationAngle = 0;
-  const modelImage = modalOverlay.querySelector(".model-image");
-  const rotateBtn = modalOverlay.querySelector("#toggle-rotation");
-  const resetBtn = modalOverlay.querySelector("#reset-view");
-
-  // Reset view
-  resetBtn.addEventListener("click", () => {
-    modelImage.style.transform = "scale(1) rotate(0deg)";
-    rotationAngle = 0;
-  });
-
-  // Auto-rotate toggle
-  rotateBtn.addEventListener("click", () => {
-    isRotating = !isRotating;
-    rotateBtn.innerHTML = isRotating
-      ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg> Stop Rotation'
-      : '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg> Auto Rotate';
-
-    if (isRotating) {
-      const rotateAnimation = setInterval(() => {
-        if (!isRotating) {
-          clearInterval(rotateAnimation);
-          return;
-        }
-        rotationAngle += 1;
-        modelImage.style.transform = `scale(1) rotate(${rotationAngle}deg)`;
-      }, 50);
-    }
-  });
-
-  // Mouse drag rotation
-  let isDragging = false;
-  let startX = 0;
-  let startRotation = 0;
-
-  modelImage.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    startX = e.clientX;
-    startRotation = rotationAngle;
-    modelImage.style.cursor = "grabbing";
-  });
-
-  document.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-
-    const deltaX = e.clientX - startX;
-    rotationAngle = startRotation + deltaX;
-    modelImage.style.transform = `scale(1) rotate(${rotationAngle}deg)`;
-  });
-
-  document.addEventListener("mouseup", () => {
-    isDragging = false;
-    modelImage.style.cursor = "grab";
-  });
-
-  // Double-click to reset
-  modelImage.addEventListener("dblclick", () => {
-    modelImage.style.transform = "scale(1) rotate(0deg)";
-    rotationAngle = 0;
-  });
-
-  // Scroll to zoom
-  modelImage.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const currentScale = parseFloat(
-      modelImage.style.transform.match(/scale\(([\d.]+)\)/)?.[1] || 1
-    );
-    const newScale = Math.max(0.5, Math.min(2, currentScale - e.deltaY * 0.001));
-    modelImage.style.transform = `scale(${newScale}) rotate(${rotationAngle}deg)`;
-  });
 
   // Reset button state after modal loads
   setTimeout(() => {

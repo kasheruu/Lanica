@@ -639,12 +639,12 @@ modelViewer.addEventListener("progress", (e) => {
   }
 });
 
-async function fetchLatestMeshyTaskId(productId) {
+async function fetchProductData(productId) {
   const pRef = doc(db, "products", productId);
   const snap = await getDoc(pRef);
   if (!snap.exists()) return null;
   const data = snap.data() || {};
-  return data.meshyTaskId || null;
+  return data;
 }
 
 async function pollMeshyAndLoad(taskId, attempt = 0) {
@@ -704,12 +704,31 @@ window.view3DModel = async (productId) => {
   modelViewer.src = "";
 
   try {
-    const taskId = await fetchLatestMeshyTaskId(productId);
-    if (!taskId) {
+    const productData = await fetchProductData(productId);
+    if (!productData) {
       setViewerLoading(false);
-      viewerStatus.textContent = "No Meshy task found for this product yet.";
+      viewerStatus.textContent = "Product not found.";
       return;
     }
+
+    // First check if there's already a modelUrl stored
+    if (productData.modelUrl) {
+      viewerStatus.style.visibility = "visible";
+      viewerStatus.textContent = "Loading 3D model...";
+      setViewerLoading(true, "Calibrating 3D object...");
+      const proxiedGlbUrl = `/api/meshy-glb?url=${encodeURIComponent(productData.modelUrl)}`;
+      modelViewer.src = proxiedGlbUrl;
+      return;
+    }
+
+    // If no modelUrl, check for meshyTaskId and poll
+    const taskId = productData.meshyTaskId;
+    if (!taskId) {
+      setViewerLoading(false);
+      viewerStatus.textContent = "No 3D model available for this product yet.";
+      return;
+    }
+
     await pollMeshyAndLoad(taskId, 0);
   } catch (e) {
     console.error(e);
@@ -824,7 +843,7 @@ const renderInventory = (products) => {
             <td>
                 <div class="action-btns">
                     ${
-                      product.meshyTaskId
+                      product.meshyTaskId || product.modelUrl
                         ? `<button class="btn-icon" title="View 3D Model" onclick="view3DModel('${product.id}')">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                     </button>`
