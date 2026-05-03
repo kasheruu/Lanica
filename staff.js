@@ -53,6 +53,10 @@ const profileForm = document.getElementById("staff-profile-form");
 const displayNameInput = document.getElementById("staff-display-name");
 const displayNameEditInput = document.getElementById("staff-display-name-edit");
 const phoneEditInput = document.getElementById("staff-phone-edit");
+const firstNameInput = document.getElementById("staff-first-name");
+const lastNameInput = document.getElementById("staff-last-name");
+const emailAddressInput = document.getElementById("staff-email-address");
+const addressEditInput = document.getElementById("staff-address-edit");
 const saveProfileBtn = document.getElementById("staff-save-profile");
 const profileHintEl = document.getElementById("staff-profile-hint");
 const profileHintEditEl = document.getElementById("staff-profile-hint-edit");
@@ -1498,6 +1502,20 @@ async function getUserRole(user) {
   return null;
 }
 
+function splitName(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    first: parts.slice(0, -1).join(" ") || parts[0] || "",
+    last: parts.length > 1 ? parts.slice(-1).join(" ") : "",
+  };
+}
+
+function combineName(first, last) {
+  const f = String(first || "").trim();
+  const l = String(last || "").trim();
+  return [f, l].filter(Boolean).join(" ");
+}
+
 async function loadMyProfile() {
   if (!currentUser || !displayNameInput) return;
   try {
@@ -1513,6 +1531,14 @@ async function loadMyProfile() {
     }
     if (phoneEditInput) {
       phoneEditInput.value = phone;
+    }
+    if (firstNameInput && lastNameInput) {
+      const split = splitName(nm || currentUser.displayName || "");
+      firstNameInput.value = split.first;
+      lastNameInput.value = split.last;
+    }
+    if (emailAddressInput) {
+      emailAddressInput.value = currentUser.email || "";
     }
     if (staffPhoneDisplay) {
       staffPhoneDisplay.textContent = phone || "Not set";
@@ -1927,14 +1953,11 @@ if (profileForm && displayNameEditInput) {
   profileForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    // Only allow save if verified
-    if (!profileEditVerified) {
-      if (profileHintEditEl) {
-        profileHintEditEl.textContent = "Please verify your identity first";
-        profileHintEditEl.style.color = "#dc2626";
-      }
-      return;
+    if (firstNameInput && lastNameInput && displayNameEditInput) {
+      displayNameEditInput.value = combineName(firstNameInput.value, lastNameInput.value);
     }
+
+    // Profile verification flow is not required for the new profile update UI.
 
     // Rate limiting check
     const rateLimitResult = rateLimiter.isAllowed("profile_update", 3, 60000); // 3 attempts per minute

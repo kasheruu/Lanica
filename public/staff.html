@@ -48,7 +48,7 @@
             <path d="M20 21a8 8 0 0 0-16 0"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          My Account
+          My Profile
         </a>
         <a href="#" class="nav-item" id="logout-btn" style="margin-top: auto">
           <svg
@@ -86,7 +86,7 @@
             alt="Staff profile"
           />
           <span class="staff-account-meta">
-            <strong id="staff-account-name">My Account</strong>
+            <strong id="staff-account-name">My Profile</strong>
             <small>Profile</small>
           </span>
         </button>
@@ -160,27 +160,89 @@
       </div>
 
       <div id="staff-account-section" class="is-hidden">
-        <div class="table-container staff-profile-wrapper">
-          <div class="staff-profile-card">
-            <h3 style="margin: 0 0 10px; font-size: 1.05rem; color: #1f2937">My Account</h3>
-            <form id="staff-profile-form" class="staff-profile-form">
-              <div style="display: grid; grid-template-columns: 1fr 180px; gap: 12px; align-items: end">
-                <div class="form-group" style="margin: 0">
-                  <label for="staff-display-name">Name</label>
-                  <input
-                    type="text"
-                    id="staff-display-name"
-                    placeholder="e.g. Carlo D."
-                    required
-                  />
+        <div class="profile-page-grid">
+          <section class="profile-summary-card">
+            <div class="profile-card-header">
+              <div class="profile-avatar-stack">
+                <img
+                  id="staff-avatar"
+                  class="profile-avatar-large"
+                  src="https://ui-avatars.com/api/?name=Staff&background=111827&color=fff&size=128"
+                  alt="Staff profile"
+                />
+                <div class="profile-avatar-actions">
+                  <button type="button" class="icon-btn" title="Edit profile photo">✎</button>
+                  <button type="button" class="icon-btn delete" title="Remove profile photo">×</button>
                 </div>
+              </div>
+              <div>
+                <p class="profile-label">My Profile</p>
+                <h3 class="profile-title" id="staff-account-name">Loading...</h3>
+                <p class="profile-subtitle">Update your profile details in one place.</p>
+              </div>
+            </div>
+            <div class="profile-summary-grid">
+              <div class="profile-summary-item">
+                <span>Email Address</span>
+                <strong id="staff-email-display">Loading...</strong>
+              </div>
+              <div class="profile-summary-item">
+                <span>Phone Number</span>
+                <strong id="staff-phone-display">Loading...</strong>
+              </div>
+              <div class="profile-summary-item">
+                <span>Account Role</span>
+                <strong id="staff-role-display">Staff</strong>
+              </div>
+              <div class="profile-summary-item">
+                <span>Joined</span>
+                <strong id="staff-created-display">Loading...</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="profile-edit-card">
+            <div class="profile-card-header">
+              <div>
+                <p class="profile-label">Edit Profile</p>
+                <h3 class="profile-title">Personal Information</h3>
+              </div>
+            </div>
+            <form id="staff-profile-form" class="profile-form">
+              <div class="profile-fields-grid">
+                <div class="form-group">
+                  <label for="staff-first-name">First Name</label>
+                  <input id="staff-first-name" class="profile-input" placeholder="Herald" />
+                </div>
+                <div class="form-group">
+                  <label for="staff-last-name">Last Name</label>
+                  <input id="staff-last-name" class="profile-input" placeholder="Zontix" />
+                </div>
+                <div class="form-group full-width">
+                  <label for="staff-email-address">Email Address</label>
+                  <input id="staff-email-address" class="profile-input" type="email" readonly />
+                </div>
+                <div class="form-group">
+                  <label for="staff-phone-edit">Phone Number</label>
+                  <input id="staff-phone-edit" class="profile-input" type="tel" placeholder="0945 751 0291" />
+                </div>
+                <div class="form-group full-width">
+                  <label for="staff-address-edit">Address</label>
+                  <input id="staff-address-edit" class="profile-input" type="text" placeholder="Magdalene" />
+                </div>
+              </div>
+
+              <input type="hidden" id="staff-display-name" />
+
+              <p class="profile-save-note">
+                You will be asked for your password when saving changes.
+              </p>
+              <div class="profile-actions-row">
+                <button type="button" id="profile-cancel-btn" class="btn-secondary">Cancel</button>
                 <button type="submit" id="staff-save-profile" class="btn-primary">Save</button>
               </div>
-              <div id="staff-profile-hint" style="margin-top: 8px; font-size: 0.85rem; color: #6b7280">
-                This name appears in admin assignment.
-              </div>
             </form>
-          </div>
+          </section>
         </div>
       </div>
     </main>

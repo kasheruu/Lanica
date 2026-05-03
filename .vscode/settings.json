@@ -7,5 +7,6 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "eslint.validate": ["javascript", "javascriptreact", "html", "mjs"],
-  "eslint.run": "onType"
+  "eslint.run": "onType",
+  "liveServer.settings.port": 5501
 }

@@ -46,6 +46,9 @@ const deliveredStatEl = document.getElementById("staff-delivered");
 
 const profileForm = document.getElementById("staff-profile-form");
 const displayNameInput = document.getElementById("staff-display-name");
+const firstNameInput = document.getElementById("staff-first-name");
+const lastNameInput = document.getElementById("staff-last-name");
+const emailAddressInput = document.getElementById("staff-email-address");
 const saveProfileBtn = document.getElementById("staff-save-profile");
 const profileHintEl = document.getElementById("staff-profile-hint");
 const staffAccountChip = document.getElementById("staff-account-chip");
@@ -461,6 +464,20 @@ async function getUserRole(user) {
   return null;
 }
 
+function splitName(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    first: parts.slice(0, -1).join(" ") || parts[0] || "",
+    last: parts.length > 1 ? parts.slice(-1).join(" ") : "",
+  };
+}
+
+function combineName(first, last) {
+  const f = String(first || "").trim();
+  const l = String(last || "").trim();
+  return [f, l].filter(Boolean).join(" ");
+}
+
 async function loadMyProfile() {
   if (!currentUser || !displayNameInput) return;
   try {
@@ -469,9 +486,17 @@ async function loadMyProfile() {
     const nm = data.displayName || data.name || "";
     const profilePhoto = data.photoURL || data.profilePic || currentUser.photoURL || "";
     displayNameInput.value = nm;
+    if (firstNameInput && lastNameInput) {
+      const split = splitName(nm || currentUser.displayName || "");
+      firstNameInput.value = split.first;
+      lastNameInput.value = split.last;
+    }
+    if (emailAddressInput) {
+      emailAddressInput.value = currentUser.email || "";
+    }
     if (staffAccountNameEl) {
       staffAccountNameEl.textContent =
-        nm || currentUser.displayName || currentUser.email || "My Account";
+        nm || currentUser.displayName || currentUser.email || "My Profile";
     }
     if (staffAvatarEl) {
       if (profilePhoto) {
@@ -540,6 +565,9 @@ onAuthStateChanged(auth, async (user) => {
 if (profileForm && displayNameInput) {
   profileForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (firstNameInput && lastNameInput && displayNameInput) {
+      displayNameInput.value = combineName(firstNameInput.value, lastNameInput.value);
+    }
     if (saveProfileBtn) {
       saveProfileBtn.disabled = true;
       saveProfileBtn.textContent = "Saving...";
