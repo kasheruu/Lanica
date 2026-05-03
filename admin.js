@@ -338,20 +338,27 @@ async function uploadImage(file, path) {
   if (!file) return null;
 
   try {
+    console.log("Starting upload for file:", file.name, "Size:", file.size, "Type:", file.type);
     // Create a unique filename
     const uniqueName = `${Date.now()}_${file.name}`;
     const storageRef = ref(storage, `products/${uniqueName}`);
 
+    console.log("Uploading to path:", `products/${uniqueName}`);
     // Upload file to Firebase Storage
     const snapshot = await uploadBytes(storageRef, file);
+    console.log("Upload successful, getting download URL...");
 
     // Get download URL
     const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log("Download URL obtained:", downloadURL);
 
     return downloadURL;
   } catch (error) {
     console.error("Firebase Storage error:", error);
-    throw new Error("Failed to upload media to Firebase Storage", { cause: error });
+    console.error("Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    throw new Error("Failed to upload media to Firebase Storage: " + error.message, {
+      cause: error,
+    });
   }
 }
 
@@ -783,11 +790,13 @@ window.editProduct = (id, productJsonBase64) => {
 
     // Store existing images so we don't overwrite with blank if no new file is selected
     productForm.dataset.existingImages = JSON.stringify(product.images || {});
-    productForm.dataset.meshyTaskId = product.meshhyTaskId || "";
-    productForm.dataset.meshyTaskIdRed = product.meshhyTaskIdRed || "";
-    productForm.dataset.meshyTaskIdBlue = product.meshhyTaskIdBlue || "";
+    productForm.dataset.meshyTaskId = product.meshyTaskId || "";
+    productForm.dataset.meshyTaskIdRed = product.meshyTaskIdRed || "";
+    productForm.dataset.meshyTaskIdBlue = product.meshyTaskIdBlue || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
+    productForm.dataset.productName = product.name || "";
+    productForm.dataset.productDescription = product.description || "";
 
     isEditing = true;
     currentEditId = id;
@@ -1527,6 +1536,8 @@ if (navOrders) {
   navOrders.addEventListener("click", (e) => {
     e.preventDefault();
     showAdminSection("orders");
+    // Reload staff members when orders section is accessed to ensure dropdown is populated
+    loadStaffMembers();
   });
 }
 if (navUsers) {
@@ -2137,7 +2148,7 @@ function renderOrdersList(orders) {
         )}</span>
       </td>
       <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign rider">
+        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign rider" ${st !== "pending" ? "disabled" : ""}>
           <option value="">Unassigned</option>
           ${staffMembers
             .map((s) => {

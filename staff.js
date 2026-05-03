@@ -52,9 +52,11 @@ const deliveredStatEl = document.getElementById("staff-delivered");
 const profileForm = document.getElementById("staff-profile-form");
 const displayNameInput = document.getElementById("staff-display-name");
 const displayNameEditInput = document.getElementById("staff-display-name-edit");
+const phoneEditInput = document.getElementById("staff-phone-edit");
 const saveProfileBtn = document.getElementById("staff-save-profile");
 const profileHintEl = document.getElementById("staff-profile-hint");
 const profileHintEditEl = document.getElementById("staff-profile-hint-edit");
+const staffPhoneDisplay = document.getElementById("staff-phone-display");
 
 // Profile Verification Elements
 const editProfileBtn = document.getElementById("edit-profile-btn");
@@ -696,24 +698,55 @@ function sanitizeInput(input, type = "text") {
   }
 }
 
-function validateInput(input, type = "text") {
-  const sanitized = sanitizeInput(input, type);
-  const original = String(input || "").trim();
-
-  // Check if sanitization removed significant content
-  if (sanitized.length === 0 && original.length > 0) {
-    return { isValid: false, error: "Invalid characters detected", sanitized: "" };
+function validateInput(input, type) {
+  if (!input || typeof input !== "string") {
+    return { isValid: false, error: `${type} is required`, sanitized: "" };
   }
 
-  if (type === "name" && sanitized.length < 2) {
-    return { isValid: false, error: "Name must be at least 2 characters", sanitized: "" };
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { isValid: false, error: `${type} cannot be empty`, sanitized: "" };
   }
 
-  if (type === "email" && !sanitized.includes("@")) {
-    return { isValid: false, error: "Invalid email format", sanitized: "" };
+  if (type === "name") {
+    if (trimmed.length < 2) {
+      return { isValid: false, error: "Name must be at least 2 characters", sanitized: "" };
+    }
+    if (trimmed.length > 50) {
+      return { isValid: false, error: "Name must be 50 characters or less", sanitized: "" };
+    }
+    // Allow letters, spaces, hyphens, apostrophes, and common Filipino characters
+    if (!/^[a-zA-Z\u00C0-\u017F\s\-'\.]+$/.test(trimmed)) {
+      return { isValid: false, error: "Name contains invalid characters", sanitized: "" };
+    }
   }
 
-  return { isValid: true, error: null, sanitized };
+  return { isValid: true, error: null, sanitized: trimmed };
+}
+
+function validatePhoneNumber(phone) {
+  if (!phone || typeof phone !== "string") {
+    return { isValid: false, error: "Phone number is required", sanitized: "" };
+  }
+
+  const trimmed = phone.trim();
+  if (!trimmed) {
+    return { isValid: true, error: null, sanitized: "" }; // Phone is optional
+  }
+
+  // Remove any non-digit characters
+  const digitsOnly = trimmed.replace(/\D/g, "");
+
+  // Check if it's a valid Philippine mobile number (starts with 09 and has 11 digits)
+  if (!/^09\d{9}$/.test(digitsOnly)) {
+    return {
+      isValid: false,
+      error: "Please enter a valid Philippine mobile number (e.g., 09123456789)",
+      sanitized: "",
+    };
+  }
+
+  return { isValid: true, error: null, sanitized: digitsOnly };
 }
 
 function pickFirstNonEmpty(...values) {
@@ -1125,17 +1158,17 @@ function getLocationBasedDeliveryTimes(address) {
     rizal: { min: 2, max: 3 },
     magdalena: { min: 2, max: 3 },
     luisiana: { min: 2, max: 3 },
-    majayjay: { min: 2, max: 3 },
-    pagsanjan: { min: 2, max: 3 },
-    paete: { min: 2, max: 3 },
-    kalayaan: { min: 2, max: 3 },
+    // majayjay: { min: 2, max: 3 }, // Duplicate - removed
+    // pagsanjan: { min: 2, max: 3 }, // Duplicate - removed
+    // paete: { min: 2, max: 3 }, // Duplicate - removed
+    // kalayaan: { min: 2, max: 3 }, // Duplicate - removed
     cavinti: { min: 2, max: 3 },
 
     // Distant areas - longer delivery
     "san pablo": { min: 3, max: 4 },
-    siniloan: { min: 3, max: 4 },
-    famy: { min: 3, max: 4 },
-    mabitac: { min: 3, max: 4 },
+    // siniloan: { min: 3, max: 4 }, // Duplicate - removed
+    // famy: { min: 3, max: 4 }, // Duplicate - removed
+    // mabitac: { min: 3, max: 4 }, // Duplicate - removed
     "sta. maria": { min: 3, max: 4 },
     cavite: { min: 3, max: 4 },
     batangas: { min: 3, max: 4 },
@@ -1194,20 +1227,20 @@ function getLocationBasedDeliveryTimes(address) {
     mauban: { min: 3, max: 5 },
     sampaloc: { min: 4, max: 6 },
     lucban: { min: 3, max: 5 },
-    pagsanjan: { min: 2, max: 3 },
-    majayjay: { min: 2, max: 3 },
-    luisiana: { min: 3, max: 5 },
-    cavinti: { min: 3, max: 5 },
-    famy: { min: 3, max: 4 },
-    mabitac: { min: 3, max: 4 },
-    siniloan: { min: 3, max: 4 },
-    kalayaan: { min: 2, max: 3 },
-    paete: { min: 2, max: 3 },
+    // pagsanjan: { min: 2, max: 3 }, // Duplicate - removed
+    // majayjay: { min: 2, max: 3 }, // Duplicate - removed
+    // luisiana: { min: 3, max: 5 }, // Duplicate - removed
+    // cavinti: { min: 3, max: 5 }, // Duplicate - removed
+    // famy: { min: 3, max: 4 }, // Duplicate - removed
+    // mabitac: { min: 3, max: 4 }, // Duplicate - removed
+    // siniloan: { min: 3, max: 4 }, // Duplicate - removed
+    // kalayaan: { min: 2, max: 3 }, // Duplicate - removed
+    // paete: { min: 2, max: 3 }, // Duplicate - removed
     pakil: { min: 3, max: 5 },
     pangil: { min: 3, max: 5 },
-    siniloan: { min: 3, max: 4 },
+    // siniloan: { min: 3, max: 4 }, // Duplicate - removed
     lumban: { min: 2, max: 3 },
-    cavinti: { min: 3, max: 5 },
+    // cavinti: { min: 3, max: 5 }, // Duplicate - removed
     baliuag: { min: 3, max: 5 },
     "san miguel": { min: 4, max: 6 },
     "san ildefonso": { min: 4, max: 6 },
@@ -1471,15 +1504,22 @@ async function loadMyProfile() {
     const snap = await getDoc(doc(db, "users", currentUser.uid));
     const data = snap.exists() ? snap.data() : {};
     const nm = data.displayName || data.name || "";
+    const phone = data.phoneNumber || data.phone || "";
     const profilePhoto = data.photoURL || data.profilePic || currentUser.photoURL || "";
 
     displayNameInput.value = nm;
     if (displayNameEditInput) {
       displayNameEditInput.value = nm;
     }
+    if (phoneEditInput) {
+      phoneEditInput.value = phone;
+    }
+    if (staffPhoneDisplay) {
+      staffPhoneDisplay.textContent = phone || "Not set";
+    }
     if (staffAccountNameEl) {
       staffAccountNameEl.textContent =
-        nm || currentUser.displayName || currentUser.email || "My Account";
+        nm || currentUser.displayName || currentUser.email || "My Profile";
     }
     if (staffAvatarEl) {
       if (profilePhoto) {
@@ -1600,30 +1640,43 @@ async function updateEmailVerificationStatus() {
   }
 }
 
-async function saveMyProfile(displayName) {
+async function saveMyProfile(displayName, phoneNumber) {
   if (!currentUser) return;
 
-  // Validate and sanitize input
-  const validation = validateInput(displayName, "name");
-  if (!validation.isValid) {
-    throw new Error(validation.error);
+  // Validate and sanitize name
+  const nameValidation = validateInput(displayName, "name");
+  if (!nameValidation.isValid) {
+    throw new Error(nameValidation.error);
   }
 
-  const sanitized = validation.sanitized;
-  if (!sanitized) throw new Error("Name is required.");
+  const sanitizedName = nameValidation.sanitized;
+  if (!sanitizedName) throw new Error("Name is required.");
+
+  // Validate phone number if provided
+  if (phoneNumber) {
+    const phoneValidation = validatePhoneNumber(phoneNumber);
+    if (!phoneValidation.isValid) {
+      throw new Error(phoneValidation.error);
+    }
+    phoneNumber = phoneValidation.sanitized;
+  }
 
   // Ensure the user's profile doc exists and is up to date.
-  await setDoc(
-    doc(db, "users", currentUser.uid),
-    {
-      role: "staff",
-      email: currentUser.email || null,
-      displayName: sanitized,
-      name: sanitized,
-      updatedAt: Timestamp.now(),
-    },
-    { merge: true }
-  );
+  const updateData = {
+    role: "staff",
+    email: currentUser.email || null,
+    displayName: sanitizedName,
+    name: sanitizedName,
+    updatedAt: Timestamp.now(),
+  };
+
+  // Add phone number if provided
+  if (phoneNumber) {
+    updateData.phoneNumber = phoneNumber;
+    updateData.phone = phoneNumber;
+  }
+
+  await setDoc(doc(db, "users", currentUser.uid), updateData, { merge: true });
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -1904,23 +1957,27 @@ if (profileForm && displayNameEditInput) {
     }
 
     try {
-      await saveMyProfile(displayNameEditInput.value);
-      if (profileHintEditEl)
-        profileHintEditEl.textContent = "Saved. Admin assignment list will show your name.";
+      const newName = String(displayNameEditInput.value || "").trim();
+      const newPhone = String(phoneEditInput.value || "").trim();
+
+      await saveMyProfile(newName, newPhone);
+      if (profileHintEditEl) profileHintEditEl.textContent = "Profile saved successfully.";
       if (staffAccountNameEl) {
-        const updatedName = String(displayNameEditInput.value || "").trim();
-        if (updatedName) staffAccountNameEl.textContent = updatedName;
+        if (newName) staffAccountNameEl.textContent = newName;
       }
 
-      // Update display input
+      // Update display inputs
       if (displayNameInput) {
-        displayNameInput.value = displayNameEditInput.value;
+        displayNameInput.value = newName;
+      }
+      if (staffPhoneDisplay) {
+        staffPhoneDisplay.textContent = newPhone || "Not set";
       }
 
       // Log successful profile update
       await logStaffAction(
         "profile_update",
-        `Name changed to: ${displayNameEditInput.value}`,
+        `Profile updated - Name: ${newName}, Phone: ${newPhone || "Not set"}`,
         true
       );
 

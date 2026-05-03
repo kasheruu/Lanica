@@ -39,19 +39,71 @@ html {
 }
 
 /* Zoom scaling from 25% to 500% */
-@media (zoom: 25%)  { html { font-size: 25%; } }
-@media (zoom: 50%)  { html { font-size: 50%; } }
-@media (zoom: 75%)  { html { font-size: 75%; } }
-@media (zoom: 90%)  { html { font-size: 90%; } }
-@media (zoom: 110%) { html { font-size: 110%; } }
-@media (zoom: 125%) { html { font-size: 125%; } }
-@media (zoom: 150%) { html { font-size: 150%; } }
-@media (zoom: 175%) { html { font-size: 175%; } }
-@media (zoom: 200%) { html { font-size: 200%; } }
-@media (zoom: 250%) { html { font-size: 250%; } }
-@media (zoom: 300%) { html { font-size: 300%; } }
-@media (zoom: 400%) { html { font-size: 400%; } }
-@media (zoom: 500%) { html { font-size: 500%; } }
+@media (zoom: 25%) {
+  html {
+    font-size: 25%;
+  }
+}
+@media (zoom: 50%) {
+  html {
+    font-size: 50%;
+  }
+}
+@media (zoom: 75%) {
+  html {
+    font-size: 75%;
+  }
+}
+@media (zoom: 90%) {
+  html {
+    font-size: 90%;
+  }
+}
+@media (zoom: 110%) {
+  html {
+    font-size: 110%;
+  }
+}
+@media (zoom: 125%) {
+  html {
+    font-size: 125%;
+  }
+}
+@media (zoom: 150%) {
+  html {
+    font-size: 150%;
+  }
+}
+@media (zoom: 175%) {
+  html {
+    font-size: 175%;
+  }
+}
+@media (zoom: 200%) {
+  html {
+    font-size: 200%;
+  }
+}
+@media (zoom: 250%) {
+  html {
+    font-size: 250%;
+  }
+}
+@media (zoom: 300%) {
+  html {
+    font-size: 300%;
+  }
+}
+@media (zoom: 400%) {
+  html {
+    font-size: 400%;
+  }
+}
+@media (zoom: 500%) {
+  html {
+    font-size: 500%;
+  }
+}
 
 body {
   font-family: "Outfit", sans-serif;
@@ -744,20 +796,30 @@ footer {
 
 .about-image {
   position: relative;
+  margin-top: -50px;
 }
 
 .image-placeholder {
   width: 100%;
-  height: 400px;
+  height: auto;
   background: var(--clr-gray-light);
   border-radius: var(--border-radius);
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .image-placeholder svg {
   width: 100%;
   height: 100%;
+}
+
+.about-logo-image {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 
 .about-values {
@@ -772,7 +834,9 @@ footer {
   border-radius: var(--border-radius);
   text-align: center;
   box-shadow: var(--shadow-sm);
-  transition: transform var(--transition-medium), box-shadow var(--transition-medium);
+  transition:
+    transform var(--transition-medium),
+    box-shadow var(--transition-medium);
 }
 
 .value-card:hover {
@@ -869,7 +933,9 @@ footer {
   padding: 30px;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-sm);
-  transition: transform var(--transition-medium), box-shadow var(--transition-medium);
+  transition:
+    transform var(--transition-medium),
+    box-shadow var(--transition-medium);
 }
 
 .location-item:hover {
