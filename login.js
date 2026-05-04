@@ -36,13 +36,29 @@ const actionCodeSettings = () => ({
   handleCodeInApp: false,
 });
 
-const VERIFY_EMAIL_THROTTLE_MS = 5 * 60 * 1000;
+const VERIFY_EMAIL_THROTTLE_MS = 10 * 60 * 1000; // Increased to 10 minutes to respect Firebase limits
+const RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000; // 15 minutes for rate limit errors
 
 function shouldAutoSendVerification(uid) {
   if (!uid) return false;
   const last = sessionStorage.getItem(`lanica_verify_sent_${uid}`);
   if (!last) return true;
   return Date.now() - Number(last) > VERIFY_EMAIL_THROTTLE_MS;
+}
+
+function isRateLimited(uid) {
+  if (!uid) return false;
+  const last = sessionStorage.getItem(`lanica_rate_limited_${uid}`);
+  if (!last) return false;
+  return Date.now() - Number(last) < RATE_LIMIT_BACKOFF_MS;
+}
+
+function setRateLimit(uid) {
+  if (uid) sessionStorage.setItem(`lanica_rate_limited_${uid}`, String(Date.now()));
+}
+
+function clearRateLimit(uid) {
+  if (uid) sessionStorage.removeItem(`lanica_rate_limited_${uid}`);
 }
 
 function recordAutoSendVerification(uid) {
@@ -132,22 +148,65 @@ function showVerificationPendingUi(user) {
 }
 
 async function maybeSendVerificationEmail(user) {
-  if (!user || !shouldAutoSendVerification(user.uid)) return;
+  console.log("=== EMAIL VERIFICATION DEBUG ===");
+  console.log("User:", user?.uid, user?.email);
+  console.log("Should auto send:", shouldAutoSendVerification(user?.uid));
+  console.log("Is rate limited:", isRateLimited(user?.uid));
+
+  if (!user || !shouldAutoSendVerification(user.uid)) {
+    console.log("Skipping email verification - user not found or not ready");
+    return;
+  }
+
+  // Check if user is currently rate limited
+  if (isRateLimited(user.uid)) {
+    console.log("User is rate limited for email verification");
+    if (errorMsg) {
+      errorMsg.textContent =
+        "Too many verification attempts. Please wait 15 minutes before trying again.";
+      errorMsg.style.color = "#c5221f";
+    }
+    return;
+  }
+
+  console.log("Attempting to send email verification...");
   try {
-    await sendEmailVerification(user, actionCodeSettings());
+    const actionSettings = actionCodeSettings();
+    console.log("Action code settings:", actionSettings);
+
+    await sendEmailVerification(user, actionSettings);
+    console.log("Email verification sent successfully");
+
     recordAutoSendVerification(user.uid);
+    clearRateLimit(user.uid); // Clear any existing rate limit on success
     if (errorMsg) {
       errorMsg.textContent = "";
       errorMsg.style.color = "#c5221f";
     }
   } catch (e) {
-    console.warn("sendEmailVerification:", e);
-    if (errorMsg) {
-      errorMsg.textContent =
-        e && e.message
-          ? "Could not send verification email. Use Resend or try again later."
-          : "Could not send verification email.";
-      errorMsg.style.color = "#c5221f";
+    console.error("sendEmailVerification failed:", e);
+    console.error("Error code:", e.code);
+    console.error("Error message:", e.message);
+
+    // Handle specific rate limiting error
+    if (e.code === "auth/too-many-requests") {
+      console.log("Rate limit detected, setting rate limit");
+      setRateLimit(user.uid);
+      if (errorMsg) {
+        errorMsg.textContent =
+          "Too many verification attempts. Please wait 15 minutes before trying again.";
+        errorMsg.style.color = "#c5221f";
+      }
+    } else {
+      // Handle other errors
+      console.log("Other error occurred:", e.code);
+      if (errorMsg) {
+        errorMsg.textContent =
+          e && e.message
+            ? "Could not send verification email. Use Resend or try again later."
+            : "Could not send verification email.";
+        errorMsg.style.color = "#c5221f";
+      }
     }
   }
 }
@@ -181,20 +240,63 @@ onAuthStateChanged(auth, (user) => {
 if (resendBtn) {
   resendBtn.addEventListener("click", async () => {
     const user = auth.currentUser;
-    if (!user) return;
+    console.log("=== RESEND VERIFICATION DEBUG ===");
+    console.log("User:", user?.uid, user?.email);
+
+    if (!user) {
+      console.log("No user found for resend");
+      return;
+    }
+
+    // Check if user is rate limited
+    if (isRateLimited(user.uid)) {
+      console.log("User is rate limited for resend");
+      if (errorMsg) {
+        errorMsg.textContent =
+          "Too many verification attempts. Please wait 15 minutes before trying again.";
+        errorMsg.style.color = "#c5221f";
+      }
+      return;
+    }
+
     resendBtn.disabled = true;
     resendBtn.textContent = "Sending…";
+    console.log("Attempting to resend verification email...");
+
     try {
-      await sendEmailVerification(user, actionCodeSettings());
+      const actionSettings = actionCodeSettings();
+      console.log("Action code settings:", actionSettings);
+
+      await sendEmailVerification(user, actionSettings);
+      console.log("Resend verification email sent successfully");
+
+      recordAutoSendVerification(user.uid);
+      clearRateLimit(user.uid); // Clear any existing rate limit on success
       if (errorMsg) {
         errorMsg.textContent = "Verification link sent. Check your inbox.";
         errorMsg.style.color = "#059669";
       }
     } catch (e) {
-      console.error(e);
-      if (errorMsg) {
-        errorMsg.textContent = e.message || "Could not resend email.";
-        errorMsg.style.color = "#c5221f";
+      console.error("Resend verification failed:", e);
+      console.error("Error code:", e.code);
+      console.error("Error message:", e.message);
+
+      // Handle specific rate limiting error
+      if (e.code === "auth/too-many-requests") {
+        console.log("Rate limit detected during resend");
+        setRateLimit(user.uid);
+        if (errorMsg) {
+          errorMsg.textContent =
+            "Too many verification attempts. Please wait 15 minutes before trying again.";
+          errorMsg.style.color = "#c5221f";
+        }
+      } else {
+        // Handle other errors
+        console.log("Other error during resend:", e.code);
+        if (errorMsg) {
+          errorMsg.textContent = e.message || "Could not resend email.";
+          errorMsg.style.color = "#c5221f";
+        }
       }
     } finally {
       resendBtn.disabled = false;
