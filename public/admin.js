@@ -19,6 +19,7 @@ import {
   getAuth,
   onAuthStateChanged,
   signOut,
+  reload,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
 import {
   getStorage,
@@ -61,6 +62,17 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   currentUser = user;
+
+  try {
+    await reload(user);
+  } catch (e) {
+    console.warn("Could not reload auth user:", e);
+  }
+  if (!user.emailVerified) {
+    window.location.replace("/login.html");
+    return;
+  }
+
   const role = await getUserRole(user);
   if (role !== "admin") {
     window.location.replace("/staff.html");

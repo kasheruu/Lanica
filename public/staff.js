@@ -11,6 +11,7 @@ import {
   getDocs,
   Timestamp,
   setDoc,
+  deleteField,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 import {
   getAuth,
@@ -19,6 +20,7 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  reload,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -52,12 +54,35 @@ const emailAddressInput = document.getElementById("staff-email-address");
 const saveProfileBtn = document.getElementById("staff-save-profile");
 const profileHintEl = document.getElementById("staff-profile-hint");
 const staffAccountChip = document.getElementById("staff-account-chip");
-const staffAvatarEl = document.getElementById("staff-avatar");
+const staffChipAvatarEl = document.getElementById("staff-chip-avatar");
+const staffProfileAvatarEl = document.getElementById("staff-profile-avatar");
+const staffProfilePhotoInput = document.getElementById("staff-profile-photo-input");
+const staffEditPhotoBtn = document.getElementById("staff-edit-photo-btn");
+const staffRemovePhotoBtn = document.getElementById("staff-remove-photo-btn");
+const staffChipNameEl = document.getElementById("staff-chip-name");
 const staffAccountNameEl = document.getElementById("staff-account-name");
+
+function setStaffNameAcrossUi(name) {
+  const label = name || "My Profile";
+  if (staffChipNameEl) staffChipNameEl.textContent = label;
+  if (staffAccountNameEl) staffAccountNameEl.textContent = label;
+}
 const navOrders = document.getElementById("nav-orders");
 const navMyAccount = document.getElementById("nav-my-account");
 const staffOrdersSection = document.getElementById("staff-orders-section");
 const staffAccountSection = document.getElementById("staff-account-section");
+const staffHeaderTitle = document.getElementById("staff-header-title");
+const staffHeaderBlurb = document.getElementById("staff-header-blurb");
+
+const STAFF_HEADER_ORDERS_HTML = {
+  title: "Staff Order Updates",
+  blurb:
+    'Update only your assigned accepted orders: <strong>Accepted → Processing → Shipped → Delivered</strong>. Your assignment name comes from your profile.',
+};
+const STAFF_HEADER_PROFILE_HTML = {
+  title: "My Profile",
+  blurb: "Update your profile details in one place.",
+};
 
 let currentUser = null;
 let allAssignedOrders = [];
@@ -72,6 +97,16 @@ function showStaffSection(name) {
   if (staffAccountSection) staffAccountSection.classList.toggle("is-hidden", !showAccount);
   if (navOrders) navOrders.classList.toggle("active", showOrders);
   if (navMyAccount) navMyAccount.classList.toggle("active", showAccount);
+
+  if (staffHeaderTitle && staffHeaderBlurb) {
+    const block = showOrders ? STAFF_HEADER_ORDERS_HTML : STAFF_HEADER_PROFILE_HTML;
+    staffHeaderTitle.textContent = block.title;
+    if (showOrders) {
+      staffHeaderBlurb.innerHTML = block.blurb;
+    } else {
+      staffHeaderBlurb.textContent = block.blurb;
+    }
+  }
 }
 
 if (navOrders) {
@@ -85,6 +120,39 @@ if (navMyAccount) {
   navMyAccount.addEventListener("click", (e) => {
     e.preventDefault();
     showStaffSection("my-account");
+  });
+}
+
+if (staffEditPhotoBtn && staffProfilePhotoInput) {
+  staffEditPhotoBtn.addEventListener("click", () => staffProfilePhotoInput.click());
+}
+
+if (staffProfilePhotoInput) {
+  staffProfilePhotoInput.addEventListener("change", async (e) => {
+    const input = e.target;
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file || !currentUser) return;
+    const validation = validateImageFile(file);
+    if (!validation.isValid) {
+      alert(validation.error);
+      return;
+    }
+    try {
+      if (staffEditPhotoBtn) staffEditPhotoBtn.disabled = true;
+      await uploadProfilePhoto(file);
+      await loadMyProfile();
+    } catch (err) {
+      alert(err.message || "Could not update photo");
+    } finally {
+      if (staffEditPhotoBtn) staffEditPhotoBtn.disabled = false;
+    }
+  });
+}
+
+if (staffRemovePhotoBtn) {
+  staffRemovePhotoBtn.addEventListener("click", () => {
+    removeStaffProfilePhoto();
   });
 }
 
@@ -478,6 +546,68 @@ function combineName(first, last) {
   return [f, l].filter(Boolean).join(" ");
 }
 
+function validateImageFile(file) {
+  const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+  const maxSize = 2 * 1024 * 1024;
+  if (!allowedTypes.includes(file.type)) {
+    return { isValid: false, error: "Only JPEG, PNG, and WebP images are allowed" };
+  }
+  if (file.size > maxSize) {
+    return { isValid: false, error: "Image must be smaller than 2MB" };
+  }
+  return { isValid: true, error: null };
+}
+
+async function uploadProfilePhoto(file) {
+  if (!currentUser || !file) throw new Error("Not signed in or no file selected.");
+  const validation = validateImageFile(file);
+  if (!validation.isValid) throw new Error(validation.error);
+
+  const reader = new FileReader();
+  return new Promise((resolve, reject) => {
+    reader.onload = async (e) => {
+      const dataURL = e.target.result;
+      try {
+        await setDoc(
+          doc(db, "users", currentUser.uid),
+          {
+            profilePhoto: dataURL,
+            photoURL: dataURL,
+            updatedAt: Timestamp.now(),
+          },
+          { merge: true }
+        );
+        resolve(dataURL);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function removeStaffProfilePhoto() {
+  if (!currentUser) return;
+  if (!confirm("Remove your profile photo?")) return;
+  try {
+    await setDoc(
+      doc(db, "users", currentUser.uid),
+      {
+        photoURL: deleteField(),
+        profilePic: deleteField(),
+        profilePhoto: deleteField(),
+        updatedAt: Timestamp.now(),
+      },
+      { merge: true }
+    );
+    await loadMyProfile();
+  } catch (err) {
+    console.error(err);
+    alert("Could not remove photo. Try again.");
+  }
+}
+
 async function loadMyProfile() {
   if (!currentUser || !displayNameInput) return;
   try {
@@ -494,20 +624,18 @@ async function loadMyProfile() {
     if (emailAddressInput) {
       emailAddressInput.value = currentUser.email || "";
     }
-    if (staffAccountNameEl) {
-      staffAccountNameEl.textContent =
-        nm || currentUser.displayName || currentUser.email || "My Profile";
-    }
-    if (staffAvatarEl) {
-      if (profilePhoto) {
-        staffAvatarEl.src = profilePhoto;
-      } else {
-        const fallbackName = nm || currentUser.displayName || currentUser.email || "Staff";
-        staffAvatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          fallbackName
-        )}&background=111827&color=fff&size=128`;
-      }
-    }
+    setStaffNameAcrossUi(
+      nm || currentUser.displayName || currentUser.email || "My Profile"
+    );
+    const avatarFallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      nm || currentUser.displayName || currentUser.email || "Staff"
+    )}&background=111827&color=fff&size=128`;
+    const setAvatarSrc = (imgEl) => {
+      if (!imgEl) return;
+      imgEl.src = profilePhoto || avatarFallbackUrl;
+    };
+    setAvatarSrc(staffChipAvatarEl);
+    setAvatarSrc(staffProfileAvatarEl);
   } catch (e) {
     console.warn("Could not load staff profile:", e);
   }
@@ -539,6 +667,17 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   currentUser = user;
+
+  try {
+    await reload(user);
+  } catch (e) {
+    console.warn("Could not reload auth user:", e);
+  }
+  if (!user.emailVerified) {
+    window.location.replace("/login.html");
+    return;
+  }
+
   const role = await getUserRole(user);
   if (role !== "staff") {
     window.location.replace("/admin.html");
@@ -577,10 +716,8 @@ if (profileForm && displayNameInput) {
       await saveMyProfile(displayNameInput.value);
       if (profileHintEl)
         profileHintEl.textContent = "Saved. Admin assignment list will show your name.";
-      if (staffAccountNameEl) {
-        const updatedName = String(displayNameInput.value || "").trim();
-        if (updatedName) staffAccountNameEl.textContent = updatedName;
-      }
+      const updatedName = String(displayNameInput.value || "").trim();
+      if (updatedName) setStaffNameAcrossUi(updatedName);
     } catch (err) {
       console.error(err);
       if (profileHintEl) profileHintEl.textContent = err.message || "Could not save profile.";

@@ -12,6 +12,7 @@ import {
   Timestamp,
   setDoc,
   addDoc,
+  deleteField,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 import {
   getAuth,
@@ -56,7 +57,6 @@ const phoneEditInput = document.getElementById("staff-phone-edit");
 const firstNameInput = document.getElementById("staff-first-name");
 const lastNameInput = document.getElementById("staff-last-name");
 const emailAddressInput = document.getElementById("staff-email-address");
-const addressEditInput = document.getElementById("staff-address-edit");
 const saveProfileBtn = document.getElementById("staff-save-profile");
 const profileHintEl = document.getElementById("staff-profile-hint");
 const profileHintEditEl = document.getElementById("staff-profile-hint-edit");
@@ -511,12 +511,35 @@ async function updateEmailAddress(newEmail) {
 }
 
 const staffAccountChip = document.getElementById("staff-account-chip");
-const staffAvatarEl = document.getElementById("staff-avatar");
+const staffChipAvatarEl = document.getElementById("staff-chip-avatar");
+const staffProfileAvatarEl = document.getElementById("staff-profile-avatar");
+const staffProfilePhotoInput = document.getElementById("staff-profile-photo-input");
+const staffEditPhotoBtn = document.getElementById("staff-edit-photo-btn");
+const staffRemovePhotoBtn = document.getElementById("staff-remove-photo-btn");
+const staffChipNameEl = document.getElementById("staff-chip-name");
 const staffAccountNameEl = document.getElementById("staff-account-name");
+
+function setStaffNameAcrossUi(name) {
+  const label = name || "My Profile";
+  if (staffChipNameEl) staffChipNameEl.textContent = label;
+  if (staffAccountNameEl) staffAccountNameEl.textContent = label;
+}
 const navOrders = document.getElementById("nav-orders");
 const navMyAccount = document.getElementById("nav-my-account");
 const staffOrdersSection = document.getElementById("staff-orders-section");
 const staffAccountSection = document.getElementById("staff-account-section");
+const staffHeaderTitle = document.getElementById("staff-header-title");
+const staffHeaderBlurb = document.getElementById("staff-header-blurb");
+
+const STAFF_HEADER_ORDERS_HTML = {
+  title: "Staff Order Updates",
+  blurb:
+    'Update only your assigned accepted orders: <strong>Accepted → Processing → Shipped → Delivered</strong>. Your assignment name comes from your profile.',
+};
+const STAFF_HEADER_PROFILE_HTML = {
+  title: "My Profile",
+  blurb: "Manage your staff details and contact information.",
+};
 
 let currentUser = null;
 let allAssignedOrders = [];
@@ -648,6 +671,16 @@ function showStaffSection(name) {
   if (staffAccountSection) staffAccountSection.classList.toggle("is-hidden", !showAccount);
   if (navOrders) navOrders.classList.toggle("active", showOrders);
   if (navMyAccount) navMyAccount.classList.toggle("active", showAccount);
+
+  if (staffHeaderTitle && staffHeaderBlurb) {
+    const block = showOrders ? STAFF_HEADER_ORDERS_HTML : STAFF_HEADER_PROFILE_HTML;
+    staffHeaderTitle.textContent = block.title;
+    if (showOrders) {
+      staffHeaderBlurb.innerHTML = block.blurb;
+    } else {
+      staffHeaderBlurb.textContent = block.blurb;
+    }
+  }
 }
 
 if (navOrders) {
@@ -661,6 +694,60 @@ if (navMyAccount) {
   navMyAccount.addEventListener("click", (e) => {
     e.preventDefault();
     showStaffSection("my-account");
+  });
+}
+
+async function removeStaffProfilePhoto() {
+  if (!currentUser) return;
+  if (!confirm("Remove your profile photo?")) return;
+  try {
+    await setDoc(
+      doc(db, "users", currentUser.uid),
+      {
+        photoURL: deleteField(),
+        profilePic: deleteField(),
+        profilePhoto: deleteField(),
+        updatedAt: Timestamp.now(),
+      },
+      { merge: true }
+    );
+    await loadMyProfile();
+  } catch (err) {
+    console.error(err);
+    alert("Could not remove photo. Try again.");
+  }
+}
+
+if (staffEditPhotoBtn && staffProfilePhotoInput) {
+  staffEditPhotoBtn.addEventListener("click", () => staffProfilePhotoInput.click());
+}
+
+if (staffProfilePhotoInput) {
+  staffProfilePhotoInput.addEventListener("change", async (e) => {
+    const input = e.target;
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file || !currentUser) return;
+    const validation = validateImageFile(file);
+    if (!validation.isValid) {
+      alert(validation.error);
+      return;
+    }
+    try {
+      if (staffEditPhotoBtn) staffEditPhotoBtn.disabled = true;
+      await uploadProfilePhoto(file);
+      await loadMyProfile();
+    } catch (err) {
+      alert(err.message || "Could not update photo");
+    } finally {
+      if (staffEditPhotoBtn) staffEditPhotoBtn.disabled = false;
+    }
+  });
+}
+
+if (staffRemovePhotoBtn) {
+  staffRemovePhotoBtn.addEventListener("click", () => {
+    removeStaffProfilePhoto();
   });
 }
 
@@ -1543,25 +1630,23 @@ async function loadMyProfile() {
     if (staffPhoneDisplay) {
       staffPhoneDisplay.textContent = phone || "Not set";
     }
-    if (staffAccountNameEl) {
-      staffAccountNameEl.textContent =
-        nm || currentUser.displayName || currentUser.email || "My Profile";
-    }
-    if (staffAvatarEl) {
+    setStaffNameAcrossUi(
+      nm || currentUser.displayName || currentUser.email || "My Profile"
+    );
+    const avatarFallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      nm || currentUser.displayName || currentUser.email || "Staff"
+    )}&background=111827&color=fff&size=128`;
+    const setAvatarSrc = (imgEl) => {
+      if (!imgEl) return;
       if (profilePhoto) {
         const sanitizedPhoto = sanitizeImageURL(profilePhoto);
-        staffAvatarEl.src =
-          sanitizedPhoto ||
-          `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            nm || currentUser.displayName || currentUser.email || "Staff"
-          )}&background=111827&color=fff&size=128`;
+        imgEl.src = sanitizedPhoto || avatarFallbackUrl;
       } else {
-        const fallbackName = nm || currentUser.displayName || currentUser.email || "Staff";
-        staffAvatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          fallbackName
-        )}&background=111827&color=fff&size=128`;
+        imgEl.src = avatarFallbackUrl;
       }
-    }
+    };
+    setAvatarSrc(staffChipAvatarEl);
+    setAvatarSrc(staffProfileAvatarEl);
 
     // Update profile photo preview
     if (profilePhotoPreview) {
@@ -1712,6 +1797,16 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   currentUser = user;
+
+  try {
+    await reload(user);
+  } catch (e) {
+    console.warn("Could not reload auth user:", e);
+  }
+  if (!user.emailVerified) {
+    window.location.replace("/login.html");
+    return;
+  }
 
   // Start session timeout monitoring
   resetSessionTimer();
@@ -1985,9 +2080,7 @@ if (profileForm && displayNameEditInput) {
 
       await saveMyProfile(newName, newPhone);
       if (profileHintEditEl) profileHintEditEl.textContent = "Profile saved successfully.";
-      if (staffAccountNameEl) {
-        if (newName) staffAccountNameEl.textContent = newName;
-      }
+      if (newName) setStaffNameAcrossUi(newName);
 
       // Update display inputs
       if (displayNameInput) {
@@ -2340,8 +2433,8 @@ if (cancelPhotoBtn) {
     }
 
     // Reset preview to current photo
-    if (profilePhotoPreview && staffAvatarEl) {
-      profilePhotoPreview.src = staffAvatarEl.src;
+    if (profilePhotoPreview && staffChipAvatarEl) {
+      profilePhotoPreview.src = staffChipAvatarEl.src;
     }
 
     if (photoUploadFeedbackEl) {

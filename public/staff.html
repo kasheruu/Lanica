@@ -71,8 +71,8 @@
     <main class="admin-main">
       <header class="admin-header">
         <div>
-          <h1>Staff Order Updates</h1>
-          <p class="admin-subtitle">
+          <h1 id="staff-header-title">Staff Order Updates</h1>
+          <p class="admin-subtitle" id="staff-header-blurb">
             Update only your assigned accepted orders:
             <strong>Accepted → Processing → Shipped → Delivered</strong>.
             Your assignment name comes from your profile.
@@ -80,13 +80,13 @@
         </div>
         <button id="staff-account-chip" class="staff-account-chip" type="button">
           <img
-            id="staff-avatar"
+            id="staff-chip-avatar"
             class="staff-avatar"
             src="https://ui-avatars.com/api/?name=Staff&background=111827&color=fff&size=128"
             alt="Staff profile"
           />
           <span class="staff-account-meta">
-            <strong id="staff-account-name">My Profile</strong>
+            <strong id="staff-chip-name">My Profile</strong>
             <small>Profile</small>
           </span>
         </button>
@@ -164,15 +164,27 @@
           <section class="profile-summary-card">
             <div class="profile-card-header">
               <div class="profile-avatar-stack">
+                <input
+                  type="file"
+                  id="staff-profile-photo-input"
+                  class="is-hidden"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-hidden="true"
+                  tabindex="-1"
+                />
                 <img
-                  id="staff-avatar"
+                  id="staff-profile-avatar"
                   class="profile-avatar-large"
                   src="https://ui-avatars.com/api/?name=Staff&background=111827&color=fff&size=128"
                   alt="Staff profile"
                 />
                 <div class="profile-avatar-actions">
-                  <button type="button" class="icon-btn" title="Edit profile photo">✎</button>
-                  <button type="button" class="icon-btn delete" title="Remove profile photo">×</button>
+                  <button type="button" class="icon-btn" id="staff-edit-photo-btn" title="Edit profile photo">
+                    ✎
+                  </button>
+                  <button type="button" class="icon-btn delete" id="staff-remove-photo-btn" title="Remove profile photo">
+                    ×
+                  </button>
                 </div>
               </div>
               <div>
@@ -225,10 +237,6 @@
                 <div class="form-group">
                   <label for="staff-phone-edit">Phone Number</label>
                   <input id="staff-phone-edit" class="profile-input" type="tel" placeholder="0945 751 0291" />
-                </div>
-                <div class="form-group full-width">
-                  <label for="staff-address-edit">Address</label>
-                  <input id="staff-address-edit" class="profile-input" type="text" placeholder="Magdalene" />
                 </div>
               </div>
 
