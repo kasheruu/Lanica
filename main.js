@@ -207,9 +207,17 @@ async function show3DModelViewer(productName, productImage, productId, button, o
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "model-viewer-overlay";
 
+  const getGlbViewerUrl = (url) => {
+    if (!url) return "";
+    if (url.includes("meshy.ai")) {
+      return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  };
+
   const viewerContent = has3DModel
     ? `<model-viewer
-         src="/api/meshy-glb?url=${encodeURIComponent(modelUrl)}"
+         src="${getGlbViewerUrl(modelUrl)}"
          style="width: 100%; height: 100%;"
          camera-controls
          auto-rotate

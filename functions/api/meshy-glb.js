@@ -23,8 +23,15 @@ export async function onRequestGet(context) {
       return buildJsonResponse({ error: "Invalid URL." }, 400);
     }
 
-    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.endsWith("meshy.ai")) {
-      return buildJsonResponse({ error: "Only meshy.ai URLs are allowed." }, 400);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return buildJsonResponse({ error: "Invalid protocol." }, 400);
+    }
+
+    const isMeshy = parsed.hostname.endsWith("meshy.ai");
+    const isFirebase = parsed.hostname.includes("firebasestorage.googleapis.com");
+
+    if (!isMeshy && !isFirebase) {
+      return buildJsonResponse({ error: "Only meshy.ai or Firebase Storage URLs are allowed." }, 400);
     }
 
     const upstream = await fetch(parsed.toString());

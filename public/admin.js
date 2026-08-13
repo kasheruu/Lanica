@@ -434,7 +434,8 @@ async function uploadGlbFromUrl(url, folderPath = "products/productsmodel", file
 
   try {
     console.log("Fetching GLB file from Meshy URL:", url);
-    const response = await fetch(url);
+    const fetchUrl = url.includes("meshy.ai") ? `/api/meshy-glb?url=${encodeURIComponent(url)}` : url;
+    const response = await fetch(fetchUrl);
     if (!response.ok) {
       throw new Error(`Failed to download GLB file from Meshy: ${response.statusText}`);
     }
@@ -650,6 +651,14 @@ async function fetchProductData(productId) {
   return data;
 }
 
+function getGlbViewerUrl(url) {
+  if (!url) return "";
+  if (url.includes("meshy.ai")) {
+    return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
 async function pollMeshyAndLoad(taskId, attempt = 0) {
   const response = await fetch(`${MESHY_API_BASE}/${encodeURIComponent(taskId)}`);
 
@@ -663,8 +672,7 @@ async function pollMeshyAndLoad(taskId, attempt = 0) {
     viewerStatus.style.visibility = "visible";
     viewerStatus.textContent = "Starting 3D download...";
     setViewerLoading(true, "Calibrating 3D object...");
-    const proxiedGlbUrl = `/api/meshy-glb?url=${encodeURIComponent(data.model_urls.glb)}`;
-    modelViewer.src = proxiedGlbUrl;
+    modelViewer.src = getGlbViewerUrl(data.model_urls.glb);
     return;
   }
 
@@ -719,8 +727,7 @@ window.view3DModel = async (productId) => {
       viewerStatus.style.visibility = "visible";
       viewerStatus.textContent = "Loading 3D model...";
       setViewerLoading(true, "Calibrating 3D object...");
-      const proxiedGlbUrl = `/api/meshy-glb?url=${encodeURIComponent(productData.modelUrl)}`;
-      modelViewer.src = proxiedGlbUrl;
+      modelViewer.src = getGlbViewerUrl(productData.modelUrl);
       return;
     }
 
