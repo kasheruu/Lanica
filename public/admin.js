@@ -630,6 +630,11 @@ function setViewerLoading(active, text) {
   if (viewerLoadingText && text) viewerLoadingText.textContent = text;
 }
 
+function hideViewerLoading() {
+  if (viewerStatus) viewerStatus.style.visibility = "hidden";
+  setViewerLoading(false);
+}
+
 // Show percentage while downloading the heavy .glb file into the browser
 modelViewer.addEventListener("progress", (e) => {
   const progress = e.detail.totalProgress;
@@ -638,15 +643,17 @@ modelViewer.addEventListener("progress", (e) => {
     viewerStatus.textContent = `Downloading and Opening 3D Model... ${Math.round(progress * 100)}%`;
     setViewerLoading(true, "Calibrating 3D object...");
   } else {
-    viewerStatus.style.visibility = "hidden";
-    setViewerLoading(false);
+    hideViewerLoading();
   }
 });
 
 // Hide loading state as soon as 3D model finishes rendering
-modelViewer.addEventListener("load", () => {
-  viewerStatus.style.visibility = "hidden";
-  setViewerLoading(false);
+modelViewer.addEventListener("load", hideViewerLoading);
+modelViewer.addEventListener("poster-dismissed", hideViewerLoading);
+modelViewer.addEventListener("model-visibility", (e) => {
+  if (e && e.detail && e.detail.visible) {
+    hideViewerLoading();
+  }
 });
 
 // Handle loading error
@@ -681,10 +688,18 @@ async function pollMeshyAndLoad(taskId, attempt = 0) {
   const progress = Number(data.progress || 0);
 
   if (status === "SUCCEEDED" && data.model_urls && data.model_urls.glb) {
+    const targetUrl = getGlbViewerUrl(data.model_urls.glb);
+    if (modelViewer.loaded && modelViewer.src === targetUrl) {
+      hideViewerLoading();
+      return;
+    }
     viewerStatus.style.visibility = "visible";
     viewerStatus.textContent = "Starting 3D download...";
     setViewerLoading(true, "Calibrating 3D object...");
-    modelViewer.src = getGlbViewerUrl(data.model_urls.glb);
+    modelViewer.src = targetUrl;
+    setTimeout(() => {
+      if (modelViewer.loaded) hideViewerLoading();
+    }, 300);
     return;
   }
 
@@ -736,10 +751,22 @@ window.view3DModel = async (productId) => {
     // First check if there's already a modelUrl stored
     if (productData.modelUrl) {
       const targetUrl = getGlbViewerUrl(productData.modelUrl);
+      
+      // If model is already loaded, hide loading spinner immediately
+      if (modelViewer.loaded && modelViewer.src === targetUrl) {
+        hideViewerLoading();
+        return;
+      }
+
       viewerStatus.style.visibility = "visible";
       viewerStatus.textContent = "Loading 3D model...";
       setViewerLoading(true, "Calibrating 3D object...");
       modelViewer.src = targetUrl;
+
+      // Fallback check for instant browser cache loads
+      setTimeout(() => {
+        if (modelViewer.loaded) hideViewerLoading();
+      }, 300);
       return;
     }
 
