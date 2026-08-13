@@ -346,16 +346,17 @@ function applyCategoryFilter() {
 }
 
 // Helper function to upload an image/video to Firebase Storage and return its URL
-async function uploadImage(file, path) {
+async function uploadImage(file, folderPath) {
   if (!file) return null;
 
   try {
     console.log("Starting upload for file:", file.name, "Size:", file.size, "Type:", file.type);
     // Create a unique filename
     const uniqueName = `${Date.now()}_${file.name}`;
-    const storageRef = ref(storage, `products/${uniqueName}`);
+    const targetPath = folderPath ? `${folderPath}/${uniqueName}` : `products/${uniqueName}`;
+    const storageRef = ref(storage, targetPath);
 
-    console.log("Uploading to path:", `products/${uniqueName}`);
+    console.log("Uploading to path:", targetPath);
     // Upload file to Firebase Storage
     const snapshot = await uploadBytes(storageRef, file);
     console.log("Upload successful, getting download URL...");
@@ -424,6 +425,33 @@ async function createMeshyTask(imageUrl, prompt = null) {
   return response.json();
 }
 
+// Helper to fetch GLB from Meshy URL and upload it to Firebase Storage in "products/productsmodel" folder
+async function uploadGlbFromUrl(url, folderPath = "products/productsmodel", filenameHint = "model.glb") {
+  if (!url) return null;
+  if (url.includes("firebasestorage.googleapis.com")) {
+    return url;
+  }
+
+  try {
+    console.log("Fetching GLB file from Meshy URL:", url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to download GLB file from Meshy: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const file = new File([blob], filenameHint.endsWith(".glb") ? filenameHint : `${filenameHint}.glb`, {
+      type: "model/gltf-binary",
+    });
+    console.log("Uploading GLB to Firebase Storage path:", folderPath);
+    const storageUrl = await uploadImage(file, folderPath);
+    console.log("GLB successfully saved to Firebase Storage:", storageUrl);
+    return storageUrl;
+  } catch (err) {
+    console.error("Failed to upload GLB to Firebase Storage:", err);
+    return url;
+  }
+}
+
 // Add / Update Product
 productForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -432,58 +460,41 @@ productForm.addEventListener("submit", async (e) => {
 
   try {
     const transparentImageFile = document.getElementById("img-bg").files[0];
-    const redVariantImageFile = document.getElementById("img-red").files[0];
-    const blueVariantImageFile = document.getElementById("img-blue").files[0];
     const imageFiles = {
       isoImage: document.getElementById("img-iso").files[0],
       bgImage: transparentImageFile,
-      imgRed: redVariantImageFile,
-      imgBlue: blueVariantImageFile,
     };
 
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
 
     // Helper to get URL: Check if new file uploaded, else keep existing
-    const getImageUrl = async (key) => {
+    const getImageUrl = async (key, folderPath) => {
       if (imageFiles[key]) {
-        const uniqueName = `${Date.now()}_${imageFiles[key].name}`;
-        return await uploadImage(imageFiles[key], `products/${uniqueName}`);
+        return await uploadImage(imageFiles[key], folderPath);
       }
       return existingImages[key] || "";
     };
 
-    // Upload all selected files concurrently
-    const [isoImage, bgImage, redVariantImage, blueVariantImage] = await Promise.all([
-      getImageUrl("isoImage"),
-      getImageUrl("bgImage"),
-      getImageUrl("imgRed"),
-      getImageUrl("imgBlue"),
+    // Upload selected files concurrently into specified Firebase Storage folders
+    const [isoImage, bgImage] = await Promise.all([
+      getImageUrl("isoImage", "products/thumbnails"),
+      getImageUrl("bgImage", "products/productsnobg"),
     ]);
 
     // Keep previous Meshy artifacts only when we are NOT regenerating from a new transparent image.
     let meshyTaskId = isEditing ? productForm.dataset.meshyTaskId || null : null;
-    let meshyTaskIdRed = isEditing ? productForm.dataset.meshyTaskIdRed || null : null;
-    let meshyTaskIdBlue = isEditing ? productForm.dataset.meshyTaskIdBlue || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
-    const shouldRegenerateMeshy = !!(
-      transparentImageFile ||
-      redVariantImageFile ||
-      blueVariantImageFile
-    );
+    const shouldRegenerateMeshy = !!transparentImageFile;
     if (shouldRegenerateMeshy) {
       // Explicitly clear old task ids and URLs when a new transparent image is uploaded.
       meshyTaskId = null;
-      meshyTaskIdRed = null;
-      meshyTaskIdBlue = null;
       modelUrl = null;
       meshyStatus = "PENDING";
     }
 
     // Meshy source should always be the transparent-background asset, never the thumbnail.
     const meshySourceImageUrl = bgImage || existingImages.bgImage || existingImages.frontBg || "";
-    const meshyRedVariantUrl = redVariantImage || existingImages.imgRed || "";
-    const meshyBlueVariantUrl = blueVariantImage || existingImages.imgBlue || "";
 
     // Automatically trigger Meshy.ai API only when a NEW transparent background image was uploaded.
     if (shouldRegenerateMeshy) {
@@ -491,55 +502,32 @@ productForm.addEventListener("submit", async (e) => {
         throw new Error("Transparent background image is required for Meshy generation.");
       }
       submitBtn.textContent = isEditing
-        ? "Regenerating 3D Model Variants..."
+        ? "Regenerating 3D Model..."
         : "Starting 3D Generation...";
       try {
         // Always try to create original task
         const originalTask = await createMeshyTask(meshySourceImageUrl);
         meshyTaskId = originalTask.result;
 
-        // Try to create red variant using red variant image if uploaded
-        try {
-          if (meshyRedVariantUrl) {
-            const redTask = await createMeshyTask(meshyRedVariantUrl);
-            meshyTaskIdRed = redTask.result;
-          }
-        } catch (err) {
-          console.error("Failed to create red variant task:", err);
-        }
-
-        // Try to create blue variant using blue variant image if uploaded
-        try {
-          if (meshyBlueVariantUrl) {
-            const blueTask = await createMeshyTask(meshyBlueVariantUrl);
-            meshyTaskIdBlue = blueTask.result;
-          }
-        } catch (err) {
-          console.error("Failed to create blue variant task:", err);
-        }
-
         meshyStatus = "PENDING";
         console.log("Meshy 3D Generation started!", {
           original: meshyTaskId,
-          red: meshyTaskIdRed,
-          blue: meshyTaskIdBlue,
         });
 
-        submitBtn.textContent = "Waiting for 3D model URLs...";
+        submitBtn.textContent = "Waiting for 3D model URL...";
 
         // Wait for original (required)
         const originalResult = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
-        modelUrl = originalResult.modelUrl || null;
+        const rawModelUrl = originalResult.modelUrl || null;
         meshyStatus = originalResult.status || meshyStatus;
 
-        // Wait for red variant if task was created
-        if (meshyTaskIdRed) {
-          const redResult = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
-        }
-
-        // Wait for blue variant if task was created
-        if (meshyTaskIdBlue) {
-          const blueResult = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
+        if (rawModelUrl) {
+          submitBtn.textContent = "Saving 3D model to Firebase Storage...";
+          const productName = document.getElementById("product-name").value || "product";
+          const safeName = productName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+          modelUrl = await uploadGlbFromUrl(rawModelUrl, "products/productsmodel", `${safeName}.glb`);
+        } else {
+          modelUrl = null;
         }
       } catch (err) {
         console.error("Failed to generate 3D model", err);
@@ -563,10 +551,8 @@ productForm.addEventListener("submit", async (e) => {
       material,
       size: `${document.getElementById("product-size-w").value} × ${document.getElementById("product-size-h").value} × ${document.getElementById("product-size-d").value} in`,
       color: document.getElementById("product-color").value,
-      images: { isoImage, bgImage, imgRed: redVariantImage, imgBlue: blueVariantImage },
+      images: { isoImage, bgImage },
       meshyTaskId: meshyTaskId,
-      meshyTaskIdRed: meshyTaskIdRed,
-      meshyTaskIdBlue: meshyTaskIdBlue,
       modelUrl: modelUrl,
       meshyStatus: meshyStatus,
       meshyRegeneratedAt: shouldRegenerateMeshy ? Timestamp.now() : null,
@@ -580,22 +566,20 @@ productForm.addEventListener("submit", async (e) => {
       savedProductRef = await addDoc(productsCollection, productData);
     }
 
-    // Ensure regenerated products eventually store Meshy URLs for all variants.
+    // Ensure regenerated products eventually store Meshy URLs uploaded to Firebase Storage.
     if (shouldRegenerateMeshy && savedProductRef) {
       const updates = {};
       if (meshyTaskId && !modelUrl) {
-        submitBtn.textContent = "Finalizing original 3D model URL...";
+        submitBtn.textContent = "Finalizing 3D model URL...";
         const finalMeshy = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         updates.meshyStatus = finalMeshy.status;
-        updates.modelUrl = finalMeshy.modelUrl || null;
-      }
-      if (meshyTaskIdRed) {
-        submitBtn.textContent = "Finalizing red variant URL...";
-        const finalRed = await waitForMeshyModelUrl(meshyTaskIdRed, 20, 3000);
-      }
-      if (meshyTaskIdBlue) {
-        submitBtn.textContent = "Finalizing blue variant URL...";
-        const finalBlue = await waitForMeshyModelUrl(meshyTaskIdBlue, 20, 3000);
+        if (finalMeshy.modelUrl) {
+          const productName = document.getElementById("product-name").value || "product";
+          const safeName = productName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+          updates.modelUrl = await uploadGlbFromUrl(finalMeshy.modelUrl, "products/productsmodel", `${safeName}.glb`);
+        } else {
+          updates.modelUrl = null;
+        }
       }
       if (Object.keys(updates).length > 0) {
         updates.updatedAt = Timestamp.now();
@@ -803,8 +787,6 @@ window.editProduct = (id, productJsonBase64) => {
     // Store existing images so we don't overwrite with blank if no new file is selected
     productForm.dataset.existingImages = JSON.stringify(product.images || {});
     productForm.dataset.meshyTaskId = product.meshyTaskId || "";
-    productForm.dataset.meshyTaskIdRed = product.meshyTaskIdRed || "";
-    productForm.dataset.meshyTaskIdBlue = product.meshyTaskIdBlue || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
     productForm.dataset.productName = product.name || "";
