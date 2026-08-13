@@ -209,10 +209,8 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   const getGlbViewerUrl = (url) => {
     if (!url) return "";
-    if (url.includes("meshy.ai")) {
-      return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
-    }
-    return url;
+    // Always proxy 3D GLB model URLs through /api/meshy-glb to eliminate CORS errors on Cloudflare Pages
+    return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
   };
 
   const viewerContent = has3DModel
