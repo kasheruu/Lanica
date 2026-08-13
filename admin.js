@@ -643,6 +643,20 @@ modelViewer.addEventListener("progress", (e) => {
   }
 });
 
+// Hide loading state as soon as 3D model finishes rendering
+modelViewer.addEventListener("load", () => {
+  viewerStatus.style.visibility = "hidden";
+  setViewerLoading(false);
+});
+
+// Handle loading error
+modelViewer.addEventListener("error", (err) => {
+  console.error("Model viewer error:", err);
+  setViewerLoading(false);
+  viewerStatus.style.visibility = "visible";
+  viewerStatus.textContent = "Failed to load 3D model.";
+});
+
 async function fetchProductData(productId) {
   const pRef = doc(db, "products", productId);
   const snap = await getDoc(pRef);
@@ -709,8 +723,7 @@ window.view3DModel = async (productId) => {
   viewerStatus.textContent = "Checking model status...";
   viewerStatus.style.visibility = "visible";
   setViewerLoading(true, "Calibrating 3D object...");
-  // Clear out previous model temporarily to show grey box while checking status
-  modelViewer.src = "";
+  modelViewer.removeAttribute("src");
 
   try {
     const productData = await fetchProductData(productId);
@@ -722,10 +735,11 @@ window.view3DModel = async (productId) => {
 
     // First check if there's already a modelUrl stored
     if (productData.modelUrl) {
+      const targetUrl = getGlbViewerUrl(productData.modelUrl);
       viewerStatus.style.visibility = "visible";
       viewerStatus.textContent = "Loading 3D model...";
       setViewerLoading(true, "Calibrating 3D object...");
-      modelViewer.src = getGlbViewerUrl(productData.modelUrl);
+      modelViewer.src = targetUrl;
       return;
     }
 
@@ -749,7 +763,7 @@ window.closeViewer = () => {
   stopViewerPolling();
   setViewerLoading(false);
   viewerModal.classList.remove("active");
-  modelViewer.src = "";
+  modelViewer.removeAttribute("src");
 };
 
 if (closeViewerBtn) closeViewerBtn.addEventListener("click", window.closeViewer);
