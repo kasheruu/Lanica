@@ -27,12 +27,20 @@
       <h2 class="logo">Lanica. <span class="admin-badge">Admin</span></h2>
     </div>
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item active" id="nav-inventory" data-section="inventory">
+      <a href="#" class="nav-item active" id="nav-dashboard" data-section="dashboard">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7"></rect>
           <rect x="14" y="3" width="7" height="7"></rect>
           <rect x="14" y="14" width="7" height="7"></rect>
           <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        Dashboard
+      </a>
+      <a href="#" class="nav-item" id="nav-inventory" data-section="inventory">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
         </svg>
         Inventory
       </a>
@@ -81,7 +89,113 @@
 
   <!-- Main Content -->
   <main class="admin-main">
-    <div id="inventory-section" class="admin-section">
+    <!-- Dashboard Section -->
+    <div id="dashboard-section" class="admin-section">
+      <header class="admin-header">
+        <div>
+          <h1>Dashboard Overview</h1>
+          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time operational summary & key performance metrics.</p>
+        </div>
+        <div class="dashboard-quick-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <button id="dash-action-add-product" class="btn-primary" type="button">+ Add New Product</button>
+          <button id="dash-action-view-orders" class="btn-secondary" type="button">View All Orders</button>
+          <button id="dash-action-export-csv" class="btn-secondary" type="button">Export Inventory CSV</button>
+        </div>
+      </header>
+
+      <!-- KPI Cards Grid -->
+      <div class="stats-grid dashboard-kpi-grid">
+        <div class="stat-card kpi-card">
+          <div class="kpi-icon-wrapper revenue-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <h3>Total Sales / Revenue</h3>
+            <p class="stat-value" id="dash-total-revenue">₱0.00</p>
+            <span class="kpi-subtitle">From completed orders</span>
+          </div>
+        </div>
+
+        <div class="stat-card kpi-card">
+          <div class="kpi-icon-wrapper pending-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 16 14"></polyline>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <h3>Pending Orders</h3>
+            <p class="stat-value" id="dash-pending-orders">0</p>
+            <span class="kpi-subtitle">Needs fulfillment attention</span>
+          </div>
+        </div>
+
+        <div class="stat-card kpi-card">
+          <div class="kpi-icon-wrapper low-stock-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <h3>Low Stock Warning</h3>
+            <p class="stat-value" id="dash-low-stock">0</p>
+            <span class="kpi-subtitle">Items with stock &le; 5</span>
+          </div>
+        </div>
+
+        <div class="stat-card kpi-card">
+          <div class="kpi-icon-wrapper products-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <h3>Total Products</h3>
+            <p class="stat-value" id="dash-total-products">0</p>
+            <span class="kpi-subtitle">Active inventory listings</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Orders Section -->
+      <div class="table-container recent-orders-container" style="margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(0, 0, 0, 0.05);">
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: #1f2937;">Recent Orders</h3>
+            <span style="font-size: 0.85rem; color: #6b7280;">Most recent 5 customer purchases</span>
+          </div>
+          <a href="#" id="dash-link-all-orders" style="font-size: 0.9rem; font-weight: 600; color: #d97706; text-decoration: none;">View All Orders &rarr;</a>
+        </div>
+        <table class="inventory-table orders-table">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Customer Name</th>
+              <th>Items Purchased</th>
+              <th>Total Amount</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="dash-recent-orders-list">
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 24px;">
+                <div class="dash-loading-spinner"></div> Loading recent orders...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="inventory-section" class="admin-section is-hidden">
       <header class="admin-header">
         <h1>Inventory Management</h1>
         <button id="add-product-btn" class="btn-primary">Add New Product</button>
@@ -148,7 +262,10 @@
 
     <div id="analytics-section" class="admin-section is-hidden">
       <header class="admin-header">
-        <h1>Business Analytics</h1>
+        <div>
+          <h1>Furniture Analytics</h1>
+          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time inventory distribution, stock health, and sales performance.</p>
+        </div>
         <button id="export-analytics-pdf-btn" class="btn-primary" type="button">Export PDF</button>
       </header>
 
@@ -163,7 +280,7 @@
             <p class="stat-value" id="low-stock">0</p>
           </div>
           <div class="stat-card">
-            <h3>Total Value</h3>
+            <h3>Total Inventory Value</h3>
             <p class="stat-value" id="total-value">₱0</p>
           </div>
         </div>
@@ -191,18 +308,27 @@
             </div>
           </div>
 
+          <!-- Inventory Breakdown by Category (Donut Chart) -->
           <div class="analytics-card">
-            <h3>Stock by Material</h3>
+            <h3>Category Breakdown</h3>
+            <div id="analytics-category-donut-container" class="donut-chart-container">
+              <div id="analytics-category-donut" class="donut-chart"></div>
+              <div id="analytics-category-legend" class="donut-legend"></div>
+            </div>
+          </div>
+
+          <!-- Popular Materials & Styles -->
+          <div class="analytics-card analytics-card-wide">
+            <h3>Stock & Sales by Material</h3>
             <div id="analytics-material-bars" class="analytics-bars"></div>
           </div>
 
+          <!-- Stock Level Alert List / Bar Chart -->
           <div class="analytics-card analytics-card-wide">
-            <h3>Stock by Category</h3>
-            <div id="analytics-category-bars" class="analytics-bars"></div>
-          </div>
-
-          <div class="analytics-card analytics-card-wide">
-            <h3>Low Stock Watchlist</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 style="margin: 0;">Critical Stock Level Alerts</h3>
+              <span style="font-size: 0.8rem; color: #6b7280;">Target: 10 units per listing</span>
+            </div>
             <div id="analytics-low-stock-list" class="analytics-watchlist"></div>
           </div>
         </div>

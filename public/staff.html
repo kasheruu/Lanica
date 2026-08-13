@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lanica | Staff Dashboard</title>
+
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://ui-avatars.com data: blob:; connect-src 'self' https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://www.gstatic.com; frame-src 'self' https://js.stripe.com;">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -121,12 +127,14 @@
               <th>Items</th>
               <th>Total</th>
               <th>Status</th>
+              <th>Est. Delivery</th>
+              <th>Manual Override</th>
               <th>Update</th>
             </tr>
           </thead>
           <tbody id="staff-orders-list">
             <tr>
-              <td colspan="6" style="text-align: center; padding: 20px">Loading assigned orders…</td>
+              <td colspan="8" style="text-align: center; padding: 20px">Loading assigned orders…</td>
             </tr>
           </tbody>
         </table>
@@ -190,7 +198,7 @@
               <div>
                 <p class="profile-label">My Profile</p>
                 <h3 class="profile-title" id="staff-account-name">Loading...</h3>
-                <p class="profile-subtitle">Update your profile details in one place.</p>
+                <p class="profile-subtitle">Manage your staff details and contact information.</p>
               </div>
             </div>
             <div class="profile-summary-grid">
@@ -241,6 +249,7 @@
               </div>
 
               <input type="hidden" id="staff-display-name" />
+              <input type="hidden" id="staff-display-name-edit" />
 
               <p class="profile-save-note">
                 You will be asked for your password when saving changes.

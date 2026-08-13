@@ -959,3 +959,245 @@
     max-width: 12px;
   }
 }
+
+/* Dashboard & Overhauled Analytics Styling */
+.dashboard-kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background-color: #ffffff;
+  padding: 22px 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.kpi-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.revenue-icon {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+.pending-icon {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.low-stock-icon {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.products-icon {
+  background-color: #f3e8ff;
+  color: #9333ea;
+}
+
+.kpi-content h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 0 0 4px 0;
+}
+
+.kpi-content .stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 2px 0;
+  line-height: 1.2;
+}
+
+.kpi-subtitle {
+  font-size: 0.78rem;
+  color: #9ca3af;
+}
+
+/* Quick Actions */
+.dashboard-quick-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dashboard-quick-actions .btn-primary {
+  background-color: #F3CA3E;
+  color: #111827;
+  border: none;
+}
+
+.dashboard-quick-actions .btn-primary:hover {
+  background-color: #e5b927;
+}
+
+.dashboard-quick-actions .btn-secondary {
+  background-color: #ffffff;
+  color: #374151;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.dashboard-quick-actions .btn-secondary:hover {
+  background-color: #f9fafb;
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Donut Chart Visualizations */
+.donut-chart-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.donut-chart {
+  width: 180px;
+  height: 180px;
+  position: relative;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-chart svg {
+  transform: rotate(-90deg);
+  width: 100%;
+  height: 100%;
+}
+
+.donut-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 16px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.donut-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* Stock Alert Progress Bars */
+.stock-alert-item {
+  background: #f9fafb;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stock-alert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stock-alert-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #1f2937;
+}
+
+.stock-alert-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.stock-alert-badge.critical {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.stock-alert-badge.warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.stock-progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stock-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.stock-progress-fill.critical {
+  background-color: #ef4444;
+}
+
+.stock-progress-fill.warning {
+  background-color: #f59e0b;
+}
+
+/* Spinners */
+.dash-loading-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-left-color: #F3CA3E;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

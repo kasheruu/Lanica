@@ -45,12 +45,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-const MESHY_API_BASE =
-  ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
-  window.location.port &&
-  window.location.port !== "5000"
-    ? "http://127.0.0.1:5000/api/meshy-image-to-3d"
-    : "/api/meshy-image-to-3d";
+const MESHY_API_BASE = "/api/meshy-image-to-3d";
 
 let currentUser = null;
 
@@ -74,9 +69,39 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   const role = await getUserRole(user);
-  if (role !== "admin") {
-    window.location.replace("/staff.html");
+
+  // Debug logging
+  console.log("=== ADMIN PAGE AUTH DEBUG ===");
+  console.log("Admin page - User UID:", user.uid);
+  console.log("Admin page - User Email:", user.email);
+  console.log("Admin page - Detected Role:", role);
+  console.log("Admin page - Role type:", typeof role);
+  console.log("Admin page - Current URL:", window.location.href);
+
+  // Only allow admin users on admin page
+  if (role === null || role === undefined || role === "") {
+    console.warn(" ADMIN PAGE - Role not found, redirecting to login");
+    window.location.replace("/login.html");
+    return;
+  } else if (role !== "admin") {
+    console.log(
+      " ADMIN PAGE - Non-admin user detected, redirecting to appropriate page. Role:",
+      role
+    );
+    if (role === "staff") {
+      console.log(" Redirecting staff user to staff page");
+      window.location.replace("/staff.html");
+    } else {
+      console.log(" Redirecting customer to main site");
+      window.location.replace("/index.html"); // Redirect customers to main site
+    }
+    return;
+  } else {
+    console.log(" ADMIN PAGE - Admin user confirmed, staying on admin page");
   }
+
+  // If role is null/undefined, stay on admin page and let the user see what happens
+  // This prevents the infinite redirect loop
 });
 
 const productsCollection = collection(db, "products");
@@ -325,20 +350,27 @@ async function uploadImage(file, path) {
   if (!file) return null;
 
   try {
+    console.log("Starting upload for file:", file.name, "Size:", file.size, "Type:", file.type);
     // Create a unique filename
     const uniqueName = `${Date.now()}_${file.name}`;
     const storageRef = ref(storage, `products/${uniqueName}`);
 
+    console.log("Uploading to path:", `products/${uniqueName}`);
     // Upload file to Firebase Storage
     const snapshot = await uploadBytes(storageRef, file);
+    console.log("Upload successful, getting download URL...");
 
     // Get download URL
     const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log("Download URL obtained:", downloadURL);
 
     return downloadURL;
   } catch (error) {
     console.error("Firebase Storage error:", error);
-    throw new Error("Failed to upload media to Firebase Storage", { cause: error });
+    console.error("Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    throw new Error("Failed to upload media to Firebase Storage: " + error.message, {
+      cause: error,
+    });
   }
 }
 
@@ -626,12 +658,12 @@ modelViewer.addEventListener("progress", (e) => {
   }
 });
 
-async function fetchLatestMeshyTaskId(productId) {
+async function fetchProductData(productId) {
   const pRef = doc(db, "products", productId);
   const snap = await getDoc(pRef);
   if (!snap.exists()) return null;
   const data = snap.data() || {};
-  return data.meshyTaskId || null;
+  return data;
 }
 
 async function pollMeshyAndLoad(taskId, attempt = 0) {
@@ -691,12 +723,31 @@ window.view3DModel = async (productId) => {
   modelViewer.src = "";
 
   try {
-    const taskId = await fetchLatestMeshyTaskId(productId);
-    if (!taskId) {
+    const productData = await fetchProductData(productId);
+    if (!productData) {
       setViewerLoading(false);
-      viewerStatus.textContent = "No Meshy task found for this product yet.";
+      viewerStatus.textContent = "Product not found.";
       return;
     }
+
+    // First check if there's already a modelUrl stored
+    if (productData.modelUrl) {
+      viewerStatus.style.visibility = "visible";
+      viewerStatus.textContent = "Loading 3D model...";
+      setViewerLoading(true, "Calibrating 3D object...");
+      const proxiedGlbUrl = `/api/meshy-glb?url=${encodeURIComponent(productData.modelUrl)}`;
+      modelViewer.src = proxiedGlbUrl;
+      return;
+    }
+
+    // If no modelUrl, check for meshyTaskId and poll
+    const taskId = productData.meshyTaskId;
+    if (!taskId) {
+      setViewerLoading(false);
+      viewerStatus.textContent = "No 3D model available for this product yet.";
+      return;
+    }
+
     await pollMeshyAndLoad(taskId, 0);
   } catch (e) {
     console.error(e);
@@ -756,6 +807,8 @@ window.editProduct = (id, productJsonBase64) => {
     productForm.dataset.meshyTaskIdBlue = product.meshyTaskIdBlue || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
+    productForm.dataset.productName = product.name || "";
+    productForm.dataset.productDescription = product.description || "";
 
     isEditing = true;
     currentEditId = id;
@@ -811,7 +864,7 @@ const renderInventory = (products) => {
             <td>
                 <div class="action-btns">
                     ${
-                      product.meshyTaskId
+                      product.meshyTaskId || product.modelUrl
                         ? `<button class="btn-icon" title="View 3D Model" onclick="view3DModel('${product.id}')">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                     </button>`
@@ -850,33 +903,119 @@ function renderBars(container, entries, totalUnits) {
     .join("");
 }
 
-function renderLowStockWatchlist(products) {
-  if (!analyticsLowStockListEl) return;
-  const lowItems = products
-    .filter((p) => Number(p.stock) > 0 && Number(p.stock) < 10)
-    .sort((a, b) => Number(a.stock) - Number(b.stock))
-    .slice(0, 6);
+const CATEGORY_COLORS = [
+  "#F3CA3E", // Lanica Yellow
+  "#3B82F6", // Royal Blue
+  "#10B981", // Emerald
+  "#8B5CF6", // Purple
+  "#F97316", // Orange
+  "#EC4899", // Pink
+  "#6366F1", // Indigo
+  "#14B8A6", // Teal
+];
 
-  if (!lowItems.length) {
-    analyticsLowStockListEl.innerHTML = `<div class="analytics-empty">No low-stock items right now.</div>`;
+function renderCategoryDonutChart(products) {
+  if (!analyticsCategoryDonutEl || !analyticsCategoryLegendEl) return;
+  if (!products || !products.length) {
+    analyticsCategoryDonutEl.innerHTML = `<span style="color:#9ca3af; font-size:0.85rem;">No product categories</span>`;
+    analyticsCategoryLegendEl.innerHTML = "";
     return;
   }
 
+  const categoryCounts = {};
+  products.forEach((p) => {
+    const cat = String(p.category || "Uncategorized").trim() || "Uncategorized";
+    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+  });
+
+  const entries = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
+  const total = products.length;
+
+  let cumulativePercent = 0;
+  const size = 180;
+  const radius = 70;
+  const strokeWidth = 22;
+  const center = size / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  let svgPaths = `<svg viewBox="0 0 ${size} ${size}">`;
+
+  entries.forEach(([cat, count], idx) => {
+    const percent = count / total;
+    const dashArray = `${percent * circumference} ${circumference}`;
+    const dashOffset = -cumulativePercent * circumference;
+    const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+
+    svgPaths += `<circle
+      cx="${center}"
+      cy="${center}"
+      r="${radius}"
+      fill="transparent"
+      stroke="${color}"
+      stroke-width="${strokeWidth}"
+      stroke-dasharray="${dashArray}"
+      stroke-dashoffset="${dashOffset}"
+    />`;
+
+    cumulativePercent += percent;
+  });
+
+  svgPaths += `<text x="50%" y="46%" text-anchor="middle" dominant-baseline="central" font-size="20" font-weight="bold" fill="#111827">${total}</text>`;
+  svgPaths += `<text x="50%" y="60%" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500" fill="#6b7280">Products</text>`;
+  svgPaths += `</svg>`;
+
+  analyticsCategoryDonutEl.innerHTML = svgPaths;
+
+  analyticsCategoryLegendEl.innerHTML = entries
+    .map(([cat, count], idx) => {
+      const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+      const pct = ((count / total) * 100).toFixed(0);
+      return `<div class="donut-legend-item">
+        <span class="donut-legend-color" style="background-color: ${color};"></span>
+        <span><strong>${escapeHtml(cat)}</strong>: ${count} (${pct}%)</span>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderLowStockWatchlist(products) {
+  if (!analyticsLowStockListEl) return;
+  const lowItems = products
+    .filter((p) => Number(p.stock) <= 5)
+    .sort((a, b) => Number(a.stock) - Number(b.stock));
+
+  if (!lowItems.length) {
+    analyticsLowStockListEl.innerHTML = `<div class="analytics-empty" style="color: #059669; font-weight: 500;">All products have healthy stock levels (&gt; 5 units).</div>`;
+    return;
+  }
+
+  const TARGET_STOCK = 10;
   analyticsLowStockListEl.innerHTML = lowItems
-    .map(
-      (p) => `<div class="analytics-watch-item">
-      <span class="analytics-watch-name">${escapeHtml(p.name || "Unnamed Product")}</span>
-      <span class="analytics-watch-stock">${Number(p.stock) || 0} left</span>
-    </div>`
-    )
+    .map((p) => {
+      const stock = Number(p.stock) || 0;
+      const isCritical = stock <= 2;
+      const badgeClass = isCritical ? "critical" : "warning";
+      const badgeText = isCritical ? "Critical (< 3)" : "Low Stock";
+      const pct = Math.min(100, Math.max(5, (stock / TARGET_STOCK) * 100));
+
+      return `<div class="stock-alert-item">
+        <div class="stock-alert-header">
+          <span class="stock-alert-title">${escapeHtml(p.name || "Unnamed Product")}</span>
+          <span class="stock-alert-badge ${badgeClass}">${badgeText} — ${stock} / ${TARGET_STOCK} left</span>
+        </div>
+        <div class="stock-progress-track">
+          <div class="stock-progress-fill ${badgeClass}" style="width: ${pct}%;"></div>
+        </div>
+      </div>`;
+    })
     .join("");
 }
 
 const updateStats = (products) => {
   let totalItems = products.length;
-  let lowStockCount = products.filter((p) => p.stock < 10 && p.stock > 0).length;
-  let outOfStockCount = products.filter((p) => p.stock === 0).length;
-  let totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0);
+  let lowStockCount = products.filter((p) => Number(p.stock) <= 5 && Number(p.stock) > 0).length;
+  let outOfStockCount = products.filter((p) => Number(p.stock) === 0).length;
+  let totalValue = products.reduce((sum, p) => sum + Number(p.price || 0) * Number(p.stock || 0), 0);
   const totalUnits = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
   const avgPrice = totalItems
     ? products.reduce((sum, p) => sum + (Number(p.price) || 0), 0) / totalItems
@@ -888,19 +1027,14 @@ const updateStats = (products) => {
     acc[key] = (acc[key] || 0) + (Number(p.stock) || 0);
     return acc;
   }, {});
-  const categoryUnits = products.reduce((acc, p) => {
-    const key = String(p.category || "Uncategorized").trim() || "Uncategorized";
-    acc[key] = (acc[key] || 0) + (Number(p.stock) || 0);
-    return acc;
-  }, {});
 
-  totalProductsStat.textContent = totalItems;
-  lowStockStat.textContent = lowStockCount; // Could combine or show separately
-
-  // Format currency
-  totalValueStat.textContent =
-    "₱" +
-    totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (totalProductsStat) totalProductsStat.textContent = totalItems;
+  if (lowStockStat) lowStockStat.textContent = lowStockCount;
+  if (totalValueStat) {
+    totalValueStat.textContent =
+      "₱" +
+      totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 
   if (analyticsTotalUnitsEl) analyticsTotalUnitsEl.textContent = String(totalUnits);
   if (analyticsOutOfStockEl) analyticsOutOfStockEl.textContent = String(outOfStockCount);
@@ -912,12 +1046,10 @@ const updateStats = (products) => {
   if (analyticsAvgStockEl) analyticsAvgStockEl.textContent = avgStockPerProduct.toFixed(1);
 
   const materialEntries = Object.entries(materialUnits).sort((a, b) => b[1] - a[1]);
-  const categoryEntries = Object.entries(categoryUnits)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8);
   renderBars(analyticsMaterialBarsEl, materialEntries, totalUnits);
-  renderBars(analyticsCategoryBarsEl, categoryEntries, totalUnits);
+  renderCategoryDonutChart(products);
   renderLowStockWatchlist(products);
+  updateDashboardKpis(products, allOrders);
 };
 
 // --- Order Management (Firestore `orders` + inventory stock) ---
@@ -938,14 +1070,29 @@ const usersTotalEl = document.getElementById("users-total");
 const usersAdminsEl = document.getElementById("users-admins");
 const usersStaffEl = document.getElementById("users-staff");
 const usersInactiveEl = document.getElementById("users-inactive");
+const navDashboard = document.getElementById("nav-dashboard");
 const navInventory = document.getElementById("nav-inventory");
 const navAnalytics = document.getElementById("nav-analytics");
 const navOrders = document.getElementById("nav-orders");
 const navUsers = document.getElementById("nav-users");
+const dashboardSection = document.getElementById("dashboard-section");
 const inventorySection = document.getElementById("inventory-section");
 const analyticsSection = document.getElementById("analytics-section");
 const ordersSection = document.getElementById("orders-section");
 const usersSection = document.getElementById("users-section");
+
+const dashTotalRevenueEl = document.getElementById("dash-total-revenue");
+const dashPendingOrdersEl = document.getElementById("dash-pending-orders");
+const dashLowStockEl = document.getElementById("dash-low-stock");
+const dashTotalProductsEl = document.getElementById("dash-total-products");
+const dashRecentOrdersListEl = document.getElementById("dash-recent-orders-list");
+const dashActionAddProduct = document.getElementById("dash-action-add-product");
+const dashActionViewOrders = document.getElementById("dash-action-view-orders");
+const dashActionExportCsv = document.getElementById("dash-action-export-csv");
+const dashLinkAllOrders = document.getElementById("dash-link-all-orders");
+
+const analyticsCategoryDonutEl = document.getElementById("analytics-category-donut");
+const analyticsCategoryLegendEl = document.getElementById("analytics-category-legend");
 
 let allOrders = [];
 let staffMembers = [];
@@ -962,22 +1109,31 @@ const ORDERS_COLLECTION = collection(db, "orders");
 
 async function getUserRole(user) {
   if (!user) return null;
+
   try {
     const roleByUid = await getDoc(doc(db, "users", user.uid));
-    if (roleByUid.exists()) return (roleByUid.data().role || "").toLowerCase();
+    if (roleByUid.exists()) {
+      const role = (roleByUid.data().role || "").toLowerCase();
+      console.log("Admin page - Role found by UID:", role);
+      return role;
+    }
   } catch (e) {
-    console.warn("Could not read user role by uid:", e);
+    console.warn("Admin page - Could not read user role by uid:", e);
   }
 
   try {
     const q = query(collection(db, "users"), where("email", "==", user.email || ""));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      return ((snap.docs[0].data() || {}).role || "").toLowerCase();
+      const role = ((snap.docs[0].data() || {}).role || "").toLowerCase();
+      console.log("Admin page - Role found by email:", role);
+      return role;
     }
   } catch (e) {
-    console.warn("Could not read user role by email:", e);
+    console.warn("Admin page - Could not read user role by email:", e);
   }
+
+  console.log("Admin page - No role found for user, returning null");
   return null;
 }
 
@@ -1453,21 +1609,137 @@ function materialHint(m) {
   return null;
 }
 
+function exportInventoryCsv() {
+  if (!allProducts || !allProducts.length) {
+    alert("No inventory data available to export.");
+    return;
+  }
+
+  const headers = ["Product ID", "Name", "Category", "Price (PHP)", "Cost (PHP)", "Stock", "Material", "Color", "Dimensions (WxHxD in)"];
+  const csvRows = [headers.join(",")];
+
+  allProducts.forEach((p) => {
+    const dims = p.size ? `"${p.size.w || 0}x${p.size.h || 0}x${p.size.d || 0}"` : '""';
+    const row = [
+      `"${(p.id || "").replace(/"/g, '""')}"`,
+      `"${(p.name || "").replace(/"/g, '""')}"`,
+      `"${(p.category || "").replace(/"/g, '""')}"`,
+      Number(p.price || 0).toFixed(2),
+      Number(p.cost || 0).toFixed(2),
+      Number(p.stock || 0),
+      `"${(p.material || "").replace(/"/g, '""')}"`,
+      `"${(p.color || "").replace(/"/g, '""')}"`,
+      dims
+    ];
+    csvRows.push(row.join(","));
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(csvRows.join("\n"));
+  const link = document.createElement("a");
+  link.setAttribute("href", csvContent);
+  const dateStr = new Date().toISOString().split("T")[0];
+  link.setAttribute("download", `lanica-inventory-${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function updateDashboardKpis(products, orders) {
+  const totalProducts = products ? products.length : 0;
+  const lowStockCount = products ? products.filter((p) => Number(p.stock) <= 5).length : 0;
+
+  const activeOrders = orders ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete") : [];
+
+  const pendingOrdersCount = activeOrders.filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return st === "pending" || st === "processing";
+  }).length;
+
+  const totalRevenue = activeOrders
+    .filter((o) => {
+      const st = normalizeOrderStatus(o.status);
+      return st === "completed" || st === "delivered" || st === "shipped" || st === "accepted";
+    })
+    .reduce((sum, o) => sum + (Number(o.total != null ? o.total : o.totalAmount) || 0), 0);
+
+  if (dashTotalRevenueEl) {
+    dashTotalRevenueEl.textContent =
+      "₱" + totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  if (dashPendingOrdersEl) dashPendingOrdersEl.textContent = String(pendingOrdersCount);
+  if (dashLowStockEl) dashLowStockEl.textContent = String(lowStockCount);
+  if (dashTotalProductsEl) dashTotalProductsEl.textContent = String(totalProducts);
+
+  renderDashboardRecentOrders(activeOrders.slice(0, 5));
+}
+
+function renderDashboardRecentOrders(recentOrders) {
+  if (!dashRecentOrdersListEl) return;
+  dashRecentOrdersListEl.innerHTML = "";
+
+  if (!recentOrders || recentOrders.length === 0) {
+    dashRecentOrdersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: #6b7280;">No customer orders recorded yet.</td></tr>`;
+    return;
+  }
+
+  recentOrders.forEach((order) => {
+    const st = normalizeOrderStatus(order.status);
+    const created = order.createdAt;
+    let dateStr = "—";
+    if (created && typeof created.toDate === "function") {
+      dateStr = created.toDate().toLocaleDateString();
+    } else if (created && created.seconds) {
+      dateStr = new Date(created.seconds * 1000).toLocaleDateString();
+    }
+
+    const customer = resolveCustomerDisplay(order);
+    const total = order.total != null ? order.total : order.totalAmount;
+    const totalStr =
+      total != null && total !== ""
+        ? `₱${Number(total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : "—";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong style="font-size:0.88rem;">${escapeHtml((order.id || "").slice(0, 8))}…</strong></td>
+      <td>${escapeHtml(String(customer))}</td>
+      <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
+      <td><strong>${totalStr}</strong></td>
+      <td><span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(st.charAt(0).toUpperCase() + st.slice(1))}</span></td>
+      <td style="font-size:0.85rem; color:#6b7280;">${escapeHtml(dateStr)}</td>
+    `;
+    dashRecentOrdersListEl.appendChild(tr);
+  });
+}
+
 function showAdminSection(name) {
+  const showDash = name === "dashboard" || !name;
   const showInv = name === "inventory";
   const showAnalytics = name === "analytics";
   const showOrders = name === "orders";
   const showUsers = name === "users";
+
+  if (dashboardSection) dashboardSection.classList.toggle("is-hidden", !showDash);
   if (inventorySection) inventorySection.classList.toggle("is-hidden", !showInv);
   if (analyticsSection) analyticsSection.classList.toggle("is-hidden", !showAnalytics);
   if (ordersSection) ordersSection.classList.toggle("is-hidden", !showOrders);
   if (usersSection) usersSection.classList.toggle("is-hidden", !showUsers);
+
+  if (navDashboard) navDashboard.classList.toggle("active", showDash);
   if (navInventory) navInventory.classList.toggle("active", showInv);
   if (navAnalytics) navAnalytics.classList.toggle("active", showAnalytics);
   if (navOrders) navOrders.classList.toggle("active", showOrders);
   if (navUsers) navUsers.classList.toggle("active", showUsers);
+
+  window.location.hash = name || "dashboard";
 }
 
+if (navDashboard) {
+  navDashboard.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("dashboard");
+  });
+}
 if (navInventory) {
   navInventory.addEventListener("click", (e) => {
     e.preventDefault();
@@ -1484,12 +1756,41 @@ if (navOrders) {
   navOrders.addEventListener("click", (e) => {
     e.preventDefault();
     showAdminSection("orders");
+    loadStaffMembers();
   });
 }
 if (navUsers) {
   navUsers.addEventListener("click", (e) => {
     e.preventDefault();
     showAdminSection("users");
+  });
+}
+
+if (dashActionAddProduct) {
+  dashActionAddProduct.addEventListener("click", () => {
+    showAdminSection("inventory");
+    if (typeof window.openModal === "function") window.openModal();
+  });
+}
+
+if (dashActionViewOrders) {
+  dashActionViewOrders.addEventListener("click", () => {
+    showAdminSection("orders");
+    loadStaffMembers();
+  });
+}
+
+if (dashActionExportCsv) {
+  dashActionExportCsv.addEventListener("click", () => {
+    exportInventoryCsv();
+  });
+}
+
+if (dashLinkAllOrders) {
+  dashLinkAllOrders.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("orders");
+    loadStaffMembers();
   });
 }
 
@@ -1661,12 +1962,21 @@ if (usersListEl) {
     try {
       t.setAttribute("disabled", "true");
       t.textContent = "Saving...";
+
+      console.log("=== ROLE UPDATE DEBUG ===");
+      console.log("Updating user doc ID:", docId);
+      console.log("New role:", role);
+      console.log("New status:", status);
+      console.log("Current admin UID:", currentUser?.uid);
+
       await updateDoc(doc(db, "users", docId), {
         role,
         status,
         updatedAt: Timestamp.now(),
         updatedByUid: currentUser ? currentUser.uid : null,
       });
+
+      console.log("✅ Role update successful!");
       t.textContent = "Saved";
       setTimeout(() => {
         t.textContent = "Save";
@@ -1712,6 +2022,7 @@ function applyOrdersFilter() {
   updateOrderStats(allOrders);
   renderRevenueGraph();
   syncBatchDeleteUi();
+  updateDashboardKpis(allProducts, allOrders);
 }
 
 if (ordersDateStartEl && ordersDateEndEl) {
@@ -2085,7 +2396,7 @@ function renderOrdersList(orders) {
         )}</span>
       </td>
       <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign rider">
+        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign rider" ${st !== "pending" ? "disabled" : ""}>
           <option value="">Unassigned</option>
           ${staffMembers
             .map((s) => {
@@ -2423,3 +2734,12 @@ if (ordersListEl) {
 }
 
 syncBatchDeleteUi();
+
+// Initialize section routing from URL hash or default to Dashboard
+const initialHash = (window.location.hash || "").replace("#", "").toLowerCase();
+showAdminSection(initialHash || "dashboard");
+
+window.addEventListener("hashchange", () => {
+  const currentHash = (window.location.hash || "").replace("#", "").toLowerCase();
+  showAdminSection(currentHash || "dashboard");
+});
