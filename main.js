@@ -946,6 +946,7 @@ async function show3DModelViewer(productName, productImage, productId, button, o
   `;
 
   document.body.appendChild(modalOverlay);
+  modalOverlay.classList.add("active");
 
   const statusEl = modalOverlay.querySelector("#pv-3d-status");
   const loadingEl = modalOverlay.querySelector("#pv-3d-loading");
