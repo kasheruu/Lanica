@@ -1966,6 +1966,29 @@ footer {
   }
 }
 
+@media (max-width: 768px) {
+  .model-viewer-modal {
+    width: 95% !important;
+    height: 85vh !important;
+    max-height: 85vh !important;
+    border-radius: 16px !important;
+  }
+  .model-viewer-content {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+  }
+  .model-viewer-canvas {
+    flex: 1 !important;
+    min-height: 320px !important;
+    width: 100% !important;
+  }
+  .model-viewer-info {
+    padding: 20px !important;
+  }
+}
+
 
 
 

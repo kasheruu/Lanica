@@ -924,13 +924,18 @@ async function show3DModelViewer(productName, productImage, productId, button, o
             <div class="viewer-spinner"></div>
             <div class="viewer-loading-text">Calibrating 3D object...</div>
           </div>
-          <div id="pv-3d-wrapper" style="width: 100%; height: 100%; position: relative; flex: 1; display: flex; align-items: center; justify-content: center;">
+          <div id="pv-3d-wrapper" style="width: 100%; height: 100%; position: relative; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 320px;">
             <model-viewer
               id="pv-model-viewer-element"
-              style="width: 100%; height: 100%; border-radius: 8px; background-color: #f5f5f5; display: block;"
+              style="width: 100%; height: 100%; min-height: 320px; border-radius: 8px; background-color: #f5f5f5; display: block;"
               camera-controls
+              touch-action="pan-y"
               auto-rotate
               shadow-intensity="1"
+              reveal="auto"
+              loading="eager"
+              ar
+              ar-modes="webxr scene-viewer quick-look"
               alt="${productName} 3D Model">
             </model-viewer>
           </div>
@@ -953,6 +958,9 @@ async function show3DModelViewer(productName, productImage, productId, button, o
   const modelViewerEl = modalOverlay.querySelector("#pv-model-viewer-element");
   const wrapperEl = modalOverlay.querySelector("#pv-3d-wrapper");
   const descEl = modalOverlay.querySelector("#pv-3d-desc");
+
+  let currentRawModelUrl = null;
+  let triedDirectUrl = false;
 
   const hideLoading = () => {
     if (loadingEl) loadingEl.classList.remove("active");
@@ -983,14 +991,47 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   if (modelViewerEl) {
     modelViewerEl.addEventListener("load", () => hideLoading());
+
+    modelViewerEl.addEventListener("progress", (ev) => {
+      const detail = ev.detail;
+      if (detail && typeof detail.totalProgress === "number") {
+        const pct = Math.round(detail.totalProgress * 100);
+        if (statusEl) {
+          statusEl.style.visibility = "visible";
+          statusEl.textContent = `Downloading 3D Model... ${pct}%`;
+        }
+        if (pct >= 100) {
+          setTimeout(hideLoading, 350);
+        }
+      }
+    });
+
     modelViewerEl.addEventListener("error", (ev) => {
       console.warn("Model viewer load error:", ev);
+      // Fallback: If proxy endpoint failed on static mobile server, retry directly from raw storage URL
+      if (!triedDirectUrl && currentRawModelUrl && (currentRawModelUrl.startsWith("http://") || currentRawModelUrl.startsWith("https://"))) {
+        triedDirectUrl = true;
+        console.log("Retrying 3D model directly from raw storage URL:", currentRawModelUrl);
+        statusEl.style.visibility = "visible";
+        statusEl.textContent = "Retrying direct 3D model stream...";
+        modelViewerEl.src = currentRawModelUrl;
+        return;
+      }
       showFallback2D("Failed to load 3D model");
     });
   }
 
+  // Periodic safety check to ensure spinner hides once model is rendered
+  const loadCheckInterval = setInterval(() => {
+    if (modelViewerEl && modelViewerEl.loaded) {
+      hideLoading();
+      clearInterval(loadCheckInterval);
+    }
+  }, 500);
+
   const closeModal = () => {
     if (pollTimer) clearTimeout(pollTimer);
+    clearInterval(loadCheckInterval);
     modalOverlay.remove();
     button.innerHTML = originalButtonText;
   };
@@ -1019,13 +1060,11 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
     const pData = productDoc.data();
     const modelUrl = pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl;
+    currentRawModelUrl = modelUrl;
 
     if (modelUrl) {
       statusEl.textContent = "Loading 3D model...";
       modelViewerEl.src = getGlbViewerUrl(modelUrl);
-      setTimeout(() => {
-        if (modelViewerEl.loaded) hideLoading();
-      }, 400);
       return;
     }
 
