@@ -297,21 +297,15 @@
             <div class="product-image-container">
               <img src="assets/product_sofa.png" alt="Aura Cloud Sofa" class="product-img" />
               <button class="btn-ar-view">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-                  ></path>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                   <line x1="12" y1="22.08" x2="12" y2="12"></line>
                 </svg>
-                View in Room
+                <span>3D</span>
+              </button>
+              <button class="btn-quick-order">
+                <span>Order Now</span>
               </button>
             </div>
             <div class="product-info">
@@ -325,21 +319,15 @@
             <div class="product-image-container">
               <img src="assets/product_chair.png" alt="Nox Lounge Chair" class="product-img" />
               <button class="btn-ar-view">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-                  ></path>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                   <line x1="12" y1="22.08" x2="12" y2="12"></line>
                 </svg>
-                View in Room
+                <span>3D</span>
+              </button>
+              <button class="btn-quick-order">
+                <span>Order Now</span>
               </button>
             </div>
             <div class="product-info">
@@ -353,21 +341,15 @@
             <div class="product-image-container">
               <img src="assets/product_lamp.png" alt="Eclipse Floor Lamp" class="product-img" />
               <button class="btn-ar-view">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-                  ></path>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                   <line x1="12" y1="22.08" x2="12" y2="12"></line>
                 </svg>
-                View in Room
+                <span>3D</span>
+              </button>
+              <button class="btn-quick-order">
+                <span>Order Now</span>
               </button>
             </div>
             <div class="product-info">
@@ -620,6 +602,37 @@
           <button type="button" id="place-order-submit-btn" class="btn-primary" style="width: 100%; font-size: 1.1rem; padding: 18px;">
             Place Order Now
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unauthenticated Sign-In Prompt Modal -->
+    <div id="auth-prompt-modal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 440px; text-align: center;">
+        <div class="modal-header" style="justify-content: flex-end; border-bottom: none; padding-bottom: 0;">
+          <button id="close-auth-prompt-btn" class="modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding-top: 0;">
+          <div class="auth-prompt-icon" style="width: 64px; height: 64px; background: rgba(252, 213, 53, 0.15); color: var(--clr-black); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+          </div>
+          <h3 style="font-size: 1.4rem; margin-bottom: 10px; font-weight: 600;">Sign in to Continue</h3>
+          <p style="color: var(--clr-text-muted); font-size: 0.95rem; margin-bottom: 24px; line-height: 1.6;">
+            Please sign in to your account to add items to your shopping bag and proceed to checkout.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button id="prompt-signin-btn" class="btn-primary" style="width: 100%;">Sign In / Register</button>
+            <button id="prompt-continue-btn" class="btn-secondary" style="width: 100%;">Continue Browsing</button>
+          </div>
         </div>
       </div>
     </div>

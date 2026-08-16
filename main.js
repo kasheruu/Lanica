@@ -105,13 +105,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAdminLogoTrigger();
 });
 
+// Auth Guard Interceptor
+function isRealUserLoggedIn() {
+  return currentUser && !currentUser.isAnonymous;
+}
+
+function requireAuth(actionCallback) {
+  if (isRealUserLoggedIn()) {
+    actionCallback();
+  } else {
+    // Intercept unauthenticated guest action and open Sign-In Prompt Modal
+    const promptModal = document.getElementById("auth-prompt-modal");
+    if (promptModal) {
+      promptModal.classList.add("active");
+    } else {
+      document.getElementById("auth-modal")?.classList.add("active");
+    }
+  }
+}
+
 // Setup Real-time Cart Listener
 function setupCartSubscription(userId) {
   if (cartUnsubscribe) cartUnsubscribe();
-  cartUnsubscribe = subscribeToCart(userId, (items) => {
-    currentCartItems = items;
-    renderCartDrawer(items);
-  });
+
+  // ONLY subscribe to Firestore cart subcollection if user is properly authenticated
+  if (isRealUserLoggedIn()) {
+    cartUnsubscribe = subscribeToCart(userId, (items) => {
+      currentCartItems = items;
+      renderCartDrawer(items);
+    });
+  } else {
+    currentCartItems = [];
+    renderCartDrawer([]);
+  }
 }
 
 // Load Products Catalog & Render Cards with Variant & AR buttons
@@ -141,15 +167,13 @@ async function loadProductsCatalog() {
           <div class="product-card reveal" style="--delay: ${delay}s">
             <div class="product-image-container">
               <img src="${displayImage}" alt="${product.name}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-              <div class="product-card-actions">
-                <button class="btn-card-action btn-quick-order" data-product-id="${docSnap.id}">
-                  <span>Order Now</span>
-                </button>
-                <button class="btn-card-action btn-ar-view" data-product-id="${docSnap.id}">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                  3D
-                </button>
-              </div>
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <span>3D</span>
+              </button>
+              <button class="btn-quick-order" data-product-id="${docSnap.id}">
+                Order Now
+              </button>
             </div>
             <div class="product-info">
               <h3>${product.name}</h3>
@@ -243,22 +267,29 @@ function updateVariantStockUI() {
   const available = getAvailableStock(currentModalProduct, currentSelectedMaterial);
   const statusEl = document.getElementById("pv-stock-status");
   const addBtn = document.getElementById("pv-add-to-cart-btn");
+  const qtyMinus = document.getElementById("pv-qty-minus");
+  const qtyPlus = document.getElementById("pv-qty-plus");
 
   if (available > 0) {
     statusEl.textContent = `In Stock (${available} left)`;
     statusEl.style.color = "#059669";
     addBtn.disabled = false;
+    addBtn.textContent = "Add to Shopping Bag";
+
+    if (currentSelectedQty < 1) currentSelectedQty = 1;
+    if (currentSelectedQty > available) currentSelectedQty = available;
   } else {
     statusEl.textContent = "Out of Stock";
     statusEl.style.color = "#ef4444";
     addBtn.disabled = true;
+    addBtn.textContent = "Out of Stock";
+    currentSelectedQty = 0;
   }
 
-  // Ensure currentSelectedQty does not exceed available stock
-  if (currentSelectedQty > available && available > 0) {
-    currentSelectedQty = available;
-  }
   document.getElementById("pv-qty-val").textContent = currentSelectedQty;
+
+  if (qtyMinus) qtyMinus.disabled = currentSelectedQty <= 1 || available <= 0;
+  if (qtyPlus) qtyPlus.disabled = currentSelectedQty >= available || available <= 0;
 }
 
 // Phase 2: Render Cart Drawer
@@ -474,7 +505,7 @@ function setupStorefrontUI() {
     qtyMinus.addEventListener("click", () => {
       if (currentSelectedQty > 1) {
         currentSelectedQty--;
-        document.getElementById("pv-qty-val").textContent = currentSelectedQty;
+        updateVariantStockUI();
       }
     });
   }
@@ -484,7 +515,7 @@ function setupStorefrontUI() {
       const maxStock = getAvailableStock(currentModalProduct, currentSelectedMaterial);
       if (currentSelectedQty < maxStock) {
         currentSelectedQty++;
-        document.getElementById("pv-qty-val").textContent = currentSelectedQty;
+        updateVariantStockUI();
       } else {
         showToast(`Only ${maxStock} items available in stock.`, "error");
       }
@@ -492,21 +523,43 @@ function setupStorefrontUI() {
   }
 
   if (addToCartBtn) {
-    addToCartBtn.addEventListener("click", async () => {
+    addToCartBtn.addEventListener("click", () => {
       if (!currentModalProduct) return;
-      try {
-        await addToCart(
-          currentUser.uid,
-          currentModalProduct,
-          currentSelectedMaterial,
-          currentSelectedQty
-        );
-        showToast(`Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial}) to bag!`);
-        pvModal.classList.remove("active");
-        cartOverlay?.classList.add("active");
-      } catch (err) {
-        showToast(err.message, "error");
-      }
+
+      requireAuth(async () => {
+        try {
+          await addToCart(
+            currentUser.uid,
+            currentModalProduct,
+            currentSelectedMaterial,
+            currentSelectedQty
+          );
+          showToast(`Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial}) to bag!`);
+          pvModal.classList.remove("active");
+          cartOverlay?.classList.add("active");
+        } catch (err) {
+          showToast(err.message, "error");
+        }
+      });
+    });
+  }
+
+  // Unauthenticated Sign-In Prompt Modal Toggles
+  const authPromptModal = document.getElementById("auth-prompt-modal");
+  const closeAuthPromptBtn = document.getElementById("close-auth-prompt-btn");
+  const promptSigninBtn = document.getElementById("prompt-signin-btn");
+  const promptContinueBtn = document.getElementById("prompt-continue-btn");
+
+  if (closeAuthPromptBtn && authPromptModal) {
+    closeAuthPromptBtn.addEventListener("click", () => authPromptModal.classList.remove("active"));
+  }
+  if (promptContinueBtn && authPromptModal) {
+    promptContinueBtn.addEventListener("click", () => authPromptModal.classList.remove("active"));
+  }
+  if (promptSigninBtn && authPromptModal) {
+    promptSigninBtn.addEventListener("click", () => {
+      authPromptModal.classList.remove("active");
+      document.getElementById("auth-modal")?.classList.add("active");
     });
   }
 
@@ -855,11 +908,12 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     try {
       const productDoc = await getDoc(doc(db, "products", productId));
       if (productDoc.exists()) {
-        modelUrl = productDoc.data().modelUrl;
+        const pData = productDoc.data();
+        modelUrl = pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl || null;
         has3DModel = !!modelUrl;
       }
     } catch (error) {
-      console.error("Error fetching product data:", error);
+      console.error("Error fetching product data for 3D viewer:", error);
     }
   }
 
@@ -868,6 +922,9 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   const getGlbViewerUrl = (url) => {
     if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
+    }
     return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
   };
 
