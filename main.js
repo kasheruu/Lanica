@@ -922,9 +922,7 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   const getGlbViewerUrl = (url) => {
     if (!url) return "";
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      return url;
-    }
+    // Always proxy 3D GLB model URLs through /api/meshy-glb to eliminate CORS errors on Cloudflare Pages
     return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
   };
 
@@ -975,6 +973,26 @@ async function show3DModelViewer(productName, productImage, productId, button, o
   `;
 
   document.body.appendChild(modalOverlay);
+
+  // Add error listener to fallback if model viewer fails to load model
+  const modelViewerEl = modalOverlay.querySelector("model-viewer");
+  if (modelViewerEl) {
+    modelViewerEl.addEventListener("error", (ev) => {
+      console.warn("Model viewer load error, displaying 2D fallback:", ev);
+      const canvasEl = modalOverlay.querySelector(".model-viewer-canvas");
+      if (canvasEl) {
+        canvasEl.innerHTML = `
+          <div class="model-placeholder">
+            <img src="${productImage}" alt="${productName}" class="model-image">
+            <div class="no-3d-message">
+              <p>3D model loading error</p>
+              <p class="fallback-text">Showing 2D preview</p>
+            </div>
+          </div>
+        `;
+      }
+    });
+  }
 
   const closeModal = () => {
     modalOverlay.remove();

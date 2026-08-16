@@ -114,7 +114,10 @@ app.get("/api/meshy-glb", async (req, res) => {
     }
 
     const isMeshy = parsed.hostname.endsWith("meshy.ai");
-    const isFirebase = parsed.hostname.includes("firebasestorage.googleapis.com");
+    const isFirebase =
+      parsed.hostname.includes("firebasestorage.googleapis.com") ||
+      parsed.hostname.includes("firebasestorage.app") ||
+      parsed.hostname.includes("firebaseapp.com");
 
     if (!isMeshy && !isFirebase) {
       res.status(400).json({ error: "Only meshy.ai or Firebase Storage URLs are allowed." });
