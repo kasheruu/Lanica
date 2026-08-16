@@ -26,32 +26,50 @@
         <a href="#about">About us</a>
         <a href="#ar-feature">AR Experience</a>
       </nav>
-      <a href="#download" class="btn-download">
-        <span>Download App</span>
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M12 16L12 8"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M9 13L12 16L15 13"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M5 18H19"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </a>
+      <div class="nav-actions">
+        <button id="cart-toggle-btn" class="nav-icon-btn" aria-label="Shopping Cart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span id="cart-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
+        <button id="auth-modal-btn" class="nav-icon-btn" aria-label="Customer Account">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </button>
+
+        <a href="#download" class="btn-download">
+          <span>Download App</span>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 16L12 8"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M9 13L12 16L15 13"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M5 18H19"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </a>
+      </div>
     </header>
 
     <main>
@@ -399,6 +417,284 @@
         <p>&copy; 2026 Lanica. All rights reserved.</p>
       </div>
     </footer>
+
+    <!-- Cart Drawer (Slide-Over) -->
+    <div id="cart-drawer-overlay" class="cart-drawer-overlay">
+      <div class="cart-drawer">
+        <div class="cart-drawer-header">
+          <h3>Shopping Bag</h3>
+          <button id="close-cart-btn" class="modal-close-btn" aria-label="Close Shopping Bag">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div id="cart-items-container" class="cart-items-container">
+          <div class="cart-empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+            <p>Your shopping bag is empty.</p>
+          </div>
+        </div>
+
+        <div class="cart-drawer-footer">
+          <div class="cart-subtotal-row">
+            <span>Subtotal</span>
+            <span id="cart-subtotal-display" class="cart-subtotal-amount">₱0</span>
+          </div>
+          <button id="proceed-checkout-btn" class="btn-checkout-cta" disabled>
+            Proceed to Checkout
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Product Quick View & Variant Selection Modal -->
+    <div id="product-detail-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="pv-title">Product Details</h3>
+          <button id="close-product-modal-btn" class="modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="product-detail-layout">
+            <div class="product-detail-img-box">
+              <img id="pv-image" src="assets/product_sofa.png" alt="Product Image" />
+            </div>
+            <div class="product-detail-info">
+              <h4 id="pv-name">Aura Cloud Sofa</h4>
+              <div id="pv-price" class="product-detail-price">₱1,299</div>
+
+              <!-- Variant Material Selector -->
+              <div class="variant-section">
+                <div class="variant-label">
+                  <span>Select Material</span>
+                  <span id="pv-stock-status">In Stock</span>
+                </div>
+                <div class="material-options">
+                  <button type="button" class="material-btn selected" data-material="Fabric">
+                    <span class="mat-title">Fabric</span>
+                    <span id="pv-fabric-stock" class="mat-stock">0 left</span>
+                  </button>
+                  <button type="button" class="material-btn" data-material="Leather">
+                    <span class="mat-title">Leather</span>
+                    <span id="pv-leather-stock" class="mat-stock">0 left</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Quantity Controls -->
+              <div class="variant-section">
+                <div class="variant-label"><span>Quantity</span></div>
+                <div class="quantity-control">
+                  <button type="button" id="pv-qty-minus" class="qty-btn">-</button>
+                  <span id="pv-qty-val" class="qty-value">1</span>
+                  <button type="button" id="pv-qty-plus" class="qty-btn">+</button>
+                </div>
+              </div>
+
+              <button type="button" id="pv-add-to-cart-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">
+                Add to Shopping Bag
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkout-modal" class="modal-overlay">
+      <div class="modal-card checkout-modal-card">
+        <div class="modal-header">
+          <h3>Complete Your Order</h3>
+          <button id="close-checkout-modal-btn" class="modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Step 1: Shipping Address -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              Shipping Address
+            </div>
+            
+            <div id="saved-addresses-list" class="address-list">
+              <!-- Dynamically populated -->
+            </div>
+
+            <button type="button" id="toggle-new-address-btn" class="btn-add-address">
+              + Add New Delivery Address
+            </button>
+
+            <form id="address-form" class="address-form-box" style="display: none;">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="addr-name">Recipient Name</label>
+                  <input type="text" id="addr-name" placeholder="Full Name" required />
+                </div>
+                <div class="form-group">
+                  <label for="addr-phone">Phone Number</label>
+                  <input type="tel" id="addr-phone" placeholder="0917XXXXXXX" required />
+                </div>
+                <div class="form-group full-width">
+                  <label for="addr-full">Full Delivery Address</label>
+                  <input type="text" id="addr-full" placeholder="House/Unit #, Street, Brgy, City, Province" required />
+                </div>
+                <div class="form-group">
+                  <label for="addr-lat">Latitude (Optional)</label>
+                  <input type="number" step="any" id="addr-lat" placeholder="14.195" />
+                </div>
+                <div class="form-group">
+                  <label for="addr-lng">Longitude (Optional)</label>
+                  <input type="number" step="any" id="addr-lng" placeholder="121.332" />
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" style="margin-top: 14px; width: 100%;">Save Address</button>
+            </form>
+          </div>
+
+          <!-- Step 2: Payment Method -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                <line x1="1" y1="10" x2="23" y2="10"></line>
+              </svg>
+              Payment Method
+            </div>
+            <div class="payment-methods-grid">
+              <div class="payment-card selected" data-method="COD">
+                <div class="payment-card-icon">💵</div>
+                <h5>Cash on Delivery</h5>
+              </div>
+              <div class="payment-card" data-method="GCash">
+                <div class="payment-card-icon">📱</div>
+                <h5>GCash (PayMongo)</h5>
+              </div>
+              <div class="payment-card" data-method="Bank Transfer">
+                <div class="payment-card-icon">🏦</div>
+                <h5>Bank Transfer</h5>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Order Summary -->
+          <div class="checkout-section">
+            <div class="checkout-summary-box">
+              <div class="summary-line">
+                <span>Items Subtotal</span>
+                <span id="checkout-subtotal">₱0</span>
+              </div>
+              <div class="summary-line">
+                <span>Estimated Shipping</span>
+                <span id="checkout-shipping">₱150</span>
+              </div>
+              <div class="summary-line total">
+                <span>Final Total</span>
+                <span id="checkout-total">₱150</span>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" id="place-order-submit-btn" class="btn-primary" style="width: 100%; font-size: 1.1rem; padding: 18px;">
+            Place Order Now
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customer Auth Modal -->
+    <div id="auth-modal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 420px;">
+        <div class="modal-header">
+          <h3>Customer Portal</h3>
+          <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="customer-signed-in-box" style="display: none; text-align: center;">
+            <p style="font-weight: 600; margin-bottom: 8px;">Signed in as:</p>
+            <p id="customer-email-display" style="color: var(--clr-text-muted); margin-bottom: 20px;"></p>
+            <button id="customer-signout-btn" class="btn-secondary" style="width: 100%;">Sign Out</button>
+          </div>
+
+          <div id="customer-auth-forms-box">
+            <button type="button" id="google-signin-btn" class="btn-google-auth">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.32 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.42l4.02-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+
+            <div class="auth-divider">
+              <span>or email</span>
+            </div>
+
+            <div class="auth-tabs">
+              <button id="tab-login" class="auth-tab active">Sign In</button>
+              <button id="tab-register" class="auth-tab">Create Account</button>
+            </div>
+
+            <form id="customer-login-form" class="form-group" style="gap: 14px;">
+              <div class="form-group">
+                <label for="cust-login-email">Email</label>
+                <input type="email" id="cust-login-email" required placeholder="yourname@example.com" />
+              </div>
+              <div class="form-group">
+                <label for="cust-login-pwd">Password</label>
+                <input type="password" id="cust-login-pwd" required placeholder="••••••••" />
+              </div>
+              <div id="cust-auth-error" style="color: #ef4444; font-size: 0.85rem;"></div>
+              <button type="submit" class="btn-primary" style="margin-top: 10px;">Sign In</button>
+            </form>
+
+            <form id="customer-register-form" class="form-group" style="gap: 14px; display: none;">
+              <div class="form-group">
+                <label for="cust-reg-email">Email</label>
+                <input type="email" id="cust-reg-email" required placeholder="yourname@example.com" />
+              </div>
+              <div class="form-group">
+                <label for="cust-reg-pwd">Password</label>
+                <input type="password" id="cust-reg-pwd" required placeholder="At least 6 characters" minlength="6" />
+              </div>
+              <div id="cust-reg-error" style="color: #ef4444; font-size: 0.85rem;"></div>
+              <button type="submit" class="btn-primary" style="margin-top: 10px;">Create Account</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script type="module" src="main.js"></script>
   </body>

@@ -145,6 +145,109 @@ app.get("/api/meshy-glb", async (req, res) => {
   }
 });
 
+app.post("/api/paymongo/checkout", async (req, res) => {
+  try {
+    const paymongoKey = String(
+      process.env.PAYMONGO_SECRET_KEY || process.env.PAYMONGO_KEY || ""
+    ).trim();
+
+    const { items, subtotal, shippingFee, totalAmount, paymentMethod, successUrl, cancelUrl } = req.body || {};
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: "No items provided for checkout." });
+      return;
+    }
+
+    const host = req.headers.host || `localhost:${PORT}`;
+    const protocol = req.headers["x-forwarded-proto"] || "http";
+    const defaultSuccessUrl = `${protocol}://${host}/?payment=success`;
+    const defaultCancelUrl = `${protocol}://${host}/?payment=cancel`;
+
+    const finalSuccessUrl = successUrl || defaultSuccessUrl;
+    const finalCancelUrl = cancelUrl || defaultCancelUrl;
+
+    const lineItems = items.map((item) => ({
+      currency: "PHP",
+      amount: Math.round(Number(item.price) * 100), // convert to centavos
+      name: `${item.name} (${item.material || "Standard"})`,
+      quantity: Number(item.quantity) || 1,
+      images: item.url ? [item.url] : undefined,
+    }));
+
+    if (shippingFee && Number(shippingFee) > 0) {
+      lineItems.push({
+        currency: "PHP",
+        amount: Math.round(Number(shippingFee) * 100),
+        name: "Shipping Fee",
+        quantity: 1,
+      });
+    }
+
+    // Determine PayMongo payment methods based on selected payment method
+    let paymentMethodTypes = ["gcash", "dob", "paymaya", "card"];
+    if (paymentMethod === "GCash") {
+      paymentMethodTypes = ["gcash"];
+    } else if (paymentMethod === "Bank Transfer") {
+      paymentMethodTypes = ["dob", "brankas"];
+    }
+
+    if (!paymongoKey) {
+      console.warn("PayMongo secret key not set. Returning test mode checkout response.");
+      res.status(200).json({
+        checkout_url: `${finalSuccessUrl}&mock=true&method=${encodeURIComponent(paymentMethod || "online")}`,
+        checkout_session_id: `cs_test_mock_${Date.now()}`,
+        is_mock: true,
+      });
+      return;
+    }
+
+    const authHeader = `Basic ${Buffer.from(`${paymongoKey}:`).toString("base64")}`;
+
+    const paymongoRes = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            send_email_receipt: true,
+            show_description: true,
+            show_line_items: true,
+            line_items: lineItems,
+            payment_method_types: paymentMethodTypes,
+            success_url: finalSuccessUrl,
+            cancel_url: finalCancelUrl,
+          },
+        },
+      }),
+    });
+
+    const data = await paymongoRes.json();
+
+    if (!paymongoRes.ok) {
+      console.error("PayMongo API error:", data);
+      res.status(paymongoRes.status).json({
+        error: data.errors?.[0]?.detail || "Failed to create PayMongo checkout session.",
+      });
+      return;
+    }
+
+    const checkoutUrl = data.data?.attributes?.checkout_url;
+    const sessionId = data.data?.id;
+
+    res.status(200).json({
+      checkout_url: checkoutUrl,
+      checkout_session_id: sessionId,
+    });
+  } catch (error) {
+    console.error("PayMongo error:", error);
+    res.status(500).json({ error: "Failed to process online checkout." });
+  }
+});
+
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
