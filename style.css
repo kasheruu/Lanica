@@ -1907,12 +1907,53 @@ footer {
   font-size: 0.95rem;
 }
 
-@media (max-width: 768px) {
-  .model-viewer-content {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+}
+
+.viewer-status {
+  margin-bottom: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--clr-text-main);
+  padding: 0 20px;
+}
+
+.viewer-loading {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--clr-text-muted);
+}
+
+.viewer-loading.active {
+  display: flex;
+}
+
+.viewer-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid #d1d5db;
+  border-top-color: var(--clr-yellow);
+  border-radius: 50%;
+  animation: viewer-spin 0.85s linear infinite;
+}
+
+.viewer-loading-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+@keyframes viewer-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
+
 
 
 

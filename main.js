@@ -899,73 +899,46 @@ function bindARButtons() {
   });
 }
 
-// Show 3D Model Viewer Modal
+// Show 3D Model Viewer Modal with Admin Parity (Progress & Meshy Polling)
 async function show3DModelViewer(productName, productImage, productId, button, originalButtonText) {
-  let modelUrl = null;
-  let has3DModel = false;
-
-  if (productId) {
-    try {
-      const productDoc = await getDoc(doc(db, "products", productId));
-      if (productDoc.exists()) {
-        const pData = productDoc.data();
-        modelUrl = pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl || null;
-        has3DModel = !!modelUrl;
-      }
-    } catch (error) {
-      console.error("Error fetching product data for 3D viewer:", error);
-    }
-  }
+  let pollTimer = null;
 
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "model-viewer-overlay";
 
   const getGlbViewerUrl = (url) => {
     if (!url) return "";
-    // Always proxy 3D GLB model URLs through /api/meshy-glb to eliminate CORS errors on Cloudflare Pages
     return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
   };
-
-  const viewerContent = has3DModel
-    ? `<model-viewer
-         src="${getGlbViewerUrl(modelUrl)}"
-         style="width: 100%; height: 100%;"
-         camera-controls
-         auto-rotate
-         shadow-intensity="1"
-         alt="${productName} 3D Model">
-       </model-viewer>`
-    : `<div class="model-placeholder">
-        <img src="${productImage}" alt="${productName}" class="model-image">
-        <div class="no-3d-message">
-          <p>3D model not available for this product</p>
-          <p class="fallback-text">Showing 2D preview</p>
-        </div>
-       </div>`;
 
   modalOverlay.innerHTML = `
     <div class="model-viewer-modal">
       <div class="model-viewer-header">
-        <h3>${productName} - 3D View</h3>
-        <button class="close-viewer" aria-label="Close 3D viewer">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <h3>3D Model Viewer</h3>
+        <button class="close-viewer" aria-label="Close 3D viewer">&times;</button>
       </div>
       <div class="model-viewer-content">
-        <div class="model-viewer-canvas">
-          ${viewerContent}
+        <div class="model-viewer-canvas" style="flex-direction: column; padding: 20px;">
+          <div id="pv-3d-status" class="viewer-status" style="visibility: visible;">Downloading and Opening 3D Model...</div>
+          <div id="pv-3d-loading" class="viewer-loading active">
+            <div class="viewer-spinner"></div>
+            <div class="viewer-loading-text">Calibrating 3D object...</div>
+          </div>
+          <div id="pv-3d-wrapper" style="width: 100%; height: 100%; position: relative; flex: 1; display: flex; align-items: center; justify-content: center;">
+            <model-viewer
+              id="pv-model-viewer-element"
+              style="width: 100%; height: 100%; border-radius: 8px; background-color: #f5f5f5; display: block;"
+              camera-controls
+              auto-rotate
+              shadow-intensity="1"
+              alt="${productName} 3D Model">
+            </model-viewer>
+          </div>
         </div>
         <div class="model-viewer-info">
           <div class="product-details">
             <h4>${productName}</h4>
-            <p>${
-              has3DModel
-                ? "Experience this furniture piece in 3D. Rotate to view from different angles and zoom to see details."
-                : "This product doesn't have a 3D model available yet. You're viewing a 2D preview."
-            }</p>
+            <p id="pv-3d-desc">Experience this furniture piece in 3D. Rotate to view from different angles and zoom to inspect details.</p>
           </div>
         </div>
       </div>
@@ -974,27 +947,49 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   document.body.appendChild(modalOverlay);
 
-  // Add error listener to fallback if model viewer fails to load model
-  const modelViewerEl = modalOverlay.querySelector("model-viewer");
-  if (modelViewerEl) {
-    modelViewerEl.addEventListener("error", (ev) => {
-      console.warn("Model viewer load error, displaying 2D fallback:", ev);
-      const canvasEl = modalOverlay.querySelector(".model-viewer-canvas");
-      if (canvasEl) {
-        canvasEl.innerHTML = `
-          <div class="model-placeholder">
-            <img src="${productImage}" alt="${productName}" class="model-image">
-            <div class="no-3d-message">
-              <p>3D model loading error</p>
-              <p class="fallback-text">Showing 2D preview</p>
-            </div>
+  const statusEl = modalOverlay.querySelector("#pv-3d-status");
+  const loadingEl = modalOverlay.querySelector("#pv-3d-loading");
+  const modelViewerEl = modalOverlay.querySelector("#pv-model-viewer-element");
+  const wrapperEl = modalOverlay.querySelector("#pv-3d-wrapper");
+  const descEl = modalOverlay.querySelector("#pv-3d-desc");
+
+  const hideLoading = () => {
+    if (loadingEl) loadingEl.classList.remove("active");
+    if (statusEl) statusEl.style.visibility = "hidden";
+  };
+
+  const showFallback2D = (message) => {
+    if (loadingEl) loadingEl.classList.remove("active");
+    if (statusEl) {
+      statusEl.style.visibility = "visible";
+      statusEl.textContent = message || "3D model not available for this product yet.";
+    }
+    if (descEl) {
+      descEl.textContent = "This product doesn't have an active 3D model yet. You are viewing a 2D preview.";
+    }
+    if (wrapperEl) {
+      wrapperEl.innerHTML = `
+        <div class="model-placeholder">
+          <img src="${productImage}" alt="${productName}" class="model-image" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <div class="no-3d-message">
+            <p>${message || "3D model not available"}</p>
+            <p class="fallback-text">Showing 2D preview</p>
           </div>
-        `;
-      }
+        </div>
+      `;
+    }
+  };
+
+  if (modelViewerEl) {
+    modelViewerEl.addEventListener("load", () => hideLoading());
+    modelViewerEl.addEventListener("error", (ev) => {
+      console.warn("Model viewer load error:", ev);
+      showFallback2D("Failed to load 3D model");
     });
   }
 
   const closeModal = () => {
+    if (pollTimer) clearTimeout(pollTimer);
     modalOverlay.remove();
     button.innerHTML = originalButtonText;
   };
@@ -1006,7 +1001,90 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   setTimeout(() => {
     button.innerHTML = originalButtonText;
-  }, 500);
+  }, 400);
+
+  // Fetch product and poll Meshy if needed
+  if (!productId) {
+    showFallback2D("No product specified.");
+    return;
+  }
+
+  try {
+    const productDoc = await getDoc(doc(db, "products", productId));
+    if (!productDoc.exists()) {
+      showFallback2D("Product not found.");
+      return;
+    }
+
+    const pData = productDoc.data();
+    const modelUrl = pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl;
+
+    if (modelUrl) {
+      statusEl.textContent = "Loading 3D model...";
+      modelViewerEl.src = getGlbViewerUrl(modelUrl);
+      setTimeout(() => {
+        if (modelViewerEl.loaded) hideLoading();
+      }, 400);
+      return;
+    }
+
+    // Check if Meshy task is generating 3D model
+    const taskId = pData.meshyTaskId;
+    if (!taskId) {
+      showFallback2D("No 3D model available for this product yet.");
+      return;
+    }
+
+    // Poll Meshy status
+    const pollMeshy = async (attempt = 0) => {
+      try {
+        const response = await fetch(`/api/meshy-image-to-3d/${encodeURIComponent(taskId)}`);
+        if (!response.ok) throw new Error("Failed to fetch 3D model generation status.");
+
+        const data = await response.json();
+        const status = String(data.status || "").toUpperCase();
+        const progress = Number(data.progress || 0);
+
+        if (status === "SUCCEEDED" && data.model_urls && data.model_urls.glb) {
+          const targetUrl = getGlbViewerUrl(data.model_urls.glb);
+          statusEl.textContent = "Downloading and Opening 3D Model... 100%";
+          modelViewerEl.src = targetUrl;
+          setTimeout(() => {
+            if (modelViewerEl.loaded) hideLoading();
+          }, 400);
+
+          // Update product document in background with modelUrl for fast future loads
+          try {
+            await updateDoc(doc(db, "products", productId), { modelUrl: data.model_urls.glb });
+          } catch (e) {
+            console.warn("Could not save modelUrl back to product doc:", e);
+          }
+          return;
+        }
+
+        if (status === "FAILED" || status === "CANCELED" || status === "CANCELLED") {
+          showFallback2D(`Model generation ${status.toLowerCase()}.`);
+          return;
+        }
+
+        if (attempt >= 30) {
+          showFallback2D("3D model generation timed out. Please try again later.");
+          return;
+        }
+
+        statusEl.textContent = `Downloading and Opening 3D Model... ${progress}%`;
+        pollTimer = setTimeout(() => pollMeshy(attempt + 1), 2500);
+      } catch (err) {
+        console.error("Meshy polling error:", err);
+        showFallback2D("Network error while loading 3D model.");
+      }
+    };
+
+    await pollMeshy(0);
+  } catch (err) {
+    console.error("Error opening 3D viewer:", err);
+    showFallback2D("Failed to load product details.");
+  }
 }
 
 // Hidden Admin Trigger
