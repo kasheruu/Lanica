@@ -1827,22 +1827,18 @@ onAuthStateChanged(auth, async (user) => {
   console.log("Role type:", typeof role);
   console.log("Role length:", role ? role.length : "N/A");
 
-  // Check if role is staff or if role detection failed
-  if (role === null || role === undefined || role === "") {
-    console.warn("Role not found in database, assuming user is staff for staff.html page");
-    // For users accessing staff.html, assume they're staff if role is not set
-    // This prevents the redirect loop
-  } else if (role === "admin") {
+  // Only allow users with role === "staff" to access staff page
+  if (role === "admin") {
     console.log("🔴 ADMIN USER DETECTED - Redirecting to admin page");
-    console.log("Role value:", JSON.stringify(role));
     window.location.replace("/admin.html");
     return;
+  } else if (role !== "staff") {
+    console.warn("🔴 ACCESS DENIED - User does not have staff role. Role:", role);
+    window.location.replace("/login.html");
+    return;
   } else {
-    console.log("✅ USER ALLOWED TO STAY ON STAFF PAGE");
-    console.log("Role value:", JSON.stringify(role));
+    console.log("✅ STAFF USER CONFIRMED - Access granted to staff page");
   }
-  // If role is "staff" or any other value (including "customer"), let them stay on staff page
-  // This prevents the redirect loop for users who should have access to staff features
 
   await loadMyProfile();
 

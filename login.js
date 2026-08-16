@@ -97,7 +97,15 @@ async function routeUserByRole(user) {
   } else if (role === "staff") {
     window.location.replace("/staff.html");
   } else {
-    window.location.replace("/staff.html");
+    console.warn("Access denied on login: User role is null or unauthorized. Role:", role);
+    if (errorMsg) {
+      errorMsg.textContent = "Access denied. Only staff and admin accounts can sign in to the management portal.";
+      errorMsg.style.color = "#c5221f";
+    }
+    showLoginFormOnly();
+    try {
+      await signOut(auth);
+    } catch (_) {}
   }
 }
 
