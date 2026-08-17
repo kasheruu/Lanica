@@ -13,6 +13,7 @@ import {
   cancelOrderAtomic,
   normalizeOrderStatus,
   getOrderCanonicalStatus,
+  getRiderName,
   isOrderCancellable,
   getTrackingStepIndex,
   calculateEstimatedDelivery,
@@ -140,7 +141,7 @@ function setupHeaderAndAuthUI() {
     });
   }
 
-  // SIGN OUT HANDLER (FIX FOR UI/UX BUG)
+  // SIGN OUT HANDLER
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -325,28 +326,28 @@ function setupOrdersSubscription(userId) {
 function updateTabBadges(orders) {
   const counts = {
     all: orders.length,
-    pending: 0,
-    to_ship: 0,
-    to_receive: 0,
-    delivered: 0,
+    placed: 0,
+    packed: 0,
+    shipped: 0,
+    arrived: 0,
     cancelled: 0,
   };
 
   orders.forEach((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (st === "Pending" || st === "Processing") counts.pending++;
-    else if (st === "To Ship") counts.to_ship++;
-    else if (st === "To Receive") counts.to_receive++;
-    else if (st === "Delivered") counts.delivered++;
+    if (st === "Placed") counts.placed++;
+    else if (st === "Packed") counts.packed++;
+    else if (st === "Shipped") counts.shipped++;
+    else if (st === "Arrived") counts.arrived++;
     else if (st === "Cancelled") counts.cancelled++;
   });
 
-  document.getElementById("badge-all").textContent = counts.all;
-  document.getElementById("badge-pending").textContent = counts.pending;
-  document.getElementById("badge-to-ship").textContent = counts.to_ship;
-  document.getElementById("badge-to-receive").textContent = counts.to_receive;
-  document.getElementById("badge-delivered").textContent = counts.delivered;
-  document.getElementById("badge-cancelled").textContent = counts.cancelled;
+  if (document.getElementById("badge-all")) document.getElementById("badge-all").textContent = counts.all;
+  if (document.getElementById("badge-placed")) document.getElementById("badge-placed").textContent = counts.placed;
+  if (document.getElementById("badge-packed")) document.getElementById("badge-packed").textContent = counts.packed;
+  if (document.getElementById("badge-shipped")) document.getElementById("badge-shipped").textContent = counts.shipped;
+  if (document.getElementById("badge-arrived")) document.getElementById("badge-arrived").textContent = counts.arrived;
+  if (document.getElementById("badge-cancelled")) document.getElementById("badge-cancelled").textContent = counts.cancelled;
 }
 
 function setupTabListeners() {
@@ -368,10 +369,10 @@ function filterOrdersByTab(orders, tabStatus) {
 
   return orders.filter((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (tabStatus === "pending_processing") return st === "Pending" || st === "Processing";
-    if (tabStatus === "to_ship") return st === "To Ship";
-    if (tabStatus === "to_receive") return st === "To Receive";
-    if (tabStatus === "delivered") return st === "Delivered";
+    if (tabStatus === "placed") return st === "Placed";
+    if (tabStatus === "packed") return st === "Packed";
+    if (tabStatus === "shipped") return st === "Shipped";
+    if (tabStatus === "arrived") return st === "Arrived";
     if (tabStatus === "cancelled") return st === "Cancelled";
     return true;
   });
@@ -419,14 +420,14 @@ function renderOrdersList() {
 
 function getTabDisplayName(statusKey) {
   switch (statusKey) {
-    case "pending_processing":
-      return "Pending / Processing";
-    case "to_ship":
-      return "To Ship";
-    case "to_receive":
-      return "To Receive";
-    case "delivered":
-      return "Delivered";
+    case "placed":
+      return "Placed";
+    case "packed":
+      return "Packed";
+    case "shipped":
+      return "Shipped";
+    case "arrived":
+      return "Arrived";
     case "cancelled":
       return "Cancelled";
     case "all":
@@ -445,6 +446,7 @@ function createOrderCardElement(order) {
   const formattedDate = formatOrderDate(order.createdAt);
   const totalAmountFormatted = parseFloat(order.totalAmount || 0).toLocaleString();
   const paymentMethod = order.paymentMethod || "COD";
+  const riderName = getRiderName(order);
 
   const cancellable = isOrderCancellable(normStatus);
   const estDeliveryText = calculateEstimatedDelivery(order);
@@ -475,7 +477,7 @@ function createOrderCardElement(order) {
     })
     .join("");
 
-  // Build Visual Stepper HTML
+  // Build Mobile App Match Stepper Box
   let trackingBoxHTML = "";
   if (normStatus === "Cancelled") {
     trackingBoxHTML = `
@@ -492,12 +494,86 @@ function createOrderCardElement(order) {
       </div>
     `;
   } else {
+    // Hero Banner Status Icon & Subtitle
+    let heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`;
+    let heroSubtitle = "We are tracking your furniture";
+
+    if (normStatus === "Placed") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
+      heroSubtitle = "Your order has been placed successfully";
+    } else if (normStatus === "Packed") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`;
+      heroSubtitle = "Your furniture is being carefully packed";
+    } else if (normStatus === "Arrived") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
+      heroSubtitle = "Your furniture has arrived safely!";
+    }
+
+    // Handled By Rider Card (Mobile App Exact Copy)
+    let riderCardHTML = "";
+    if (riderName) {
+      riderCardHTML = `
+        <div class="handled-by-card">
+          <div class="handled-by-info">
+            <div class="handled-by-avatar">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <div>
+              <div class="handled-by-text-label">Handled By</div>
+              <div class="handled-by-name">${riderName}</div>
+            </div>
+          </div>
+          <svg class="verified-badge-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.69 3.1 5.5l.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82 1.89 3.2 3.4-1.47 3.4 1.46 1.89-3.19 3.61-.83-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/>
+          </svg>
+        </div>
+      `;
+    }
+
+    // Estimated Delivery Card (Mobile App Exact Copy)
+    const estDeliveryCardHTML = `
+      <div class="est-delivery-card">
+        <div class="est-delivery-icon-box">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+            <polyline points="9 16 11 18 15 14"></polyline>
+          </svg>
+        </div>
+        <div>
+          <div class="est-delivery-label">Estimated Delivery</div>
+          <div class="est-delivery-date">📅 ${estDeliveryText}</div>
+        </div>
+      </div>
+    `;
+
+    // 4-Stage App Stepper (PLACED, PACKED, SHIPPED, ARRIVED)
     const steps = [
-      { key: "Pending", label: "Order Placed" },
-      { key: "Processing", label: "Processing" },
-      { key: "To Ship", label: "To Ship" },
-      { key: "To Receive", label: "To Receive" },
-      { key: "Delivered", label: "Delivered" },
+      {
+        key: "Placed",
+        label: "PLACED",
+        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`,
+      },
+      {
+        key: "Packed",
+        label: "PACKED",
+        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
+      },
+      {
+        key: "Shipped",
+        label: "SHIPPED",
+        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`,
+      },
+      {
+        key: "Arrived",
+        label: "ARRIVED",
+        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`,
+      },
     ];
 
     const stepperStepsHTML = steps
@@ -512,7 +588,7 @@ function createOrderCardElement(order) {
         return `
           <div class="stepper-step ${stateClass}">
             <div class="step-icon-wrapper">
-              ${isCompleted ? "✓" : idx + 1}
+              ${step.icon}
             </div>
             <div class="step-label">${step.label}</div>
           </div>
@@ -520,18 +596,20 @@ function createOrderCardElement(order) {
       })
       .join("");
 
-    const linePercent = Math.min(100, Math.max(0, stepIdx * 25));
+    const linePercent = Math.min(100, Math.max(0, (stepIdx / 3) * 100));
 
     trackingBoxHTML = `
       <div class="tracking-box">
-        <div class="tracking-header">
-          <span style="font-size: 0.9rem; font-weight: 600; color: var(--clr-black);">
-            Live Delivery Tracking
-          </span>
-          <div class="est-delivery">
-            🚚 Estimated Delivery: <strong>${estDeliveryText}</strong>
+        <div class="app-status-hero">
+          <div class="app-hero-icon">
+            ${heroIconSVG}
           </div>
+          <div class="app-status-title">${normStatus}</div>
+          <div class="app-status-subtitle">${heroSubtitle}</div>
         </div>
+
+        ${riderCardHTML}
+        ${estDeliveryCardHTML}
 
         <div class="tracking-stepper">
           <div class="stepper-line-container">
@@ -646,7 +724,6 @@ async function handleCancelConfirmSubmit() {
       <span>Cancelling Order...</span>
     `;
 
-    // Execute Atomic Firestore Transaction with stock rollback
     await cancelOrderAtomic({
       orderId: pendingCancelOrderId,
       userId: currentUser.uid,
