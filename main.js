@@ -768,7 +768,10 @@ async function handlePlaceOrderSubmit() {
       submitBtn.textContent = "Place Order Now";
       document.getElementById("checkout-modal")?.classList.remove("active");
 
-      showToast(`Order Placed Successfully! ID: ${result.orderId}`, "success");
+      showToast(`Order Placed Successfully! ID: ${result.orderId}. Redirecting to tracking...`, "success");
+      setTimeout(() => {
+        window.location.href = "orders.html";
+      }, 1500);
     } else {
       // Phase 4: Online Payment Integration (PayMongo for GCash / Bank Transfer)
       sessionStorage.setItem(
@@ -842,6 +845,9 @@ async function handlePaymentRedirect() {
     });
 
     showToast(`Payment Authorized! Order Placed Successfully (ID: ${result.orderId})`, "success");
+    setTimeout(() => {
+      window.location.href = "orders.html";
+    }, 1500);
 
     // Clean up query string from address bar
     window.history.replaceState({}, document.title, window.location.pathname);

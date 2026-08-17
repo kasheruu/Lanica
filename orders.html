@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lanica | My Purchases & Real-Time Order Tracking</title>
+    <meta
+      name="description"
+      content="Track your Lanica furniture orders in real-time, view your purchase history, and manage order statuses."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="orders.css" />
+  </head>
+
+  <body>
+    <!-- Navbar (100% Parity with Storefront Theme) -->
+    <header class="navbar">
+      <a href="index.html" class="logo-link">
+        <div class="logo">Lanica.</div>
+      </a>
+      <nav class="nav-links">
+        <a href="index.html#collections">Collections</a>
+        <a href="index.html#about">About us</a>
+        <a href="index.html#ar-feature">AR Experience</a>
+        <a href="orders.html" class="active">My Purchases</a>
+      </nav>
+      <div class="nav-actions">
+        <button id="cart-toggle-btn" class="nav-icon-btn" aria-label="Shopping Cart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span id="cart-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
+        <button id="auth-modal-btn" class="nav-icon-btn" aria-label="Customer Account">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </button>
+
+        <a href="index.html#download" class="btn-download">
+          <span>Download App</span>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12 16L12 8"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M9 13L12 16L15 13"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M5 18H19"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="orders-page-wrapper">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="page-header-top">
+          <div>
+            <div class="badge" style="margin-bottom: 12px; display: inline-block;">Order Management & Live Tracking</div>
+            <h1 class="page-title">My Purchases</h1>
+            <p class="page-subtitle">Track your furniture orders in real-time and view purchase history</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lifecycle Status Filter Tabs -->
+      <div class="orders-tabs-wrapper">
+        <div id="orders-status-tabs" class="orders-tabs">
+          <button type="button" class="tab-btn active" data-status="all">
+            <span>All</span>
+            <span class="tab-badge" id="badge-all">0</span>
+          </button>
+          <button type="button" class="tab-btn" data-status="pending_processing">
+            <span>Pending / Processing</span>
+            <span class="tab-badge" id="badge-pending">0</span>
+          </button>
+          <button type="button" class="tab-btn" data-status="to_ship">
+            <span>To Ship</span>
+            <span class="tab-badge" id="badge-to-ship">0</span>
+          </button>
+          <button type="button" class="tab-btn" data-status="to_receive">
+            <span>To Receive</span>
+            <span class="tab-badge" id="badge-to-receive">0</span>
+          </button>
+          <button type="button" class="tab-btn" data-status="delivered">
+            <span>Delivered</span>
+            <span class="tab-badge" id="badge-delivered">0</span>
+          </button>
+          <button type="button" class="tab-btn" data-status="cancelled">
+            <span>Cancelled</span>
+            <span class="tab-badge" id="badge-cancelled">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Orders List Container -->
+      <div id="orders-list-container" class="orders-list">
+        <!-- Initial Loading State -->
+        <div class="orders-empty-state">
+          <div class="viewer-spinner" style="margin: 0 auto 16px; border: 3px solid rgba(0, 0, 0, 0.1); border-top-color: var(--clr-yellow); width: 36px; height: 36px; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+          <p style="color: var(--clr-text-muted);">Syncing live orders with Firestore...</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer Parity -->
+    <footer>
+      <div class="footer-content">
+        <div class="footer-brand">
+          <h2>Lanica.</h2>
+          <p>Bringing modern design into your reality.</p>
+        </div>
+        <div class="footer-links">
+          <a href="https://www.facebook.com/lanicassofasalaset" target="_blank" class="fb-contact">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path
+                d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07z"
+              />
+            </svg>
+            Contact Us
+          </a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lanica. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <!-- Customer Auth Modal -->
+    <div id="auth-modal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 420px;">
+        <div class="modal-header">
+          <h3>Customer Portal</h3>
+          <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="customer-signed-in-box" style="display: none; text-align: center;">
+            <p style="font-weight: 600; margin-bottom: 8px;">Signed in as:</p>
+            <p id="customer-email-display" style="color: var(--clr-text-muted); margin-bottom: 20px;"></p>
+            <a href="orders.html" class="btn-primary" style="display: block; width: 100%; text-decoration: none; box-sizing: border-box; margin-bottom: 12px;">
+              📦 My Purchases & Order Tracking
+            </a>
+            <button type="button" id="customer-signout-btn" class="btn-secondary" style="width: 100%;">Sign Out</button>
+          </div>
+
+          <div id="customer-auth-forms-box">
+            <button type="button" id="google-signin-btn" class="btn-google-auth">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.32 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.42l4.02-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+
+            <div class="auth-divider">
+              <span>or email</span>
+            </div>
+
+            <div class="auth-tabs">
+              <button id="tab-login" class="auth-tab active">Sign In</button>
+              <button id="tab-register" class="auth-tab">Create Account</button>
+            </div>
+
+            <form id="customer-login-form" class="form-group" style="gap: 14px;">
+              <div class="form-group">
+                <label for="cust-login-email">Email</label>
+                <input type="email" id="cust-login-email" required placeholder="yourname@example.com" />
+              </div>
+              <div class="form-group">
+                <label for="cust-login-pwd">Password</label>
+                <input type="password" id="cust-login-pwd" required placeholder="••••••••" />
+              </div>
+              <div id="cust-auth-error" style="color: #ef4444; font-size: 0.85rem;"></div>
+              <button type="submit" class="btn-primary" style="margin-top: 10px;">Sign In</button>
+            </form>
+
+            <form id="customer-register-form" class="form-group" style="gap: 14px; display: none;">
+              <div class="form-group">
+                <label for="cust-reg-email">Email</label>
+                <input type="email" id="cust-reg-email" required placeholder="yourname@example.com" />
+              </div>
+              <div class="form-group">
+                <label for="cust-reg-pwd">Password</label>
+                <input type="password" id="cust-reg-pwd" required placeholder="At least 6 characters" minlength="6" />
+              </div>
+              <div id="cust-reg-error" style="color: #ef4444; font-size: 0.85rem;"></div>
+              <button type="submit" class="btn-primary" style="margin-top: 10px;">Create Account</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart Drawer Overlay -->
+    <div id="cart-drawer-overlay" class="cart-drawer-overlay">
+      <div class="cart-drawer">
+        <div class="cart-drawer-header">
+          <h3>Shopping Bag</h3>
+          <button id="close-cart-btn" class="modal-close-btn" aria-label="Close Shopping Bag">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="cart-items-container" class="cart-items-container">
+          <div class="cart-empty-state">
+            <p>Return to catalog to view shopping bag items.</p>
+            <a href="index.html#collections" class="btn-primary" style="display: inline-block; margin-top: 12px;">Browse Catalog</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Order Cancellation Confirmation Modal -->
+    <div id="cancel-order-modal" class="modal-overlay">
+      <div class="cancel-modal-card">
+        <div class="modal-header">
+          <h3>Cancel Order</h3>
+          <button type="button" id="close-cancel-modal-btn" class="modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="cancel-modal-body">
+          <p>
+            Are you sure you want to cancel order <strong id="cancel-target-order-id" style="color: var(--clr-black);">#---</strong>?
+          </p>
+          <p style="font-size: 0.88rem; color: var(--clr-text-muted); margin-bottom: 18px;">
+            Cancelling this order will immediately release the reserved variant stock back into our inventory.
+          </p>
+
+          <label for="cancel-reason-input" style="display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 8px; color: var(--clr-black);">
+            Reason for Cancellation (Optional):
+          </label>
+          <textarea
+            id="cancel-reason-input"
+            class="reason-textarea"
+            placeholder="e.g. Changed my mind, ordered duplicate item..."
+          ></textarea>
+
+          <div class="modal-actions">
+            <button type="button" id="dismiss-cancel-btn" class="btn-secondary">
+              Keep Order
+            </button>
+            <button type="button" id="confirm-cancel-btn" class="btn-danger-confirm">
+              <span>Confirm Cancellation</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script type="module" src="orders.js"></script>
+  </body>
+</html>
