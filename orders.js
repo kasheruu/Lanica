@@ -9,7 +9,6 @@ import {
 
 import {
   auth,
-  ensureAuth,
   subscribeToUserOrders,
   cancelOrderAtomic,
   normalizeOrderStatus,
@@ -19,7 +18,7 @@ import {
   formatOrderDate,
 } from "./orderService.js";
 
-import { subscribeToCart } from "./cartService.js";
+import { ensureAuth, subscribeToCart } from "./cartService.js";
 
 // Global State
 let currentUser = null;

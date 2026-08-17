@@ -31,6 +31,7 @@ try {
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export { ensureAuth } from "./cartService.js";
 
 /**
  * Standardizes order status values into canonical UI strings.
