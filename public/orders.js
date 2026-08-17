@@ -140,7 +140,7 @@ function setupHeaderAndAuthUI() {
     });
   }
 
-  // SIGN OUT HANDLER (FIX FOR UI/UX BUG)
+  // SIGN OUT HANDLER
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async (e) => {
       e.preventDefault();

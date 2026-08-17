@@ -1534,6 +1534,7 @@ async function updateOrderStatus(orderId, newStatus) {
     // Prepare update data
     const updateData = {
       status: newStatus,
+      orderStatus: newStatus,
       updatedAt: Timestamp.now(),
       estimatedDeliveryMin: deliveryEstimate.minDate,
       estimatedDeliveryMax: deliveryEstimate.maxDate,

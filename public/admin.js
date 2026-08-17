@@ -2583,6 +2583,7 @@ async function handleOrderStatusChange(orderId, newStatus) {
         }
         transaction.update(orderRef, {
           status: next,
+          orderStatus: next,
           stockDeducted: true,
           updatedAt: Timestamp.now(),
         });
@@ -2599,6 +2600,7 @@ async function handleOrderStatusChange(orderId, newStatus) {
   try {
     await updateDoc(orderRef, {
       status: next,
+      orderStatus: next,
       updatedAt: Timestamp.now(),
     });
   } catch (e) {
@@ -2644,6 +2646,7 @@ async function handleOrderAccept(orderId) {
 
       transaction.update(orderRef, {
         status: "accepted",
+        orderStatus: "accepted",
         stockDeducted: !!oData.stockDeducted,
         acceptedAt: Timestamp.now(),
         acceptedByUid: currentUser ? currentUser.uid : null,
