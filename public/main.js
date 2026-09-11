@@ -76,9 +76,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
         // Re-bind AR Buttons to new DOM elements
         bindARButtons();
+      } else {
+        productsGrid.innerHTML = `
+          <div class="empty-state-container" style="grid-column: 1 / -1;">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <h3 class="empty-state-title">No Products Available</h3>
+            <p class="empty-state-subtitle">We couldn't find any products matching your selection. Please check back later or refresh.</p>
+          </div>
+        `;
       }
     } catch (error) {
-      console.error("Error loading products:", error);
+      console.error("Error loading catalog products:", error);
+      if (productsGrid) {
+        productsGrid.innerHTML = `
+          <div class="empty-state-container" style="grid-column: 1 / -1;">
+            <h3 class="empty-state-title">Unable to Load Catalog</h3>
+            <p class="empty-state-subtitle">There was an issue fetching products. Please check your connection and try again.</p>
+          </div>
+        `;
+      }
     }
   }
 

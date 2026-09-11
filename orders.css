@@ -830,5 +830,14 @@ body {
   .btn-cancel-order {
     width: 100%;
     text-align: center;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tab-btn {
+    min-height: 44px;
   }
 }
+

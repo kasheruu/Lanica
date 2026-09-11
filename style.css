@@ -1989,6 +1989,130 @@ footer {
   }
 }
 
+/* ==========================================
+   RESPONSIVE UTILITIES, SKELETONS & ACCESSIBILITY
+   ========================================== */
+
+/* Overflow & Text Bounds */
+body {
+  overflow-x: hidden;
+}
+
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-break-all {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Responsive Table Wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+}
+
+/* Accessible Focus States */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--clr-yellow);
+  outline-offset: 2px;
+}
+
+/* Skeleton Loading Shimmer Effect */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #eef0f3 25%, #e2e5ea 37%, #eef0f3 63%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+
+.skeleton-card {
+  height: 320px;
+  width: 100%;
+  border-radius: var(--border-radius);
+}
+
+.skeleton-text {
+  height: 16px;
+  width: 80%;
+  margin-bottom: 8px;
+}
+
+.skeleton-title {
+  height: 24px;
+  width: 60%;
+  margin-bottom: 12px;
+}
+
+/* Generic Empty State Component */
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: var(--clr-white);
+  border-radius: var(--border-radius-lg);
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  margin: 32px 0;
+  width: 100%;
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--clr-text-muted);
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--clr-text-main);
+  margin: 0 0 8px 0;
+}
+
+.empty-state-subtitle {
+  font-size: 0.95rem;
+  color: var(--clr-text-muted);
+  max-width: 420px;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+/* Mobile Touch Target Sizing (min 44px) */
+@media (max-width: 768px) {
+  button,
+  .btn,
+  input[type="button"],
+  input[type="submit"],
+  select,
+  .nav-item {
+    min-height: 44px;
+  }
+}
+
+
 
 
 

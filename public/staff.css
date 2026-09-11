@@ -245,3 +245,21 @@
     margin-top: 12px;
   }
 }
+
+/* Staff Responsive Media Queries */
+@media (max-width: 768px) {
+  .staff-account-chip {
+    padding: 8px 14px;
+    min-height: 44px;
+  }
+
+  .staff-status-select {
+    min-height: 44px;
+    font-size: 0.9rem;
+  }
+
+  .staff-profile-card {
+    padding: 12px;
+  }
+}
+
