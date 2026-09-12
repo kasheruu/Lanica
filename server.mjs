@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -6,6 +7,39 @@ const app = express();
 const PORT = Number(process.env.PORT || 5000);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Trust proxy headers from Cloudflare (CF-Connecting-IP / X-Forwarded-For)
+app.set("trust proxy", 1);
+
+// General API Rate Limiter (100 requests per 15 minutes per IP)
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
+});
+
+// Strict Rate Limiter for AI 3D Generation API (10 requests per 15 minutes per IP)
+const meshyApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Generation limit reached. Please wait 15 minutes before initiating more 3D models." },
+});
+
+// Strict Rate Limiter for Checkout API (15 requests per 15 minutes per IP)
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many checkout requests from this IP. Please try again after 15 minutes." },
+});
+
+// Apply global rate limiter to all /api/ routes
+app.use("/api/", globalApiLimiter);
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -24,7 +58,7 @@ function sendMeshyError(res, message, status = 500) {
   res.status(status).json({ error: message });
 }
 
-app.post("/api/meshy-image-to-3d", async (req, res) => {
+app.post("/api/meshy-image-to-3d", meshyApiLimiter, async (req, res) => {
   try {
     const apiKey = String(
       process.env.MESHY_API_KEY || process.env.MESHY_KEY || process.env.MESHY_APIKEY || process.env.MESHY_API || ""
@@ -148,7 +182,7 @@ app.get("/api/meshy-glb", async (req, res) => {
   }
 });
 
-app.post("/api/paymongo/checkout", async (req, res) => {
+app.post("/api/paymongo/checkout", checkoutLimiter, async (req, res) => {
   try {
     const paymongoKey = String(
       process.env.PAYMONGO_SECRET_KEY || process.env.PAYMONGO_KEY || ""

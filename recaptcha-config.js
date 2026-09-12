@@ -6,4 +6,4 @@
  * 3. Add your domains (e.g. localhost, your Firebase Hosting domain)
  * 4. Paste the **Site Key** between the quotes below (not the Secret Key).
  */
-window.LANICA_RECAPTCHA_SITE_KEY = "6Led9NcsAAAAAJ9RwLNosSBiw7YIpFJSMCaN9vzg";
+window.LANICA_RECAPTCHA_SITE_KEY = "6LdOEbctAAAAAJ33fXEz0C-aYFHHPNwUqnewKBKG";
