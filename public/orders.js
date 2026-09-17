@@ -478,7 +478,7 @@ function createOrderCardElement(order) {
     .join("");
 
   // Build Mobile App Match Stepper Box
-  let trackingBoxHTML = "";
+  let trackingBoxHTML;
   if (normStatus === "Cancelled") {
     trackingBoxHTML = `
       <div class="tracking-box" style="border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">

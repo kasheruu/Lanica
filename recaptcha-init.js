@@ -1,3 +1,4 @@
+/* global grecaptcha */
 /**
  * Runs after Google's api.js loads. Mounts only when #login-recaptcha exists (DOM ready).
  */

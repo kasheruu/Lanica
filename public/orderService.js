@@ -114,7 +114,7 @@ export function getTrackingStepIndex(status) {
  */
 export function calculateEstimatedDelivery(orderOrCreatedAt) {
   let order = {};
-  let createdAt = null;
+  let createdAt;
 
   if (orderOrCreatedAt && typeof orderOrCreatedAt === "object" && !orderOrCreatedAt.seconds && !orderOrCreatedAt.toDate) {
     order = orderOrCreatedAt;

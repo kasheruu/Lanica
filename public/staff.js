@@ -173,12 +173,13 @@ async function sendProfileVerificationEmail() {
     // Handle specific Firebase errors
     if (error.code === "auth/too-many-requests") {
       throw new Error(
-        "Too many verification requests. Please wait a few minutes before trying again."
+        "Too many verification requests. Please wait a few minutes before trying again.",
+        { cause: error }
       );
     } else if (error.code === "auth/user-not-found") {
-      throw new Error("User account not found. Please sign in again.");
+      throw new Error("User account not found. Please sign in again.", { cause: error });
     } else {
-      throw new Error(error.message || "Failed to send verification code. Please try again.");
+      throw new Error(error.message || "Failed to send verification code. Please try again.", { cause: error });
     }
   }
 }
@@ -301,7 +302,7 @@ async function uploadProfilePhoto(file) {
       `Failed to upload photo: ${error.message}`,
       false
     );
-    throw new Error("Failed to upload profile photo");
+    throw new Error("Failed to upload profile photo", { cause: error });
   }
 }
 
@@ -340,10 +341,11 @@ async function sendPhotoVerificationEmail() {
     // Handle specific Firebase errors
     if (error.code === "auth/too-many-requests") {
       throw new Error(
-        "Too many verification requests. Please wait a few minutes before trying again."
+        "Too many verification requests. Please wait a few minutes before trying again.",
+        { cause: error }
       );
     } else if (error.code === "auth/user-not-found") {
-      throw new Error("User account not found. Please sign in again.");
+      throw new Error("User account not found. Please sign in again.", { cause: error });
     } else {
       // Try to log the error (but don't fail if logging fails)
       try {
@@ -355,7 +357,7 @@ async function sendPhotoVerificationEmail() {
       } catch (logError) {
         console.warn("Failed to log error:", logError);
       }
-      throw new Error("Failed to send verification email. Please try again later.");
+      throw new Error("Failed to send verification email. Please try again later.", { cause: error });
     }
   }
 }
@@ -427,10 +429,11 @@ async function sendCurrentEmailVerification() {
     // Handle specific Firebase errors
     if (error.code === "auth/too-many-requests") {
       throw new Error(
-        "Too many verification requests. Please wait a few minutes before trying again."
+        "Too many verification requests. Please wait a few minutes before trying again.",
+        { cause: error }
       );
     } else if (error.code === "auth/user-not-found") {
-      throw new Error("User account not found. Please sign in again.");
+      throw new Error("User account not found. Please sign in again.", { cause: error });
     } else {
       // Try to log the error (but don't fail if logging fails)
       try {
@@ -442,7 +445,7 @@ async function sendCurrentEmailVerification() {
       } catch (logError) {
         console.warn("Failed to log error:", logError);
       }
-      throw new Error("Failed to send verification email. Please try again later.");
+      throw new Error("Failed to send verification email. Please try again later.", { cause: error });
     }
   }
 }
@@ -506,7 +509,7 @@ async function updateEmailAddress(newEmail) {
   } catch (error) {
     console.error("Email update error:", error);
     await logStaffAction("email_change_failed", `Failed to change email: ${error.message}`, false);
-    throw new Error("Failed to update email address. Please try again.");
+    throw new Error("Failed to update email address. Please try again.", { cause: error });
   }
 }
 
@@ -807,7 +810,7 @@ function validateInput(input, type) {
       return { isValid: false, error: "Name must be 50 characters or less", sanitized: "" };
     }
     // Allow letters, spaces, hyphens, apostrophes, and common Filipino characters
-    if (!/^[a-zA-Z\u00C0-\u017F\s\-'\.]+$/.test(trimmed)) {
+    if (!/^[a-zA-Z\u00C0-\u017F\s\-'.]+$/.test(trimmed)) {
       return { isValid: false, error: "Name contains invalid characters", sanitized: "" };
     }
   }
@@ -1561,7 +1564,7 @@ async function updateOrderStatus(orderId, newStatus) {
 async function getUserRole(user) {
   if (!user) return null;
 
-  let role = null;
+  let role;
 
   try {
     const roleByUid = await getDoc(doc(db, "users", user.uid));
@@ -2170,7 +2173,7 @@ async function sendPasswordResetEmailToUser() {
       `Failed to send password reset: ${error.message}`,
       false
     );
-    throw new Error("Failed to send password reset email. Please try again.");
+    throw new Error("Failed to send password reset email. Please try again.", { cause: error });
   }
 }
 

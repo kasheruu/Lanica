@@ -105,7 +105,9 @@ async function routeUserByRole(user) {
     showLoginFormOnly();
     try {
       await signOut(auth);
-    } catch (_) {}
+    } catch (_) {
+      /* ignore signout error */
+    }
   }
 }
 

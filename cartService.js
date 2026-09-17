@@ -282,7 +282,7 @@ export async function placeOrderAtomic({
       const mat = (item.material || "Fabric").toLowerCase();
       const reqQty = Number(item.quantity || 1);
 
-      let available = 0;
+      let available;
       if (mat === "fabric" && typeof pData.FabricStocks === "number") {
         available = pData.FabricStocks;
       } else if (mat === "leather" && typeof pData.LeatherStocks === "number") {
