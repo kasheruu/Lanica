@@ -30,9 +30,6 @@ import {
   getAvailableStock,
 } from "./cartService.js";
 
-import { LanicaWebAR } from "./arCore.js";
-
-
 // Global State
 let currentUser = null;
 let currentCartItems = [];
@@ -928,74 +925,233 @@ function bindARButtons() {
   });
 }
 
-// Show High-End Custom Web AR Experience via LanicaWebAR module
+// Show 3D Model Viewer Modal with Admin Parity (Progress & Meshy Polling)
 async function show3DModelViewer(productName, productImage, productId, button, originalButtonText) {
-  let catalogList = [];
-  let currentProduct = {
-    id: productId || "prod_" + Date.now(),
-    name: productName,
-    image: productImage,
-    price: 499,
+  let pollTimer = null;
+
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "model-viewer-overlay";
+
+  const getGlbViewerUrl = (url) => {
+    if (!url) return "";
+    return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
   };
 
-  try {
-    // Fetch product details from Firestore
-    if (productId) {
-      const productDoc = await getDoc(doc(db, "products", productId));
-      if (productDoc.exists()) {
-        const pData = productDoc.data();
-        currentProduct = {
-          id: productDoc.id,
-          name: pData.name || productName,
-          image: pData.imageUrl || pData.image || productImage,
-          price: pData.price || 499,
-          modelUrl: pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl,
-        };
+  modalOverlay.innerHTML = `
+    <div class="model-viewer-modal">
+      <div class="model-viewer-header">
+        <h3>3D Model Viewer</h3>
+        <button class="close-viewer" aria-label="Close 3D viewer">&times;</button>
+      </div>
+      <div class="model-viewer-content">
+        <div class="model-viewer-canvas" style="flex-direction: column; padding: 20px;">
+          <div id="pv-3d-status" class="viewer-status" style="visibility: visible;">Downloading and Opening 3D Model...</div>
+          <div id="pv-3d-loading" class="viewer-loading active">
+            <div class="viewer-spinner"></div>
+            <div class="viewer-loading-text">Calibrating 3D object...</div>
+          </div>
+          <div id="pv-3d-wrapper" style="width: 100%; height: 100%; position: relative; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 320px;">
+            <model-viewer
+              id="pv-model-viewer-element"
+              style="width: 100%; height: 100%; min-height: 320px; border-radius: 8px; background-color: #f5f5f5; display: block;"
+              camera-controls
+              touch-action="pan-y"
+              auto-rotate
+              shadow-intensity="1"
+              reveal="auto"
+              loading="eager"
+              ar
+              ar-modes="webxr scene-viewer quick-look"
+              alt="${productName} 3D Model">
+            </model-viewer>
+          </div>
+        </div>
+        <div class="model-viewer-info">
+          <div class="product-details">
+            <h4>${productName}</h4>
+            <p id="pv-3d-desc">Experience this furniture piece in 3D. Rotate to view from different angles and zoom to inspect details.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modalOverlay);
+  modalOverlay.classList.add("active");
+
+  const statusEl = modalOverlay.querySelector("#pv-3d-status");
+  const loadingEl = modalOverlay.querySelector("#pv-3d-loading");
+  const modelViewerEl = modalOverlay.querySelector("#pv-model-viewer-element");
+  const wrapperEl = modalOverlay.querySelector("#pv-3d-wrapper");
+  const descEl = modalOverlay.querySelector("#pv-3d-desc");
+
+  let currentRawModelUrl = null;
+  let triedDirectUrl = false;
+
+  const hideLoading = () => {
+    if (loadingEl) loadingEl.classList.remove("active");
+    if (statusEl) statusEl.style.visibility = "hidden";
+  };
+
+  const showFallback2D = (message) => {
+    if (loadingEl) loadingEl.classList.remove("active");
+    if (statusEl) {
+      statusEl.style.visibility = "visible";
+      statusEl.textContent = message || "3D model not available for this product yet.";
+    }
+    if (descEl) {
+      descEl.textContent = "This product doesn't have an active 3D model yet. You are viewing a 2D preview.";
+    }
+    if (wrapperEl) {
+      wrapperEl.innerHTML = `
+        <div class="model-placeholder">
+          <img src="${productImage}" alt="${productName}" class="model-image" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <div class="no-3d-message">
+            <p>${message || "3D model not available"}</p>
+            <p class="fallback-text">Showing 2D preview</p>
+          </div>
+        </div>
+      `;
+    }
+  };
+
+  if (modelViewerEl) {
+    modelViewerEl.addEventListener("load", () => hideLoading());
+
+    modelViewerEl.addEventListener("progress", (ev) => {
+      const detail = ev.detail;
+      if (detail && typeof detail.totalProgress === "number") {
+        const pct = Math.round(detail.totalProgress * 100);
+        if (statusEl) {
+          statusEl.style.visibility = "visible";
+          statusEl.textContent = `Downloading 3D Model... ${pct}%`;
+        }
+        if (pct >= 100) {
+          setTimeout(hideLoading, 350);
+        }
       }
-    }
-
-    // Fetch catalog products to populate AR room bottom carousel
-    try {
-      const catalogSnap = await getDocs(collection(db, "products"));
-      catalogSnap.forEach((docSnap) => {
-        const d = docSnap.data();
-        catalogList.push({
-          id: docSnap.id,
-          name: d.name || "Furniture",
-          image: d.imageUrl || d.image || "assets/product_sofa.png",
-          price: d.price || 499,
-          modelUrl: d.modelUrl || d.glbUrl || d.model_url || d.arModelUrl || d.usdzUrl,
-        });
-      });
-    } catch (e) {
-      console.warn("Could not load full catalog for AR carousel, using active product:", e);
-      catalogList = [currentProduct];
-    }
-
-    // Pre-flight HTTP HEAD check on active product asset URL
-    if (currentProduct.modelUrl) {
-      const isValid = await LanicaWebAR.validateModelAsset(currentProduct.modelUrl);
-      if (!isValid) {
-        console.warn("Asset validation warning: model URL returned non-200 HEAD status:", currentProduct.modelUrl);
-      }
-    }
-
-    // Launch Web AR Module
-    const webAr = new LanicaWebAR({
-      product: currentProduct,
-      catalog: catalogList,
-      onClose: () => {
-        if (button) button.innerHTML = originalButtonText;
-      },
     });
 
-    await webAr.start();
+    modelViewerEl.addEventListener("error", (ev) => {
+      console.warn("Model viewer load error:", ev);
+      // Fallback: If proxy endpoint failed on static mobile server, retry directly from raw storage URL
+      if (!triedDirectUrl && currentRawModelUrl && (currentRawModelUrl.startsWith("http://") || currentRawModelUrl.startsWith("https://"))) {
+        triedDirectUrl = true;
+        console.log("Retrying 3D model directly from raw storage URL:", currentRawModelUrl);
+        statusEl.style.visibility = "visible";
+        statusEl.textContent = "Retrying direct 3D model stream...";
+        modelViewerEl.src = currentRawModelUrl;
+        return;
+      }
+      showFallback2D("Failed to load 3D model");
+    });
+  }
+
+  // Periodic safety check to ensure spinner hides once model is rendered
+  const loadCheckInterval = setInterval(() => {
+    if (modelViewerEl && modelViewerEl.loaded) {
+      hideLoading();
+      clearInterval(loadCheckInterval);
+    }
+  }, 500);
+
+  const closeModal = () => {
+    if (pollTimer) clearTimeout(pollTimer);
+    clearInterval(loadCheckInterval);
+    modalOverlay.remove();
+    button.innerHTML = originalButtonText;
+  };
+
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) closeModal();
+  });
+  modalOverlay.querySelector(".close-viewer")?.addEventListener("click", closeModal);
+
+  setTimeout(() => {
+    button.innerHTML = originalButtonText;
+  }, 400);
+
+  // Fetch product and poll Meshy if needed
+  if (!productId) {
+    showFallback2D("No product specified.");
+    return;
+  }
+
+  try {
+    const productDoc = await getDoc(doc(db, "products", productId));
+    if (!productDoc.exists()) {
+      showFallback2D("Product not found.");
+      return;
+    }
+
+    const pData = productDoc.data();
+    const modelUrl = pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl;
+    currentRawModelUrl = modelUrl;
+
+    if (modelUrl) {
+      statusEl.textContent = "Loading 3D model...";
+      modelViewerEl.src = getGlbViewerUrl(modelUrl);
+      return;
+    }
+
+    // Check if Meshy task is generating 3D model
+    const taskId = pData.meshyTaskId;
+    if (!taskId) {
+      showFallback2D("No 3D model available for this product yet.");
+      return;
+    }
+
+    // Poll Meshy status
+    const pollMeshy = async (attempt = 0) => {
+      try {
+        const response = await fetch(`/api/meshy-image-to-3d/${encodeURIComponent(taskId)}`);
+        if (!response.ok) throw new Error("Failed to fetch 3D model generation status.");
+
+        const data = await response.json();
+        const status = String(data.status || "").toUpperCase();
+        const progress = Number(data.progress || 0);
+
+        if (status === "SUCCEEDED" && data.model_urls && data.model_urls.glb) {
+          const targetUrl = getGlbViewerUrl(data.model_urls.glb);
+          statusEl.textContent = "Downloading and Opening 3D Model... 100%";
+          modelViewerEl.src = targetUrl;
+          setTimeout(() => {
+            if (modelViewerEl.loaded) hideLoading();
+          }, 400);
+
+          // Update product document in background with modelUrl for fast future loads
+          try {
+            await updateDoc(doc(db, "products", productId), { modelUrl: data.model_urls.glb });
+          } catch (e) {
+            console.warn("Could not save modelUrl back to product doc:", e);
+          }
+          return;
+        }
+
+        if (status === "FAILED" || status === "CANCELED" || status === "CANCELLED") {
+          showFallback2D(`Model generation ${status.toLowerCase()}.`);
+          return;
+        }
+
+        if (attempt >= 30) {
+          showFallback2D("3D model generation timed out. Please try again later.");
+          return;
+        }
+
+        statusEl.textContent = `Downloading and Opening 3D Model... ${progress}%`;
+        pollTimer = setTimeout(() => pollMeshy(attempt + 1), 2500);
+      } catch (err) {
+        console.error("Meshy polling error:", err);
+        showFallback2D("Network error while loading 3D model.");
+      }
+    };
+
+    await pollMeshy(0);
   } catch (err) {
-    console.error("Error opening Web AR experience:", err);
-    if (button) button.innerHTML = originalButtonText;
+    console.error("Error opening 3D viewer:", err);
+    showFallback2D("Failed to load product details.");
   }
 }
-
 
 // Hidden Admin Trigger
 function setupAdminLogoTrigger() {
