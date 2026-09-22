@@ -6,6 +6,8 @@ import {
   getDoc,
   doc,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+import { LanicaWebAR } from "./arCore.js";
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb2kDAVp9N_afxgOw5hSzDIvQ3UAIZVNU",
@@ -204,307 +206,71 @@ function bindARButtons() {
   });
 }
 
+// Show High-End Custom Web AR Experience via LanicaWebAR module
 async function show3DModelViewer(productName, productImage, productId, button, originalButtonText) {
-  // Fetch product data from Firebase
-  let modelUrl = null;
-  let has3DModel = false;
+  let catalogList = [];
+  let currentProduct = {
+    id: productId || "prod_" + Date.now(),
+    name: productName,
+    image: productImage,
+    price: 499,
+  };
 
-  if (productId) {
-    try {
+  try {
+    // Fetch product details from Firestore
+    if (productId) {
       const productDoc = await getDoc(doc(db, "products", productId));
       if (productDoc.exists()) {
-        const productData = productDoc.data();
-        modelUrl = productData.modelUrl;
-        has3DModel = !!modelUrl;
+        const pData = productDoc.data();
+        currentProduct = {
+          id: productDoc.id,
+          name: pData.name || productName,
+          image: pData.imageUrl || pData.image || productImage,
+          price: pData.price || 499,
+          modelUrl: pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl,
+        };
       }
-    } catch (error) {
-      console.error("Error fetching product data:", error);
     }
+
+    // Fetch catalog products to populate AR room bottom carousel
+    try {
+      const catalogSnap = await getDocs(collection(db, "products"));
+      catalogSnap.forEach((docSnap) => {
+        const d = docSnap.data();
+        catalogList.push({
+          id: docSnap.id,
+          name: d.name || "Furniture",
+          image: d.imageUrl || d.image || "assets/product_sofa.png",
+          price: d.price || 499,
+          modelUrl: d.modelUrl || d.glbUrl || d.model_url || d.arModelUrl || d.usdzUrl,
+        });
+      });
+    } catch (e) {
+      console.warn("Could not load full catalog for AR carousel, using active product:", e);
+      catalogList = [currentProduct];
+    }
+
+    // Pre-flight HTTP HEAD check on active product asset URL
+    if (currentProduct.modelUrl) {
+      const isValid = await LanicaWebAR.validateModelAsset(currentProduct.modelUrl);
+      if (!isValid) {
+        console.warn("Asset validation warning: model URL returned non-200 HEAD status:", currentProduct.modelUrl);
+      }
+    }
+
+    // Launch Web AR Module
+    const webAr = new LanicaWebAR({
+      product: currentProduct,
+      catalog: catalogList,
+      onClose: () => {
+        if (button) button.innerHTML = originalButtonText;
+      },
+    });
+
+    await webAr.start();
+  } catch (err) {
+    console.error("Error opening Web AR experience:", err);
+    if (button) button.innerHTML = originalButtonText;
   }
-
-  // Create modal overlay
-  const modalOverlay = document.createElement("div");
-  modalOverlay.className = "model-viewer-overlay";
-
-  const getGlbViewerUrl = (url) => {
-    if (!url) return "";
-    // Always proxy 3D GLB model URLs through /api/meshy-glb to eliminate CORS errors on Cloudflare Pages
-    return `/api/meshy-glb?url=${encodeURIComponent(url)}`;
-  };
-
-  const viewerContent = has3DModel
-    ? `<model-viewer
-         src="${getGlbViewerUrl(modelUrl)}"
-         style="width: 100%; height: 100%;"
-         camera-controls
-         auto-rotate
-         shadow-intensity="1"
-         alt="${productName} 3D Model">
-       </model-viewer>`
-    : `<div class="model-placeholder">
-        <img src="${productImage}" alt="${productName}" class="model-image">
-        <div class="no-3d-message">
-          <p>3D model not available for this product</p>
-          <p class="fallback-text">Showing 2D preview</p>
-        </div>
-       </div>`;
-
-  modalOverlay.innerHTML = `
-    <div class="model-viewer-modal">
-      <div class="model-viewer-header">
-        <h3>${productName} - 3D View</h3>
-        <button class="close-viewer" aria-label="Close 3D viewer">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
-      <div class="model-viewer-content">
-        <div class="model-viewer-canvas">
-          ${viewerContent}
-        </div>
-        <div class="model-viewer-info">
-          <div class="product-details">
-            <h4>${productName}</h4>
-            <p>${
-              has3DModel
-                ? "Experience this furniture piece in 3D. Rotate to view from different angles and zoom to see details."
-                : "This product doesn't have a 3D model available yet. You're viewing a 2D preview."
-            }</p>
-            <div class="viewing-tips">
-              <h5>Viewing Tips:</h5>
-              <ul>
-                ${
-                  has3DModel
-                    ? `<li>Click and drag to rotate the model</li>
-                     <li>Use scroll wheel to zoom in/out</li>
-                     <li>Double-click to reset view</li>
-                     <li>This is a view-only experience</li>`
-                    : `<li>Check back later for 3D model availability</li>
-                     <li>Contact us for more details</li>`
-                }
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Add modal to page
-  document.body.appendChild(modalOverlay);
-
-  // Add CSS for the modal
-  if (!document.querySelector("#model-viewer-styles")) {
-    const style = document.createElement("style");
-    style.id = "model-viewer-styles";
-    style.textContent = `
-      .model-viewer-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.9);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        opacity: 0;
-        animation: fadeIn 0.3s ease forwards;
-      }
-
-      @keyframes fadeIn {
-        to { opacity: 1; }
-      }
-
-      .model-viewer-modal {
-        background: var(--clr-white);
-        border-radius: var(--border-radius-lg);
-        width: 90%;
-        max-width: 1200px;
-        height: 80vh;
-        max-height: 800px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      }
-
-      .model-viewer-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px 30px;
-        border-bottom: 1px solid var(--clr-gray-light);
-        background: var(--clr-gray-light);
-      }
-
-      .model-viewer-header h3 {
-        margin: 0;
-        font-size: 1.5rem;
-        color: var(--clr-text-main);
-      }
-
-      .close-viewer {
-        background: none;
-        border: none;
-        padding: 8px;
-        border-radius: 8px;
-        cursor: pointer;
-        color: var(--clr-text-muted);
-        transition: all var(--transition-fast);
-      }
-
-      .close-viewer:hover {
-        background: var(--clr-gray-light);
-        color: var(--clr-text-main);
-      }
-
-      .model-viewer-content {
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        height: 100%;
-        overflow: hidden;
-      }
-
-      .model-viewer-canvas {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .model-placeholder {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-      }
-
-      .model-image {
-        max-width: 80%;
-        max-height: 80%;
-        object-fit: contain;
-        border-radius: var(--border-radius);
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-      }
-
-      .no-3d-message {
-        position: absolute;
-        bottom: 30px;
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 15px 25px;
-        border-radius: 8px;
-        text-align: center;
-      }
-
-      .no-3d-message p {
-        margin: 5px 0;
-      }
-
-      .fallback-text {
-        font-size: 0.85rem;
-        opacity: 0.8;
-      }
-
-      .model-viewer-info {
-        padding: 30px;
-        background: var(--clr-white);
-        overflow-y: auto;
-      }
-
-      .product-details h4 {
-        margin: 0 0 15px 0;
-        font-size: 1.3rem;
-        color: var(--clr-text-main);
-      }
-
-      .product-details p {
-        margin: 0 0 20px 0;
-        color: var(--clr-text-muted);
-        line-height: 1.6;
-      }
-
-      .viewing-tips h5 {
-        margin: 0 0 10px 0;
-        font-size: 1rem;
-        color: var(--clr-text-main);
-      }
-
-      .viewing-tips ul {
-        margin: 0;
-        padding-left: 20px;
-        color: var(--clr-text-muted);
-        font-size: 0.9rem;
-        line-height: 1.6;
-      }
-
-      .viewing-tips li {
-        margin-bottom: 5px;
-      }
-
-      @media (max-width: 768px) {
-        .model-viewer-modal {
-          width: 95%;
-          height: 90vh;
-        }
-
-        .model-viewer-content {
-          grid-template-columns: 1fr;
-        }
-
-        .model-viewer-info {
-          padding: 20px;
-        }
-
-        .model-controls {
-          bottom: 20px;
-          padding: 15px 20px;
-        }
-
-        .control-buttons {
-          flex-direction: column;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  // Close modal functionality
-  const closeModal = () => {
-    modalOverlay.remove();
-    button.innerHTML = originalButtonText;
-  };
-
-  // Close on overlay click
-  modalOverlay.addEventListener("click", (e) => {
-    if (e.target === modalOverlay) {
-      closeModal();
-    }
-  });
-
-  // Close on X button click
-  modalOverlay.querySelector(".close-viewer").addEventListener("click", closeModal);
-
-  // Close on Escape key
-  const escapeHandler = (e) => {
-    if (e.key === "Escape") {
-      closeModal();
-      document.removeEventListener("keydown", escapeHandler);
-    }
-  };
-  document.addEventListener("keydown", escapeHandler);
-
-  // Reset button state after modal loads
-  setTimeout(() => {
-    button.innerHTML = originalButtonText;
-  }, 500);
 }
+

@@ -96,7 +96,29 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 5. Setup Order Cancellation Modal Listeners
   setupModalListeners();
+
+  // 6. Check for Custom AR Order Bridge payload
+  checkCustomAROrder();
 });
+
+function checkCustomAROrder() {
+  const arPayloadRaw = localStorage.getItem("lanica_custom_ar_order");
+  if (!arPayloadRaw) return;
+
+  try {
+    const payload = JSON.parse(arPayloadRaw);
+    localStorage.removeItem("lanica_custom_ar_order");
+
+    const itemCount = payload.items ? payload.items.length : 0;
+    const selectedName = payload.selectedItem?.name || (payload.items?.[0]?.name) || "Custom Furniture";
+    const color = payload.selectedItem?.color || (payload.items?.[0]?.color) || "Custom Tint";
+
+    showToast(`Received AR Custom Request for '${selectedName}' (${color}). Placed items: ${itemCount}`, "success");
+  } catch (e) {
+    console.warn("Failed to parse custom AR payload:", e);
+  }
+}
+
 
 function setupHeaderAndAuthUI() {
   const cartBtn = document.getElementById("cart-toggle-btn");

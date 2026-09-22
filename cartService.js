@@ -56,9 +56,16 @@ export async function ensureAuth() {
             unsubscribe();
             resolve(userCred.user);
           } catch (err) {
+            console.warn("Anonymous authentication is restricted in Firebase console. Using local guest session fallback.", err);
             unsubscribe();
-            reject(err);
+            let guestUid = localStorage.getItem("lanica_guest_uid");
+            if (!guestUid) {
+              guestUid = "guest_" + Math.random().toString(36).substring(2, 11);
+              localStorage.setItem("lanica_guest_uid", guestUid);
+            }
+            resolve({ uid: guestUid, isAnonymous: true, displayName: "Guest User" });
           }
+
         }
       },
       (error) => {
