@@ -1155,6 +1155,10 @@ textarea:focus-visible {
   touch-action: none;
 }
 
+.webxr-ar-overlay.fallback-mode {
+  background: #0f1115 !important;
+}
+
 .webxr-ar-overlay .ar-canvas-container {
   position: absolute;
   inset: 0;

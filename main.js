@@ -492,7 +492,17 @@ function setupStorefrontUI() {
   document.querySelectorAll('a[href="#ar-feature"]').forEach((link) => {
     link.addEventListener("click", (e) => {
       e.preventDefault();
-      arCoreManager.launchAR(cachedProductsList);
+      const firstProd = cachedProductsList[0];
+      arCoreManager.launchAR(
+        cachedProductsList,
+        firstProd?.id,
+        (targetId) => {
+          if (firstProd) {
+            const displayImg = firstProd.thumbnail || (firstProd.images && (firstProd.images.isoImage || firstProd.images.frontBg)) || firstProd.image || "assets/product_sofa.png";
+            show3DModelViewer(firstProd.name, displayImg, targetId || firstProd.id, link, link.innerHTML);
+          }
+        }
+      );
     });
   });
 
@@ -926,7 +936,17 @@ function bindARButtons() {
     newBtn.addEventListener("click", async (e) => {
       e.preventDefault();
       const productId = newBtn.getAttribute("data-product-id");
-      await arCoreManager.launchAR(cachedProductsList, productId);
+      const productCard = newBtn.closest(".product-card");
+      const productName = productCard?.querySelector("h3")?.textContent || "Product";
+      const productImage = productCard?.querySelector(".product-img")?.src || "";
+
+      await arCoreManager.launchAR(
+        cachedProductsList,
+        productId,
+        (targetId) => {
+          show3DModelViewer(productName, productImage, targetId || productId, newBtn, newBtn.innerHTML);
+        }
+      );
     });
   });
 }

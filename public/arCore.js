@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // Filter out non-fatal duplicate Three.js instance warning caused by model-viewer co-existing with Three.js ESM
 const originalWarn = console.warn;
@@ -28,6 +29,7 @@ export class ARCoreManager {
     this.renderer = null;
     this.scene = null;
     this.camera = null;
+    this.controls = null;
     this.gltfLoader = new GLTFLoader();
 
     // Floor & Hit Test State
@@ -65,11 +67,12 @@ export class ARCoreManager {
   }
 
   /**
-   * Launch WebXR AR Session or Fallback 3D Studio Mode
+   * Launch WebXR AR Session or Fallback to 3D Model Viewer on Non-WebXR Devices
    * @param {Array} catalogProducts - Array of product objects from Firestore
    * @param {string} initialProductId - ID of product to pre-select
+   * @param {Function} fallbackViewerCallback - Callback to show standard 3D Model Viewer modal on PC/non-WebXR devices
    */
-  async launchAR(catalogProducts = [], initialProductId = null) {
+  async launchAR(catalogProducts = [], initialProductId = null, fallbackViewerCallback = null) {
     this.catalogProducts = catalogProducts;
     if (initialProductId) {
       this.selectedCatalogProductId = initialProductId;
@@ -77,20 +80,35 @@ export class ARCoreManager {
       this.selectedCatalogProductId = catalogProducts[0].id;
     }
 
-    // Build DOM Overlay UI
-    this.buildOverlayUI();
-
     // Check WebXR AR Support
-    if (navigator.xr && (await navigator.xr.isSessionSupported("immersive-ar"))) {
+    let isWebXRSupported = false;
+    if (navigator.xr && typeof navigator.xr.isSessionSupported === "function") {
+      try {
+        isWebXRSupported = await navigator.xr.isSessionSupported("immersive-ar");
+      } catch (e) {
+        isWebXRSupported = false;
+      }
+    }
+
+    if (isWebXRSupported) {
+      this.buildOverlayUI();
       try {
         await this.startWebXRSession();
       } catch (err) {
-        console.warn("WebXR Session request failed, switching to 3D Fallback AR Mode:", err);
-        this.startFallbackMode();
+        console.warn("WebXR Session request failed:", err);
+        if (fallbackViewerCallback) {
+          fallbackViewerCallback(this.selectedCatalogProductId);
+        } else {
+          this.startFallbackMode();
+        }
       }
     } else {
-      console.log("WebXR immersive-ar not supported on this browser/device. Launching Interactive 3D AR Fallback.");
-      this.startFallbackMode();
+      console.log("WebXR immersive-ar not supported on this device/PC browser. Showing 3D Model Viewer modal.");
+      if (fallbackViewerCallback) {
+        fallbackViewerCallback(this.selectedCatalogProductId);
+      } else {
+        this.startFallbackMode();
+      }
     }
   }
 
@@ -132,6 +150,9 @@ export class ARCoreManager {
    */
   startFallbackMode() {
     this.isFallbackMode = true;
+    if (this.overlayEl) {
+      this.overlayEl.classList.add("fallback-mode");
+    }
     this.setupThreeScene();
 
     // Append renderer to overlay canvas container
@@ -148,8 +169,18 @@ export class ARCoreManager {
     this.scene.add(gridHelper);
 
     // Setup Camera for 3D View
-    this.camera.position.set(0, 1.6, 2.5);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.set(0, 1.8, 3.2);
+    this.camera.lookAt(0, 0.5, 0);
+
+    // Initialize OrbitControls for PC/Desktop navigation
+    try {
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.enableDamping = true;
+      this.controls.dampingFactor = 0.05;
+      this.controls.target.set(0, 0.5, 0);
+    } catch (e) {
+      console.warn("OrbitControls initialization warning:", e);
+    }
 
     // Event listeners for fallback touch/mouse interaction
     this.bindFallbackTouchEvents();
@@ -158,6 +189,7 @@ export class ARCoreManager {
     const animate = () => {
       if (!this.isFallbackMode) return;
       requestAnimationFrame(animate);
+      if (this.controls) this.controls.update();
       this.updatePhysics();
       this.renderer.render(this.scene, this.camera);
     };
@@ -169,6 +201,9 @@ export class ARCoreManager {
    */
   setupThreeScene() {
     this.scene = new THREE.Scene();
+    if (this.isFallbackMode) {
+      this.scene.background = new THREE.Color(0x0f1115);
+    }
     this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -541,6 +576,7 @@ export class ARCoreManager {
       if (hitProductId) {
         this.setActiveItem(hitProductId);
         this.isDragging = true;
+        if (this.controls) this.controls.enabled = false;
         this.draggedItem = this.placedItems.get(hitProductId);
         if (this.draggedItem) {
           this.draggedItem.targetLift = 0.25; // Apply +0.25m lift on drag start
@@ -573,6 +609,7 @@ export class ARCoreManager {
     };
 
     const handlePointerUp = () => {
+      if (this.controls) this.controls.enabled = true;
       if (this.isDragging && this.draggedItem) {
         this.draggedItem.targetLift = 0.0; // Drop back to floor plane on release
         this.draggedItem = null;
@@ -897,6 +934,11 @@ export class ARCoreManager {
   onSessionEnded() {
     this.session = null;
     this.isFallbackMode = false;
+
+    if (this.controls) {
+      this.controls.dispose();
+      this.controls = null;
+    }
 
     // Dispose all placed objects
     Array.from(this.placedItems.keys()).forEach(() => {
