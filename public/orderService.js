@@ -34,74 +34,85 @@ export const db = getFirestore(app);
 export { ensureAuth } from "./cartService.js";
 
 /**
- * Standardizes order status values into canonical UI strings regardless of casing or whitespace.
- * Canonical statuses: "Pending", "Processing", "To Ship", "To Receive", "Delivered", "Cancelled"
+ * Standardizes order status values into Mobile App Canonical Strings:
+ * 1. "Placed"   (Step 0)
+ * 2. "Packed"   (Step 1)
+ * 3. "Shipped"  (Step 2)
+ * 4. "Arrived"  (Step 3)
+ * 5. "Cancelled" (-1)
  */
 export function normalizeOrderStatus(rawStatus) {
-  if (!rawStatus) return "Pending";
+  if (!rawStatus) return "Placed";
   const s = String(rawStatus).trim().toLowerCase();
   
-  if (s === "pending" || s === "order placed") return "Pending";
-  if (s === "processing" || s === "accepted") return "Processing";
-  if (s === "to ship" || s === "shipped" || s === "shipping") return "To Ship";
-  if (s === "to receive" || s === "out for delivery" || s === "in transit") return "To Receive";
-  if (s === "delivered" || s === "completed" || s === "received") return "Delivered";
+  if (s === "pending" || s === "order placed" || s === "placed") return "Placed";
+  if (s === "processing" || s === "accepted" || s === "packed") return "Packed";
+  if (s === "to ship" || s === "shipped" || s === "shipping" || s === "in transit") return "Shipped";
+  if (s === "to receive" || s === "out for delivery" || s === "delivered" || s === "completed" || s === "arrived" || s === "received") return "Arrived";
   if (s === "cancelled" || s === "canceled" || s === "declined") return "Cancelled";
   
-  // Capitalize fallback
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /**
  * Intelligently resolves the active canonical status from an order object.
- * Admin dashboards may write to `status` while customer orders write `orderStatus`.
- * Prioritizes whichever field has been updated beyond "Pending".
+ * Checks both `status` and `orderStatus` and prioritizes status updates.
  */
 export function getOrderCanonicalStatus(order) {
-  if (!order) return "Pending";
+  if (!order) return "Placed";
   const rawStatus = order.status;
   const rawOrderStatus = order.orderStatus;
 
   const normStatus = rawStatus ? normalizeOrderStatus(rawStatus) : null;
   const normOrderStatus = rawOrderStatus ? normalizeOrderStatus(rawOrderStatus) : null;
 
-  if (normStatus && normStatus !== "Pending") return normStatus;
-  if (normOrderStatus && normOrderStatus !== "Pending") return normOrderStatus;
+  if (normStatus && normStatus !== "Placed") return normStatus;
+  if (normOrderStatus && normOrderStatus !== "Placed") return normOrderStatus;
 
-  return normStatus || normOrderStatus || "Pending";
+  return normStatus || normOrderStatus || "Placed";
+}
+
+/**
+ * Helper to retrieve assigned Rider / Staff name from order.
+ */
+export function getRiderName(order) {
+  if (!order) return null;
+  return (
+    order.assignedToName ||
+    order.riderName ||
+    order.staffName ||
+    (typeof order.assignedTo === "string" ? order.assignedTo : null)
+  );
 }
 
 /**
  * Checks whether an order is cancellable by the customer.
- * Strict Rule: Only "Pending" or "Processing" orders can be cancelled.
+ * Rule: Only "Placed" or "Packed" (Pending / Processing) orders can be cancelled.
  */
 export function isOrderCancellable(status) {
   const norm = normalizeOrderStatus(status);
-  return norm === "Pending" || norm === "Processing";
+  return norm === "Placed" || norm === "Packed";
 }
 
 /**
- * Returns tracking step index for the visual progress stepper:
- * 0: Order Placed (Pending)
- * 1: Processing (Accepted)
- * 2: To Ship (Shipped)
- * 3: To Receive (Out for Delivery)
- * 4: Delivered (Completed)
+ * Returns tracking step index matching the Mobile App 4-Stage Stepper:
+ * 0: PLACED
+ * 1: PACKED
+ * 2: SHIPPED
+ * 3: ARRIVED
  * Returns -1 for Cancelled
  */
 export function getTrackingStepIndex(status) {
   const norm = normalizeOrderStatus(status);
   switch (norm) {
-    case "Pending":
+    case "Placed":
       return 0;
-    case "Processing":
+    case "Packed":
       return 1;
-    case "To Ship":
+    case "Shipped":
       return 2;
-    case "To Receive":
+    case "Arrived":
       return 3;
-    case "Delivered":
-      return 4;
     case "Cancelled":
     default:
       return -1;
@@ -110,7 +121,7 @@ export function getTrackingStepIndex(status) {
 
 /**
  * Calculates or formats estimated delivery date window.
- * Reactively syncs with admin/staff overrides (estimatedDeliveryMin / Max / manualDeliveryOverride).
+ * Syncs with admin/staff overrides (estimatedDeliveryMin / Max / manualDeliveryOverride / estimatedDeliveryDate).
  */
 export function calculateEstimatedDelivery(orderOrCreatedAt) {
   let order = {};
@@ -125,6 +136,9 @@ export function calculateEstimatedDelivery(orderOrCreatedAt) {
 
   // Check for admin/staff manual override or specific min/max estimate strings
   if (order.estimatedDeliveryMin && order.estimatedDeliveryMax) {
+    if (order.estimatedDeliveryMin === order.estimatedDeliveryMax) {
+      return order.estimatedDeliveryMin;
+    }
     return `${order.estimatedDeliveryMin} - ${order.estimatedDeliveryMax}`;
   }
   if (order.manualDeliveryOverride) {
@@ -248,10 +262,6 @@ export function useCustomerOrders(userId, callback, errorCallback) {
 
 /**
  * ATOMIC ORDER CANCELLATION FLOW WITH INVENTORY ROLLBACK
- * Executes a Firestore Atomic Transaction:
- * 1. Verify Current Status (must be "Pending" or "Processing")
- * 2. Restock Inventory (increments FabricStocks, LeatherStocks, or stock for each item)
- * 3. Status Update (orderStatus = "Cancelled", status = "Cancelled", cancelledAt = serverTimestamp())
  */
 export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
   if (!orderId) throw new Error("Order ID is required to cancel an order.");
@@ -260,7 +270,6 @@ export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
   const orderRef = doc(db, "orders", orderId);
 
   await runTransaction(db, async (transaction) => {
-    // Step 1: Read order document inside transaction to verify status
     const orderSnap = await transaction.get(orderRef);
 
     if (!orderSnap.exists()) {
@@ -281,7 +290,6 @@ export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
       );
     }
 
-    // Step 2: Restock Inventory for each item
     const items = Array.isArray(orderData.items) ? orderData.items : [];
 
     for (const item of items) {
@@ -326,7 +334,6 @@ export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
       }
     }
 
-    // Step 3: Update Order Document Status to Cancelled
     const cancellationPayload = {
       orderStatus: "Cancelled",
       status: "Cancelled",

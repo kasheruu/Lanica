@@ -30,8 +30,6 @@ import {
   getAvailableStock,
 } from "./cartService.js";
 
-import { arCoreManager } from "./arCore.js";
-
 // Global State
 let currentUser = null;
 let currentCartItems = [];
@@ -42,7 +40,6 @@ let currentModalProduct = null;
 let currentSelectedMaterial = "Fabric";
 let currentSelectedQty = 1;
 let cartUnsubscribe = null;
-let cachedProductsList = [];
 
 // Helper: Toast Notifications
 function showToast(message, type = "success") {
@@ -154,12 +151,10 @@ async function loadProductsCatalog() {
 
     if (!querySnapshot.empty) {
       productsGrid.innerHTML = ""; // Clear static placeholders
-      cachedProductsList = [];
 
       let delay = 0.1;
       querySnapshot.forEach((docSnap) => {
         const product = docSnap.data();
-        cachedProductsList.push({ id: docSnap.id, ...product });
 
         const displayImage =
           product.thumbnail ||
@@ -488,18 +483,6 @@ async function loadUserAddresses() {
 
 // Storefront UI Wireup
 function setupStorefrontUI() {
-  // Bind Navbar AR Experience Link
-  document.querySelectorAll('a[href="#ar-feature"]').forEach((link) => {
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      const firstProd = cachedProductsList[0];
-      if (firstProd) {
-        const displayImg = firstProd.thumbnail || (firstProd.images && (firstProd.images.isoImage || firstProd.images.frontBg)) || firstProd.image || "assets/product_sofa.png";
-        show3DModelViewer(firstProd.name, displayImg, firstProd.id, link, link.innerHTML);
-      }
-    });
-  });
-
   // Cart Drawer toggles
   const cartBtn = document.getElementById("cart-toggle-btn");
   const cartOverlay = document.getElementById("cart-drawer-overlay");
@@ -920,21 +903,24 @@ function initAnimations() {
   bindARButtons();
 }
 
-// AR Buttons WebXR AR binding
+// AR Buttons 3D Viewer binding
 function bindARButtons() {
   const arButtons = document.querySelectorAll(".btn-ar-view");
   arButtons.forEach((btn) => {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
-    newBtn.addEventListener("click", (e) => {
+    newBtn.addEventListener("click", async (e) => {
       e.preventDefault();
-      const productId = newBtn.getAttribute("data-product-id");
+      const originalText = newBtn.innerHTML;
+      newBtn.innerHTML = `<div class="dot active"></div> Loading 3D...`;
+
       const productCard = newBtn.closest(".product-card");
       const productName = productCard?.querySelector("h3")?.textContent || "Product";
       const productImage = productCard?.querySelector(".product-img")?.src || "";
+      const productId = newBtn.getAttribute("data-product-id");
 
-      show3DModelViewer(productName, productImage, productId, newBtn, newBtn.innerHTML);
+      await show3DModelViewer(productName, productImage, productId, newBtn, originalText);
     });
   });
 }
@@ -974,6 +960,8 @@ async function show3DModelViewer(productName, productImage, productId, button, o
               shadow-intensity="1"
               reveal="auto"
               loading="eager"
+              ar
+              ar-modes="webxr scene-viewer quick-look"
               alt="${productName} 3D Model">
             </model-viewer>
           </div>
@@ -982,14 +970,6 @@ async function show3DModelViewer(productName, productImage, productId, button, o
           <div class="product-details">
             <h4>${productName}</h4>
             <p id="pv-3d-desc">Experience this furniture piece in 3D. Rotate to view from different angles and zoom to inspect details.</p>
-            <button id="pv-launch-ar-cta" class="btn-primary btn-launch-ar-cta">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <polyline points="12 22.08 12 12"></polyline>
-              </svg>
-              View in 3D AR (Your Room)
-            </button>
           </div>
         </div>
       </div>
@@ -1086,11 +1066,6 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     if (e.target === modalOverlay) closeModal();
   });
   modalOverlay.querySelector(".close-viewer")?.addEventListener("click", closeModal);
-
-  modalOverlay.querySelector("#pv-launch-ar-cta")?.addEventListener("click", () => {
-    closeModal();
-    arCoreManager.startInteractiveAR(cachedProductsList, productId);
-  });
 
   setTimeout(() => {
     button.innerHTML = originalButtonText;
