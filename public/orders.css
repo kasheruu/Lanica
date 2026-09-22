@@ -790,8 +790,9 @@ body {
 /* Mobile Responsive */
 @media (max-width: 640px) {
   .orders-page-wrapper {
-    width: 92%;
-    margin-top: 100px;
+    width: 94%;
+    padding-top: 76px;
+    margin: 0 auto;
   }
   
   .page-title {

@@ -62,6 +62,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  setupMobileMenu();
+
   // 2. Setup Auth & Cart UI Event Listeners
   setupHeaderAndAuthUI();
 
@@ -742,4 +744,40 @@ async function handleCancelConfirmSubmit() {
       confirmBtn.innerHTML = `<span>Confirm Cancellation</span>`;
     }
   }
+}
+
+function setupMobileMenu() {
+  const menuBtn = document.getElementById("mobile-menu-btn");
+  const navLinks = document.querySelector(".nav-links");
+  if (!menuBtn || !navLinks) return;
+
+  const hamburgerIcon = menuBtn.querySelector(".hamburger-icon");
+  const closeIcon = menuBtn.querySelector(".close-icon");
+
+  const toggleMenu = (show) => {
+    const isOpen = show !== undefined ? show : !navLinks.classList.contains("active");
+    navLinks.classList.toggle("active", isOpen);
+    menuBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    if (hamburgerIcon) hamburgerIcon.style.display = isOpen ? "none" : "block";
+    if (closeIcon) closeIcon.style.display = isOpen ? "block" : "none";
+  };
+
+  menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+
+  navLinks.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => toggleMenu(false));
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!navLinks.contains(e.target) && !menuBtn.contains(e.target)) {
+      toggleMenu(false);
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") toggleMenu(false);
+  });
 }

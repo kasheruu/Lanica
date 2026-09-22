@@ -61,7 +61,7 @@ function showToast(message, type = "success") {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // 1. Navbar Scroll Effect
+  // 1. Navbar Scroll Effect & Mobile Drawer Menu
   const navbar = document.querySelector(".navbar");
   if (navbar) {
     window.addEventListener("scroll", () => {
@@ -72,6 +72,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
+
+  setupMobileMenu();
 
   // 2. Initialize Authentication & Real-time Cart
   try {
@@ -1179,4 +1181,40 @@ function setupAdminLogoTrigger() {
 
   logoArea.setAttribute("title", "Lanica Furniture (Triple click for CMS)");
   logoArea.style.cursor = "pointer";
+}
+
+function setupMobileMenu() {
+  const menuBtn = document.getElementById("mobile-menu-btn");
+  const navLinks = document.querySelector(".nav-links");
+  if (!menuBtn || !navLinks) return;
+
+  const hamburgerIcon = menuBtn.querySelector(".hamburger-icon");
+  const closeIcon = menuBtn.querySelector(".close-icon");
+
+  const toggleMenu = (show) => {
+    const isOpen = show !== undefined ? show : !navLinks.classList.contains("active");
+    navLinks.classList.toggle("active", isOpen);
+    menuBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    if (hamburgerIcon) hamburgerIcon.style.display = isOpen ? "none" : "block";
+    if (closeIcon) closeIcon.style.display = isOpen ? "block" : "none";
+  };
+
+  menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+
+  navLinks.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => toggleMenu(false));
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!navLinks.contains(e.target) && !menuBtn.contains(e.target)) {
+      toggleMenu(false);
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") toggleMenu(false);
+  });
 }
