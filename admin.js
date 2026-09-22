@@ -160,6 +160,20 @@ colorInput.addEventListener("input", (e) => {
   }
 });
 
+// Quick Material Preset Chip Clicks
+document.addEventListener("click", (e) => {
+  const chipBtn = e.target.closest(".material-chip-btn");
+  if (chipBtn) {
+    e.preventDefault();
+    const val = chipBtn.dataset.val || chipBtn.textContent;
+    const matInput = document.getElementById("product-material");
+    if (matInput) {
+      matInput.value = val;
+      matInput.focus();
+    }
+  }
+});
+
 // --- Input Validation with Warnings ---
 const validationRules = [
   { id: "product-name", max: 100, msg: "Product name cannot exceed 100 characters" },
@@ -400,11 +414,26 @@ async function waitForMeshyModelUrl(taskId, maxAttempts = 40, delayMs = 3000) {
   return { status: "PENDING", modelUrl: null };
 }
 
-async function createMeshyTask(imageUrl, prompt = null) {
+async function createMeshyTask(imagesPayload, prompt = null) {
   const body = {
-    image_url: imageUrl,
     enable_pbr: true,
   };
+
+  if (typeof imagesPayload === "string") {
+    body.image_url = imagesPayload;
+  } else if (imagesPayload && typeof imagesPayload === "object") {
+    body.image_url = imagesPayload.frontUrl || imagesPayload.bgImage || "";
+    if (imagesPayload.leftUrl || imagesPayload.leftBgImage) {
+      body.left_image_url = imagesPayload.leftUrl || imagesPayload.leftBgImage;
+    }
+    if (imagesPayload.rightUrl || imagesPayload.rightBgImage) {
+      body.right_image_url = imagesPayload.rightUrl || imagesPayload.rightBgImage;
+    }
+    if (imagesPayload.backUrl || imagesPayload.backBgImage) {
+      body.back_image_url = imagesPayload.backUrl || imagesPayload.backBgImage;
+    }
+  }
+
   if (prompt && prompt.trim()) {
     body.prompt = prompt.trim();
   }
@@ -460,10 +489,17 @@ productForm.addEventListener("submit", async (e) => {
   submitBtn.disabled = true;
 
   try {
-    const transparentImageFile = document.getElementById("img-bg").files[0];
+    const transparentFrontFile = document.getElementById("img-bg").files[0];
+    const leftBgFile = document.getElementById("img-bg-left")?.files[0] || null;
+    const rightBgFile = document.getElementById("img-bg-right")?.files[0] || null;
+    const backBgFile = document.getElementById("img-bg-back")?.files[0] || null;
+
     const imageFiles = {
       isoImage: document.getElementById("img-iso").files[0],
-      bgImage: transparentImageFile,
+      bgImage: transparentFrontFile,
+      leftBgImage: leftBgFile,
+      rightBgImage: rightBgFile,
+      backBgImage: backBgFile,
     };
 
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
@@ -477,42 +513,51 @@ productForm.addEventListener("submit", async (e) => {
     };
 
     // Upload selected files concurrently into specified Firebase Storage folders
-    const [isoImage, bgImage] = await Promise.all([
+    const [isoImage, bgImage, leftBgImage, rightBgImage, backBgImage] = await Promise.all([
       getImageUrl("isoImage", "products/thumbnails"),
       getImageUrl("bgImage", "products/productsnobg"),
+      getImageUrl("leftBgImage", "products/productsnobg"),
+      getImageUrl("rightBgImage", "products/productsnobg"),
+      getImageUrl("backBgImage", "products/productsnobg"),
     ]);
 
     // Keep previous Meshy artifacts only when we are NOT regenerating from a new transparent image.
     let meshyTaskId = isEditing ? productForm.dataset.meshyTaskId || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
-    const shouldRegenerateMeshy = !!transparentImageFile;
+    const shouldRegenerateMeshy = !!(transparentFrontFile || leftBgFile || rightBgFile || backBgFile);
+
     if (shouldRegenerateMeshy) {
-      // Explicitly clear old task ids and URLs when a new transparent image is uploaded.
+      // Explicitly clear old task ids and URLs when new transparent image(s) are uploaded.
       meshyTaskId = null;
       modelUrl = null;
       meshyStatus = "PENDING";
     }
 
-    // Meshy source should always be the transparent-background asset, never the thumbnail.
-    const meshySourceImageUrl = bgImage || existingImages.bgImage || existingImages.frontBg || "";
+    const meshyPayload = {
+      frontUrl: bgImage || existingImages.bgImage || existingImages.frontBg || "",
+      leftUrl: leftBgImage || existingImages.leftBgImage || "",
+      rightUrl: rightBgImage || existingImages.rightBgImage || "",
+      backUrl: backBgImage || existingImages.backBgImage || "",
+    };
 
-    // Automatically trigger Meshy.ai API only when a NEW transparent background image was uploaded.
+    // Automatically trigger Meshy.ai API when new transparent background image(s) were uploaded.
     if (shouldRegenerateMeshy) {
-      if (!meshySourceImageUrl) {
-        throw new Error("Transparent background image is required for Meshy generation.");
+      if (!meshyPayload.frontUrl) {
+        throw new Error("Front transparent background image is required for Meshy generation.");
       }
       submitBtn.textContent = isEditing
         ? "Regenerating 3D Model..."
         : "Starting 3D Generation...";
       try {
-        // Always try to create original task
-        const originalTask = await createMeshyTask(meshySourceImageUrl);
+        // Always try to create task (single or multi-view)
+        const originalTask = await createMeshyTask(meshyPayload);
         meshyTaskId = originalTask.result;
 
         meshyStatus = "PENDING";
         console.log("Meshy 3D Generation started!", {
           original: meshyTaskId,
+          isMultiView: !!(leftBgImage || rightBgImage || backBgImage),
         });
 
         submitBtn.textContent = "Waiting for 3D model URL...";
@@ -552,7 +597,13 @@ productForm.addEventListener("submit", async (e) => {
       material,
       size: `${document.getElementById("product-size-w").value} × ${document.getElementById("product-size-h").value} × ${document.getElementById("product-size-d").value} in`,
       color: document.getElementById("product-color").value,
-      images: { isoImage, bgImage },
+      images: {
+        isoImage,
+        bgImage,
+        leftBgImage: leftBgImage || "",
+        rightBgImage: rightBgImage || "",
+        backBgImage: backBgImage || "",
+      },
       meshyTaskId: meshyTaskId,
       modelUrl: modelUrl,
       meshyStatus: meshyStatus,

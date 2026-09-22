@@ -74,17 +74,22 @@ app.post("/api/meshy-image-to-3d", meshyApiLimiter, async (req, res) => {
       return;
     }
 
+    const meshyPayload = {
+      image_url: imageUrl,
+      enable_pbr: req.body?.enable_pbr !== false,
+      ...(req.body?.left_image_url ? { left_image_url: String(req.body.left_image_url).trim() } : {}),
+      ...(req.body?.right_image_url ? { right_image_url: String(req.body.right_image_url).trim() } : {}),
+      ...(req.body?.back_image_url ? { back_image_url: String(req.body.back_image_url).trim() } : {}),
+      ...(req.body?.prompt ? { prompt: String(req.body.prompt).trim() } : {}),
+    };
+
     const upstream = await fetch("https://api.meshy.ai/v1/image-to-3d", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        image_url: imageUrl,
-        enable_pbr: req.body?.enable_pbr !== false,
-        ...(req.body?.prompt ? { prompt: String(req.body.prompt).trim() } : {}),
-      }),
+      body: JSON.stringify(meshyPayload),
     });
 
     const bodyText = await upstream.text();

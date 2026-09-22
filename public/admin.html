@@ -426,10 +426,44 @@
             </div>
             <div class="form-group">
               <label for="product-material">Material</label>
-              <select id="product-material" required>
-                <option value="Fabric">Fabric</option>
-                <option value="Leather">Leather</option>
-              </select>
+              <input type="text" id="product-material" list="material-presets" required placeholder="e.g. Italian Leather, Solid Oak" style="
+                width: 100%;
+                padding: 10px 14px;
+                border-radius: 8px;
+                border: 1px solid rgba(0, 0, 0, 0.15);
+                font-family: inherit;
+                font-size: 0.95rem;
+                outline: none;
+              " />
+              <datalist id="material-presets">
+                <option value="Fabric"></option>
+                <option value="Leather"></option>
+                <option value="Italian Genuine Leather"></option>
+                <option value="Velvet"></option>
+                <option value="Solid Oak Wood"></option>
+                <option value="Mahogany"></option>
+                <option value="Stainless Steel"></option>
+                <option value="Linen"></option>
+                <option value="Bouclé"></option>
+                <option value="Marble"></option>
+                <option value="Tempered Glass"></option>
+                <option value="Brass"></option>
+                <option value="Teak Wood"></option>
+              </datalist>
+            </div>
+          </div>
+
+          <div class="material-chips-container" style="margin-top: -8px; margin-bottom: 16px;">
+            <span style="font-size: 0.8rem; font-weight: 600; color: #6b7280; margin-right: 6px;">Presets:</span>
+            <div class="material-chips-list" style="display: inline-flex; flex-wrap: wrap; gap: 6px;">
+              <button type="button" class="material-chip-btn" data-val="Italian Genuine Leather">Leather</button>
+              <button type="button" class="material-chip-btn" data-val="Velvet">Velvet</button>
+              <button type="button" class="material-chip-btn" data-val="Solid Oak Wood">Solid Oak</button>
+              <button type="button" class="material-chip-btn" data-val="Mahogany">Mahogany</button>
+              <button type="button" class="material-chip-btn" data-val="Stainless Steel">Steel</button>
+              <button type="button" class="material-chip-btn" data-val="Linen">Linen</button>
+              <button type="button" class="material-chip-btn" data-val="Bouclé">Bouclé</button>
+              <button type="button" class="material-chip-btn" data-val="Marble">Marble</button>
             </div>
           </div>
 
@@ -464,13 +498,62 @@
               </div>
             </div>
           </div>
+
           <div class="form-group">
-            <label for="img-iso">Thumbnail (White Background)</label>
-            <input type="file" id="img-iso" accept="image/*,video/*" required />
+            <label for="img-iso">Thumbnail (White / Storefront Background)</label>
+            <input type="file" id="img-iso" accept="image/*" required />
           </div>
-          <div class="form-group">
-            <label for="img-bg">Original - Meshy (Transparent Background)</label>
-            <input type="file" id="img-bg" accept="image/*,video/*" required />
+
+          <!-- Multi-View Transparent Images for 3D Generation -->
+          <div class="form-group" style="margin-top: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="margin: 0; font-weight: 600;">Transparent Background Images (Meshy 3D AI)</label>
+              <span class="multiview-badge-hint" style="font-size: 0.78rem; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 12px; font-weight: 600;">
+                Front required • Adding side views produces detailed 3D objects
+              </span>
+            </div>
+            
+            <div class="multiview-upload-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+              <!-- Front View (Required) -->
+              <div class="multiview-slot-card" style="border: 1.5px solid #3b82f6; border-radius: 10px; padding: 10px; background: #eff6ff;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <strong style="font-size: 0.85rem; color: #1e40af;">Front View</strong>
+                  <span style="font-size: 0.7rem; background: #2563eb; color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Required</span>
+                </div>
+                <input type="file" id="img-bg" accept="image/*" required style="font-size: 0.8rem; width: 100%;" />
+                <span style="font-size: 0.75rem; color: #64748b; display: block; margin-top: 4px;">Primary image for 3D model generation</span>
+              </div>
+
+              <!-- Left Side View (Optional) -->
+              <div class="multiview-slot-card" style="border: 1px dashed rgba(0,0,0,0.15); border-radius: 10px; padding: 10px; background: #fafafa;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <strong style="font-size: 0.85rem; color: #374151;">Left Side View</strong>
+                  <span style="font-size: 0.7rem; background: #9ca3af; color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Optional</span>
+                </div>
+                <input type="file" id="img-bg-left" accept="image/*" style="font-size: 0.8rem; width: 100%;" />
+                <span style="font-size: 0.75rem; color: #9ca3af; display: block; margin-top: 4px;">Left profile for 360° side depth</span>
+              </div>
+
+              <!-- Right Side View (Optional) -->
+              <div class="multiview-slot-card" style="border: 1px dashed rgba(0,0,0,0.15); border-radius: 10px; padding: 10px; background: #fafafa;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <strong style="font-size: 0.85rem; color: #374151;">Right Side View</strong>
+                  <span style="font-size: 0.7rem; background: #9ca3af; color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Optional</span>
+                </div>
+                <input type="file" id="img-bg-right" accept="image/*" style="font-size: 0.8rem; width: 100%;" />
+                <span style="font-size: 0.75rem; color: #9ca3af; display: block; margin-top: 4px;">Right profile for 360° side depth</span>
+              </div>
+
+              <!-- Back View (Optional) -->
+              <div class="multiview-slot-card" style="border: 1px dashed rgba(0,0,0,0.15); border-radius: 10px; padding: 10px; background: #fafafa;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <strong style="font-size: 0.85rem; color: #374151;">Back View</strong>
+                  <span style="font-size: 0.7rem; background: #9ca3af; color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Optional</span>
+                </div>
+                <input type="file" id="img-bg-back" accept="image/*" style="font-size: 0.8rem; width: 100%;" />
+                <span style="font-size: 0.75rem; color: #9ca3af; display: block; margin-top: 4px;">Back face texture & upholstery detail</span>
+              </div>
+            </div>
           </div>
 
           <div class="modal-actions">
