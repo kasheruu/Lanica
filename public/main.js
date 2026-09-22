@@ -207,20 +207,14 @@ function bindARButtons() {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
-    newBtn.addEventListener("click", async (e) => {
+    newBtn.addEventListener("click", (e) => {
       e.preventDefault();
       const productId = newBtn.getAttribute("data-product-id");
       const productCard = newBtn.closest(".product-card");
       const productName = productCard?.querySelector("h3")?.textContent || "Product";
       const productImage = productCard?.querySelector(".product-img")?.src || "";
 
-      await arCoreManager.launchAR(
-        publicCachedProductsList,
-        productId,
-        (targetId) => {
-          show3DModelViewer(productName, productImage, targetId || productId, newBtn, newBtn.innerHTML);
-        }
-      );
+      show3DModelViewer(productName, productImage, productId, newBtn, newBtn.innerHTML);
     });
   });
 }
@@ -293,6 +287,14 @@ async function show3DModelViewer(productName, productImage, productId, button, o
                 ? "Experience this furniture piece in 3D. Rotate to view from different angles and zoom to see details."
                 : "This product doesn't have a 3D model available yet. You're viewing a 2D preview."
             }</p>
+            <button id="pv-launch-ar-cta" class="btn-primary btn-launch-ar-cta">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <polyline points="12 22.08 12 12"></polyline>
+              </svg>
+              View in 3D AR (Your Room)
+            </button>
             <div class="viewing-tips">
               <h5>Viewing Tips:</h5>
               <ul>
@@ -514,6 +516,12 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
   // Close on X button click
   modalOverlay.querySelector(".close-viewer").addEventListener("click", closeModal);
+
+  // Launch Interactive AR on CTA button click
+  modalOverlay.querySelector("#pv-launch-ar-cta")?.addEventListener("click", () => {
+    closeModal();
+    arCoreManager.startInteractiveAR(publicCachedProductsList, productId);
+  });
 
   // Close on Escape key
   const escapeHandler = (e) => {

@@ -73,12 +73,27 @@ export class ARCoreManager {
    * @param {Function} fallbackViewerCallback - Callback to show standard 3D Model Viewer modal on PC/non-WebXR devices
    */
   async launchAR(catalogProducts = [], initialProductId = null, fallbackViewerCallback = null) {
+    if (fallbackViewerCallback) {
+      fallbackViewerCallback(initialProductId);
+    } else {
+      await this.startInteractiveAR(catalogProducts, initialProductId);
+    }
+  }
+
+  /**
+   * Start Interactive AR Experience (Called from 3D Model Viewer Modal CTA button)
+   * Launches WebXR session on supported mobile devices or Interactive 3D Room on PC
+   */
+  async startInteractiveAR(catalogProducts = [], initialProductId = null) {
     this.catalogProducts = catalogProducts;
     if (initialProductId) {
       this.selectedCatalogProductId = initialProductId;
     } else if (catalogProducts.length > 0) {
       this.selectedCatalogProductId = catalogProducts[0].id;
     }
+
+    // Close any open 3D model viewer modal
+    document.querySelectorAll(".model-viewer-overlay").forEach((el) => el.remove());
 
     // Check WebXR AR Support
     let isWebXRSupported = false;
@@ -90,25 +105,19 @@ export class ARCoreManager {
       }
     }
 
+    this.buildOverlayUI();
+    document.body.classList.add("ar-session-active");
+
     if (isWebXRSupported) {
-      this.buildOverlayUI();
       try {
         await this.startWebXRSession();
       } catch (err) {
         console.warn("WebXR Session request failed:", err);
-        if (fallbackViewerCallback) {
-          fallbackViewerCallback(this.selectedCatalogProductId);
-        } else {
-          this.startFallbackMode();
-        }
-      }
-    } else {
-      console.log("WebXR immersive-ar not supported on this device/PC browser. Showing 3D Model Viewer modal.");
-      if (fallbackViewerCallback) {
-        fallbackViewerCallback(this.selectedCatalogProductId);
-      } else {
         this.startFallbackMode();
       }
+    } else {
+      console.log("WebXR immersive-ar not supported on this device/PC browser. Launching Interactive 3D AR Studio.");
+      this.startFallbackMode();
     }
   }
 
@@ -267,6 +276,9 @@ export class ARCoreManager {
       <!-- Close Session Button -->
       <button class="ar-close-btn" id="ar-close-btn" aria-label="Exit AR Session">&times;</button>
 
+      <!-- Toast Notification Banner -->
+      <div class="ar-toast-banner" id="ar-toast-banner"></div>
+
       <!-- Active Item Controls (Delete Item & Color Palette) -->
       <div class="ar-item-controls hidden" id="ar-item-controls">
         <div class="ar-item-header">
@@ -349,6 +361,26 @@ export class ARCoreManager {
   }
 
   /**
+   * Display HUD AR Toast Notification
+   */
+  showARToast(message) {
+    if (!this.overlayEl) return;
+    let toastEl = this.overlayEl.querySelector("#ar-toast-banner");
+    if (!toastEl) {
+      toastEl = document.createElement("div");
+      toastEl.id = "ar-toast-banner";
+      toastEl.className = "ar-toast-banner";
+      this.overlayEl.appendChild(toastEl);
+    }
+    toastEl.textContent = message;
+    toastEl.classList.add("visible");
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      toastEl.classList.remove("visible");
+    }, 3000);
+  }
+
+  /**
    * Render Bottom Catalog Carousel with Product Cards & Single-Piece Rules
    */
   renderCatalogCarousel() {
@@ -388,12 +420,14 @@ export class ARCoreManager {
         </div>
       `;
 
-      if (!isPlaced) {
-        card.addEventListener("click", (e) => {
-          e.stopPropagation();
+      card.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (isPlaced) {
+          this.showARToast(`Single-Piece Rule: '${prod.name}' is already placed in the room.`);
+        } else {
           this.selectCatalogProduct(prod.id);
-        });
-      }
+        }
+      });
 
       this.catalogCarouselEl.appendChild(card);
     });
@@ -934,6 +968,7 @@ export class ARCoreManager {
   onSessionEnded() {
     this.session = null;
     this.isFallbackMode = false;
+    document.body.classList.remove("ar-session-active");
 
     if (this.controls) {
       this.controls.dispose();
