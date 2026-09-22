@@ -6,6 +6,9 @@ import {
   getDoc,
   doc,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+import { arCoreManager } from "./arCore.js";
+
+let publicCachedProductsList = [];
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb2kDAVp9N_afxgOw5hSzDIvQ3UAIZVNU",
@@ -41,10 +44,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Only overwrite if we have products in the DB, otherwise keep static mockups
       if (!querySnapshot.empty) {
         productsGrid.innerHTML = ""; // Clear static defaults
+        publicCachedProductsList = [];
 
         let delay = 0.1;
         querySnapshot.forEach((doc) => {
           const product = doc.data();
+          publicCachedProductsList.push({ id: doc.id, ...product });
 
           // Prefer thumbnail-style images first, then legacy fields.
           const displayImage =
@@ -104,9 +109,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Initialize regular animations
   initAnimations();
 
-  // 4. Smooth scrolling for anchor links
+  // 4. Smooth scrolling for anchor links & AR Experience navbar launcher
   document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
     anchor.addEventListener("click", function (e) {
+      if (this.getAttribute("href") === "#ar-feature") {
+        e.preventDefault();
+        arCoreManager.launchAR(publicCachedProductsList);
+        return;
+      }
       e.preventDefault();
       const targetId = this.getAttribute("href");
       if (targetId === "#download") {
@@ -189,17 +199,8 @@ function bindARButtons() {
 
     newBtn.addEventListener("click", async (e) => {
       e.preventDefault();
-      const originalText = newBtn.innerHTML;
-      newBtn.innerHTML = `<div class="dot active"></div> Loading 3D Model...`;
-
-      // Get product information from the card
-      const productCard = newBtn.closest(".product-card");
-      const productName = productCard.querySelector("h3")?.textContent || "Product";
-      const productImage = productCard.querySelector(".product-img")?.src || "";
       const productId = newBtn.getAttribute("data-product-id");
-
-      // Create and show 3D model viewer modal
-      await show3DModelViewer(productName, productImage, productId, newBtn, originalText);
+      await arCoreManager.launchAR(publicCachedProductsList, productId);
     });
   });
 }

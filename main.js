@@ -30,6 +30,8 @@ import {
   getAvailableStock,
 } from "./cartService.js";
 
+import { arCoreManager } from "./arCore.js";
+
 // Global State
 let currentUser = null;
 let currentCartItems = [];
@@ -40,6 +42,7 @@ let currentModalProduct = null;
 let currentSelectedMaterial = "Fabric";
 let currentSelectedQty = 1;
 let cartUnsubscribe = null;
+let cachedProductsList = [];
 
 // Helper: Toast Notifications
 function showToast(message, type = "success") {
@@ -151,10 +154,12 @@ async function loadProductsCatalog() {
 
     if (!querySnapshot.empty) {
       productsGrid.innerHTML = ""; // Clear static placeholders
+      cachedProductsList = [];
 
       let delay = 0.1;
       querySnapshot.forEach((docSnap) => {
         const product = docSnap.data();
+        cachedProductsList.push({ id: docSnap.id, ...product });
 
         const displayImage =
           product.thumbnail ||
@@ -483,6 +488,14 @@ async function loadUserAddresses() {
 
 // Storefront UI Wireup
 function setupStorefrontUI() {
+  // Bind Navbar AR Experience Link
+  document.querySelectorAll('a[href="#ar-feature"]').forEach((link) => {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      arCoreManager.launchAR(cachedProductsList);
+    });
+  });
+
   // Cart Drawer toggles
   const cartBtn = document.getElementById("cart-toggle-btn");
   const cartOverlay = document.getElementById("cart-drawer-overlay");
@@ -903,7 +916,7 @@ function initAnimations() {
   bindARButtons();
 }
 
-// AR Buttons 3D Viewer binding
+// AR Buttons WebXR AR binding
 function bindARButtons() {
   const arButtons = document.querySelectorAll(".btn-ar-view");
   arButtons.forEach((btn) => {
@@ -912,15 +925,8 @@ function bindARButtons() {
 
     newBtn.addEventListener("click", async (e) => {
       e.preventDefault();
-      const originalText = newBtn.innerHTML;
-      newBtn.innerHTML = `<div class="dot active"></div> Loading 3D...`;
-
-      const productCard = newBtn.closest(".product-card");
-      const productName = productCard?.querySelector("h3")?.textContent || "Product";
-      const productImage = productCard?.querySelector(".product-img")?.src || "";
       const productId = newBtn.getAttribute("data-product-id");
-
-      await show3DModelViewer(productName, productImage, productId, newBtn, originalText);
+      await arCoreManager.launchAR(cachedProductsList, productId);
     });
   });
 }
