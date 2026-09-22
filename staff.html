@@ -6,8 +6,7 @@
     <title>Lanica | Staff Dashboard</title>
     <link rel="icon" type="image/jpeg" href="assets/lanicalogo.jpg" />
 
-    <!-- Security Headers -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://ui-avatars.com data: blob:; connect-src 'self' https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://www.gstatic.com; frame-src 'self' https://js.stripe.com;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://ui-avatars.com data: blob:; connect-src 'self' https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://www.gstatic.com https://cdn.jsdelivr.net https://ajax.googleapis.com; frame-src 'self' https://js.stripe.com;">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
@@ -20,6 +19,16 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="admin.css" />
     <link rel="stylesheet" href="staff.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+          "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+          "three/": "https://cdn.jsdelivr.net/npm/three@0.173.0/"
+        }
+      }
+    </script>
     <script type="module" src="staff.js" defer></script>
   </head>
   <body class="admin-body">
