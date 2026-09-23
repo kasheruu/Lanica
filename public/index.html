@@ -513,6 +513,14 @@
                 </div>
               </div>
 
+              <!-- Customization & Specs Box (Made-to-Order Support) -->
+              <div class="variant-section" style="margin-top: 14px;">
+                <div class="variant-label">
+                  <span>Customization / Dimensions (Optional)</span>
+                </div>
+                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-family: inherit; font-size: 0.85rem; resize: vertical;"></textarea>
+              </div>
+
               <button type="button" id="pv-add-to-cart-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">
                 Add to Shopping Bag
               </button>
@@ -580,7 +588,30 @@
             </form>
           </div>
 
-          <!-- Step 2: Payment Method -->
+          <!-- Step 2: Payment Terms (Made-to-Order Downpayment Option) -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              Payment Terms (Crafting Deposit)
+            </div>
+            <div class="payment-terms-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+              <label class="payment-term-card selected" id="term-downpayment-card" style="border: 2px solid var(--clr-yellow, #fcd535); border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
+                <input type="radio" name="checkoutPaymentTerm" value="downpayment" checked style="accent-color: #000; margin-bottom: 6px;">
+                <strong style="font-size: 0.95rem;">50% Downpayment</strong>
+                <small style="color: #6b7280; font-size: 0.8rem; margin-top: 2px;">Pay 50% deposit to commence crafting. Settle 50% balance upon dispatch.</small>
+              </label>
+              <label class="payment-term-card" id="term-full-card" style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
+                <input type="radio" name="checkoutPaymentTerm" value="full" style="accent-color: #000; margin-bottom: 6px;">
+                <strong style="font-size: 0.95rem;">Full Payment (100%)</strong>
+                <small style="color: #6b7280; font-size: 0.8rem; margin-top: 2px;">Settle the entire amount upfront for priority workshop scheduling.</small>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 3: Payment Method -->
           <div class="checkout-section">
             <div class="checkout-section-title">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -590,22 +621,33 @@
               Payment Method
             </div>
             <div class="payment-methods-grid">
-              <div class="payment-card selected" data-method="COD">
-                <div class="payment-card-icon">💵</div>
-                <h5>Cash on Delivery</h5>
-              </div>
-              <div class="payment-card" data-method="GCash">
+              <div class="payment-card selected" data-method="GCash">
                 <div class="payment-card-icon">📱</div>
-                <h5>GCash (PayMongo)</h5>
+                <h5>GCash / Maya</h5>
               </div>
               <div class="payment-card" data-method="Bank Transfer">
                 <div class="payment-card-icon">🏦</div>
                 <h5>Bank Transfer</h5>
               </div>
+              <div class="payment-card" data-method="COD">
+                <div class="payment-card-icon">💵</div>
+                <h5>Cash on Delivery</h5>
+              </div>
+            </div>
+
+            <!-- Proof of Payment Upload box for Non-COD -->
+            <div id="proof-payment-box" style="margin-top: 14px; background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 12px;">
+              <label style="display: block; font-weight: 500; font-size: 0.85rem; margin-bottom: 6px;">
+                Upload Proof of Payment / Transaction Slip (Optional):
+              </label>
+              <input type="file" id="checkout-payment-slip" accept="image/*" style="font-size: 0.85rem;" />
+              <small style="display: block; color: #6b7280; margin-top: 4px; font-size: 0.78rem;">
+                Official receipt / screenshot can also be sent directly in our Live Chat.
+              </small>
             </div>
           </div>
 
-          <!-- Step 3: Order Summary -->
+          <!-- Step 4: Order Summary -->
           <div class="checkout-section">
             <div class="checkout-summary-box">
               <div class="summary-line">
@@ -617,8 +659,16 @@
                 <span id="checkout-shipping">₱150</span>
               </div>
               <div class="summary-line total">
-                <span>Final Total</span>
+                <span>Total Order Value</span>
                 <span id="checkout-total">₱150</span>
+              </div>
+              <div class="summary-line" id="checkout-downpayment-row" style="color: #2563eb; font-weight: 600; border-top: 1px dashed #e5e7eb; padding-top: 6px; margin-top: 6px;">
+                <span>Due Today (50% Downpayment)</span>
+                <span id="checkout-due-today">₱75</span>
+              </div>
+              <div class="summary-line" id="checkout-balance-row" style="color: #4b5563; font-size: 0.85rem;">
+                <span>Remaining Balance Upon Ready</span>
+                <span id="checkout-balance-due">₱75</span>
               </div>
             </div>
           </div>
@@ -731,6 +781,65 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Floating Live Chat Widget Button -->
+    <div id="lanica-chat-launcher" class="chat-launcher-btn" title="Chat with Lanica Workshop">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <span class="chat-launcher-label">Chat Workshop</span>
+      <span id="chat-unread-badge" class="chat-badge-bubble" style="display: none;">0</span>
+    </div>
+
+    <!-- Live Chat Drawer / Window -->
+    <div id="lanica-chat-drawer" class="chat-drawer-container">
+      <div class="chat-drawer-header">
+        <div class="chat-header-info">
+          <div class="chat-avatar-ring">
+            <span class="chat-status-dot"></span>
+            <img src="assets/lanicalogo.jpg" alt="Lanica Workshop Support" />
+          </div>
+          <div>
+            <h4>Lanica Design & Workshop</h4>
+            <small>Direct line for custom orders & updates</small>
+          </div>
+        </div>
+        <button id="close-chat-btn" class="chat-close-btn" aria-label="Close Chat">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div id="chat-messages-area" class="chat-messages-body">
+        <div class="chat-welcome-card">
+          <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Workshop Support. You can ask for custom furniture dimensions, wood stains, fabric swatches, or inquire about your crafting order progress!</p>
+        </div>
+      </div>
+
+      <!-- Attachment Preview -->
+      <div id="chat-attachment-preview" class="chat-attachment-preview" style="display: none;">
+        <span id="chat-attachment-name">attachment.jpg</span>
+        <button type="button" id="chat-cancel-attachment">&times;</button>
+      </div>
+
+      <form id="chat-input-form" class="chat-input-container">
+        <label for="chat-file-input" class="chat-attach-btn" title="Attach photo or swatch">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+          <input type="file" id="chat-file-input" accept="image/*" style="display: none;" />
+        </label>
+        <input type="text" id="chat-text-input" placeholder="Type a message or inquiry..." autocomplete="off" />
+        <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send Message">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
     </div>
 
     <!-- Toast Notification Container -->

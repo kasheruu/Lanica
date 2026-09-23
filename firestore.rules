@@ -24,44 +24,35 @@ service cloud.firestore {
       // For now, trust authenticated users since client-side handles role validation
     }
 
-    // --- 2) USERS ---
+    // --- 2) USERS & USER CHAT SUBCOLLECTIONS ---
     match /users/{userId} {
-      // Allow users to read their own profile
-      allow read: if isSignedIn() && request.auth.uid == userId;
-
-      // Admins can read any user profile
+      // Allow authenticated users to read user profiles
       allow read: if isSignedIn();
 
-      // Users can update their own profile (except role changes)
-      allow update: if isSignedIn() && request.auth.uid == userId && isNotChangingRole();
+      // Users can update their own profile (except role changes), admins/staff can update profiles/chat metadata
+      allow update: if isSignedIn() && (request.auth.uid == userId ? isNotChangingRole() : true);
 
-      // Admins can update any user profile (including roles) - FULL CONTROL
-      allow update: if isSignedIn() && request.auth.uid != userId;
-
-      // Admins can create user profiles
+      // Admins and authenticated users can create user profiles
       allow create: if isSignedIn();
 
+      // Allow authenticated users (customers, admins, staff) to read & write all subcollections (messages, addresses, favorites, notifications, cart, history)
       match /{allSubcollections=**} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read, write: if isSignedIn();
       }
     }
 
-    // --- 3) ORDERS ---
+    // --- 3) ORDERS & ORDER CHAT SUBCOLLECTIONS ---
     match /orders/{orderId} {
-      // Allow users to read their own orders
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-
-      // Admins can read any order - FULL CONTROL
+      // Allow authenticated users to read orders
       allow read: if isSignedIn();
 
-      // Allow users to create orders
-      allow create: if isSignedIn();
+      // Allow authenticated users to create, update, or delete orders
+      allow create, update, delete: if isSignedIn();
 
-      // Admins can update any order - FULL CONTROL
-      allow update: if isSignedIn();
-
-      // Admins can delete orders - FULL CONTROL
-      allow delete: if isSignedIn();
+      // Allow authenticated users (customers, admins, staff) to read & write order messages subcollections
+      match /{allSubcollections=**} {
+        allow read, write: if isSignedIn();
+      }
     }
 
     // --- 4) VERIFICATION COLLECTIONS ---
@@ -84,7 +75,7 @@ service cloud.firestore {
       // Users can create their own verification codes
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
       // Users can read their own verification codes
-      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       // Users can update their own verification codes
       allow update: if isSignedIn() && request.auth.uid == request.resource.data.userId;
       // Users can delete their own verification codes
@@ -99,6 +90,14 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Admins can update audit logs
       allow update: if isSignedIn();
+    }
+
+    // --- 7) CHATS ---
+    match /chats/{chatId} {
+      allow read, write: if isSignedIn();
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
     }
   }
 }

@@ -27,6 +27,12 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
+import {
+  subscribeToAllChats,
+  subscribeToMessages,
+  sendChatMessage,
+  uploadChatAttachment,
+} from "./chatService.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -1152,11 +1158,15 @@ const usersInactiveEl = document.getElementById("users-inactive");
 const navDashboard = document.getElementById("nav-dashboard");
 const navInventory = document.getElementById("nav-inventory");
 const navAnalytics = document.getElementById("nav-analytics");
+const navWorkshop = document.getElementById("nav-workshop");
+const navChats = document.getElementById("nav-chats");
 const navOrders = document.getElementById("nav-orders");
 const navUsers = document.getElementById("nav-users");
 const dashboardSection = document.getElementById("dashboard-section");
 const inventorySection = document.getElementById("inventory-section");
 const analyticsSection = document.getElementById("analytics-section");
+const workshopSection = document.getElementById("workshop-section");
+const chatsSection = document.getElementById("chats-section");
 const ordersSection = document.getElementById("orders-section");
 const usersSection = document.getElementById("users-section");
 
@@ -1394,22 +1404,27 @@ async function hydrateCustomerNamesForOrders(orders) {
 }
 
 function normalizeOrderStatus(raw) {
-  if (raw == null) return "pending";
+  if (raw == null) return "placed";
   const s = String(raw).toLowerCase().trim();
+  if (s === "pending") return "placed";
+  if (s === "accepted") return "downpayment confirmed";
+  if (s === "processing" || s === "packed") return "in production";
+  if (s === "declined") return "cancelled";
+  if (s === "completed" || s === "received" || s === "arrived") return "delivered";
   if (
     [
-      "pending",
-      "accepted",
-      "processing",
+      "placed",
+      "downpayment confirmed",
+      "in production",
+      "quality checked",
       "shipped",
       "delivered",
-      "declined",
-      "completed",
-      "received",
+      "cancelled",
     ].includes(s)
-  )
+  ) {
     return s;
-  return "pending";
+  }
+  return "placed";
 }
 
 function normalizeOrderAction(raw) {
@@ -1725,19 +1740,21 @@ function exportInventoryCsv() {
 
 function updateDashboardKpis(products, orders) {
   const totalProducts = products ? products.length : 0;
-  const lowStockCount = products ? products.filter((p) => Number(p.stock) <= 5).length : 0;
+  // Made-to-Order items have 0 physical stock. Showroom units normally have 1-3.
+  // Low stock warning alerts only if showroom display stock is 1 or 2 left.
+  const lowStockCount = products ? products.filter((p) => Number(p.stock) > 0 && Number(p.stock) <= 2).length : 0;
 
   const activeOrders = orders ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete") : [];
 
   const pendingOrdersCount = activeOrders.filter((o) => {
     const st = normalizeOrderStatus(o.status);
-    return st === "pending" || st === "processing";
+    return st === "placed" || st === "downpayment confirmed" || st === "in production";
   }).length;
 
   const totalRevenue = activeOrders
     .filter((o) => {
       const st = normalizeOrderStatus(o.status);
-      return st === "completed" || st === "delivered" || st === "shipped" || st === "accepted";
+      return st === "delivered" || st === "shipped" || st === "quality checked" || st === "in production" || st === "downpayment confirmed";
     })
     .reduce((sum, o) => sum + (Number(o.total != null ? o.total : o.totalAmount) || 0), 0);
 
@@ -1795,20 +1812,28 @@ function showAdminSection(name) {
   const showDash = name === "dashboard" || !name;
   const showInv = name === "inventory";
   const showAnalytics = name === "analytics";
+  const showWorkshop = name === "workshop";
+  const showChats = name === "chats";
   const showOrders = name === "orders";
   const showUsers = name === "users";
 
   if (dashboardSection) dashboardSection.classList.toggle("is-hidden", !showDash);
   if (inventorySection) inventorySection.classList.toggle("is-hidden", !showInv);
   if (analyticsSection) analyticsSection.classList.toggle("is-hidden", !showAnalytics);
+  if (workshopSection) workshopSection.classList.toggle("is-hidden", !showWorkshop);
+  if (chatsSection) chatsSection.classList.toggle("is-hidden", !showChats);
   if (ordersSection) ordersSection.classList.toggle("is-hidden", !showOrders);
   if (usersSection) usersSection.classList.toggle("is-hidden", !showUsers);
 
   if (navDashboard) navDashboard.classList.toggle("active", showDash);
   if (navInventory) navInventory.classList.toggle("active", showInv);
   if (navAnalytics) navAnalytics.classList.toggle("active", showAnalytics);
+  if (navWorkshop) navWorkshop.classList.toggle("active", showWorkshop);
+  if (navChats) navChats.classList.toggle("active", showChats);
   if (navOrders) navOrders.classList.toggle("active", showOrders);
   if (navUsers) navUsers.classList.toggle("active", showUsers);
+
+  if (showWorkshop) renderWorkshopQueue(allOrders);
 
   window.location.hash = name || "dashboard";
 }
@@ -1829,6 +1854,18 @@ if (navAnalytics) {
   navAnalytics.addEventListener("click", (e) => {
     e.preventDefault();
     showAdminSection("analytics");
+  });
+}
+if (navWorkshop) {
+  navWorkshop.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("workshop");
+  });
+}
+if (navChats) {
+  navChats.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("chats");
   });
 }
 if (navOrders) {
@@ -2072,7 +2109,7 @@ if (usersListEl) {
 }
 
 function updateOrderStats(orders) {
-  const counts = { pending: 0, accepted: 0, processing: 0, shipped: 0 };
+  const counts = { placed: 0, "downpayment confirmed": 0, "in production": 0, "quality checked": 0, shipped: 0, delivered: 0 };
   orders.forEach((o) => {
     const st = normalizeOrderStatus(o.status);
     if (counts[st] !== undefined) counts[st]++;
@@ -2081,10 +2118,10 @@ function updateOrderStats(orders) {
     const el = document.getElementById(id);
     if (el) el.textContent = String(n);
   };
-  set("orders-pending", counts.pending);
-  set("orders-processing", counts.accepted);
-  set("orders-shipped", counts.processing);
-  set("orders-delivered", counts.shipped);
+  set("orders-pending", counts.placed);
+  set("orders-processing", counts["in production"]);
+  set("orders-shipped", counts["quality checked"]);
+  set("orders-delivered", counts.delivered);
 }
 
 function applyOrdersFilter() {
@@ -2098,6 +2135,7 @@ function applyOrdersFilter() {
   }
   renderOrdersList(rows);
   renderCompletedOrdersHistory(allOrders.filter((o) => isOrderCompleted(o)));
+  renderWorkshopQueue(allOrders);
   updateOrderStats(allOrders);
   renderRevenueGraph();
   syncBatchDeleteUi();
@@ -2814,6 +2852,344 @@ if (ordersListEl) {
     }
   });
 }
+
+function renderWorkshopQueue(orders) {
+  const queueList = document.getElementById("workshop-queue-list");
+  if (!queueList) return;
+
+  const craftingOrders = (orders || []).filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return (
+      !isOrderCompleted(o) &&
+      normalizeOrderAction(o.action) !== "delete" &&
+      ["placed", "downpayment confirmed", "in production", "quality checked"].includes(st)
+    );
+  });
+
+  const queuedCount = craftingOrders.filter((o) => normalizeOrderStatus(o.status) === "downpayment confirmed").length;
+  const inProdCount = craftingOrders.filter((o) => normalizeOrderStatus(o.status) === "in production").length;
+  const qcPassedCount = craftingOrders.filter((o) => normalizeOrderStatus(o.status) === "quality checked").length;
+  const showroomCount = (allProducts || []).reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
+
+  const elQueued = document.getElementById("workshop-deposit-verified");
+  const elInProd = document.getElementById("workshop-in-production");
+  const elQc = document.getElementById("workshop-qc-passed");
+  const elShowroom = document.getElementById("workshop-showroom-units");
+
+  if (elQueued) elQueued.textContent = String(queuedCount);
+  if (elInProd) elInProd.textContent = String(inProdCount);
+  if (elQc) elQc.textContent = String(qcPassedCount);
+  if (elShowroom) elShowroom.textContent = String(showroomCount);
+
+  if (craftingOrders.length === 0) {
+    queueList.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #6b7280;">No active crafting orders in workshop queue.</td></tr>`;
+    return;
+  }
+
+  queueList.innerHTML = "";
+  craftingOrders.forEach((o) => {
+    const st = normalizeOrderStatus(o.status);
+    const customer = resolveCustomerDisplay(o);
+    const items = Array.isArray(o.items) ? o.items : [];
+
+    const customSpecsHTML = items
+      .map((it) => {
+        const notes = it.customNotes
+          ? `<div style="font-size: 0.78rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; margin-top: 3px; display: inline-block;"><strong>Custom Specs:</strong> ${escapeHtml(
+              it.customNotes
+            )}</div>`
+          : "";
+        return `
+          <div style="margin-bottom: 4px;">
+            <strong>${escapeHtml(it.name || "Item")}</strong> (${escapeHtml(it.material || "Standard")}) x${it.quantity || 1}
+            ${notes}
+          </div>
+        `;
+      })
+      .join("");
+
+    const isDownpayment = o.paymentOption === "downpayment" || Number(o.downpaymentAmount) > 0;
+    const paymentHTML = isDownpayment
+      ? `
+      <div style="font-size: 0.82rem;">
+        <div>Paid: <strong style="color: #059669;">₱${parseFloat(o.downpaymentAmount || 0).toLocaleString()}</strong> (50%)</div>
+        <div>Bal: <strong style="color: #d97706;">₱${parseFloat(o.balanceDue || 0).toLocaleString()}</strong></div>
+        ${
+          o.paymentDetails?.paymentSlipUrl
+            ? `<a href="${o.paymentDetails.paymentSlipUrl}" target="_blank" rel="noopener" style="color: #4338ca; text-decoration: underline; font-weight: 500;">View Deposit Slip ↗</a>`
+            : ""
+        }
+      </div>
+    `
+      : `
+      <div style="font-size: 0.82rem;">
+        <div>Full: <strong>₱${parseFloat(o.total || o.totalAmount || 0).toLocaleString()}</strong></div>
+      </div>
+    `;
+
+    let nextStage = "";
+    let nextLabel = "";
+    if (st === "placed") {
+      nextStage = "downpayment confirmed";
+      nextLabel = "Verify Deposit";
+    } else if (st === "downpayment confirmed") {
+      nextStage = "in production";
+      nextLabel = "Start Crafting";
+    } else if (st === "in production") {
+      nextStage = "quality checked";
+      nextLabel = "Pass QC Check";
+    } else if (st === "quality checked") {
+      nextStage = "shipped";
+      nextLabel = "Dispatch / Ship";
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <strong style="font-size: 0.88rem;">${escapeHtml(o.id.slice(0, 8))}…</strong>
+        <div style="font-size: 0.72rem; color: #9ca3af; margin-top: 2px;">${escapeHtml(o.orderType || "Made-to-Order")}</div>
+      </td>
+      <td>${escapeHtml(String(customer))}</td>
+      <td style="max-width: 240px;">${customSpecsHTML}</td>
+      <td>${paymentHTML}</td>
+      <td style="font-size: 0.82rem;">${escapeHtml(o.estimatedLeadTime || "14–21 Business Days")}</td>
+      <td>
+        <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, "-"))}">
+          ${escapeHtml(st.toUpperCase())}
+        </span>
+      </td>
+      <td>
+        ${
+          nextStage
+            ? `
+          <button type="button" class="btn-primary btn-advance-crafting" data-order-id="${escapeHtml(
+            o.id
+          )}" data-next-status="${nextStage}" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; white-space: nowrap;">
+            ${nextLabel} &rarr;
+          </button>
+        `
+            : `<span style="font-size: 0.8rem; color: #6b7280;">Ready</span>`
+        }
+      </td>
+    `;
+    queueList.appendChild(tr);
+  });
+}
+
+const workshopQueueTable = document.getElementById("workshop-queue-list");
+if (workshopQueueTable) {
+  workshopQueueTable.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".btn-advance-crafting");
+    if (!btn) return;
+    const orderId = btn.getAttribute("data-order-id");
+    const nextStatus = btn.getAttribute("data-next-status");
+    if (!orderId || !nextStatus) return;
+
+    try {
+      btn.disabled = true;
+      btn.textContent = "Updating...";
+      await updateDoc(doc(db, "orders", orderId), {
+        status: nextStatus,
+        orderStatus: nextStatus,
+        updatedAt: Timestamp.now(),
+      });
+      console.log(`Advanced order ${orderId} to ${nextStatus}`);
+    } catch (err) {
+      console.error("Failed to advance crafting stage:", err);
+      alert(err.message || "Failed to update order status.");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+// Live Chat Inbox Implementation
+let activeChatSessionId = null;
+let activeChatUnsubscribe = null;
+let allChatSessions = [];
+
+function setupAdminLiveChat() {
+  const sessionsListEl = document.getElementById("admin-chat-sessions-list");
+  const messagesEl = document.getElementById("admin-chat-messages");
+  const customerNameEl = document.getElementById("admin-chat-customer-name");
+  const customerEmailEl = document.getElementById("admin-chat-customer-email");
+  const chatForm = document.getElementById("admin-chat-form");
+  const chatInput = document.getElementById("admin-chat-input");
+  const fileInput = document.getElementById("admin-chat-file-input");
+  const attachBtn = document.getElementById("admin-chat-attach-btn");
+  const attachPreview = document.getElementById("admin-chat-attachment-preview");
+  const attachFilename = document.getElementById("admin-chat-filename");
+  const cancelAttachBtn = document.getElementById("admin-chat-cancel-attachment");
+
+  let attachedFile = null;
+
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+          alert("Attachment must be under 5MB.");
+          fileInput.value = "";
+          return;
+        }
+        attachedFile = file;
+        if (attachPreview && attachFilename) {
+          attachFilename.textContent = attachedFile.name;
+          attachPreview.style.display = "flex";
+        }
+      }
+    });
+  }
+
+  if (cancelAttachBtn) {
+    cancelAttachBtn.addEventListener("click", () => {
+      attachedFile = null;
+      if (fileInput) fileInput.value = "";
+      if (attachPreview) attachPreview.style.display = "none";
+    });
+  }
+
+  // Subscribe to all chat sessions in Firestore
+  subscribeToAllChats((sessions) => {
+    allChatSessions = sessions;
+    renderChatSessionsList(sessions);
+  });
+
+  function renderChatSessionsList(sessions) {
+    if (!sessionsListEl) return;
+    if (sessions.length === 0) {
+      sessionsListEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No active customer chats.</div>`;
+      return;
+    }
+
+    sessionsListEl.innerHTML = "";
+    sessions.forEach((s) => {
+      const isSelected = s.id === activeChatSessionId;
+      const item = document.createElement("div");
+      item.className = "chat-session-item";
+      item.style.cssText = `padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
+        isSelected ? "#eff6ff" : "#fff"
+      }; transition: background 0.15s;`;
+
+      const timeStr = s.updatedAt?.toDate
+        ? s.updatedAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
+
+      item.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <strong style="font-size: 0.88rem; color: #111827;">${escapeHtml(
+            s.userName || s.userEmail || "Customer"
+          )}</strong>
+          <span style="font-size: 0.72rem; color: #9ca3af;">${timeStr}</span>
+        </div>
+        <div style="font-size: 0.78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${escapeHtml(s.lastMessage || "No messages yet")}
+        </div>
+      `;
+
+      item.addEventListener("click", () => {
+        selectChatSession(s);
+      });
+
+      sessionsListEl.appendChild(item);
+    });
+  }
+
+  function selectChatSession(session) {
+    activeChatSessionId = session.id;
+    if (customerNameEl) customerNameEl.textContent = session.userName || session.userEmail || "Customer";
+    if (customerEmailEl)
+      customerEmailEl.textContent = session.userEmail
+        ? `${session.userEmail} (ID: ${session.id})`
+        : `User ID: ${session.id}`;
+
+    renderChatSessionsList(allChatSessions);
+
+    if (activeChatUnsubscribe) activeChatUnsubscribe();
+
+    activeChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
+      if (!messagesEl) return;
+      if (messages.length === 0) {
+        messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this conversation yet. Send a greeting!</div>`;
+        return;
+      }
+
+      messagesEl.innerHTML = "";
+      messages.forEach((m) => {
+        const isStaff = m.senderRole === "admin" || m.senderRole === "staff";
+        const row = document.createElement("div");
+        row.style.cssText = `display: flex; flex-direction: column; align-items: ${
+          isStaff ? "flex-end" : "flex-start"
+        }; margin-bottom: 10px;`;
+
+        const senderLabel = isStaff ? "Lanica Workshop" : m.senderName || "Customer";
+        const timeStr = m.createdAt?.toDate
+          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        row.innerHTML = `
+          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">${escapeHtml(
+            senderLabel
+          )} • ${timeStr}</span>
+          <div style="max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
+            isStaff ? "#6b4423" : "#ffffff"
+          }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
+          isStaff ? "#6b4423" : "#e5e7eb"
+        };">
+            ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+            ${
+              m.attachmentUrl
+                ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" style="max-width: 220px; max-height: 160px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
+                : ""
+            }
+          </div>
+        `;
+        messagesEl.appendChild(row);
+      });
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+  }
+
+  if (chatForm) {
+    chatForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = chatInput?.value || "";
+      if (!text.trim() && !attachedFile) return;
+      if (!activeChatSessionId) {
+        alert("Please select a customer conversation first.");
+        return;
+      }
+
+      try {
+        let attachmentUrl = "";
+        if (attachedFile) {
+          attachmentUrl = await uploadChatAttachment(attachedFile, activeChatSessionId);
+          attachedFile = null;
+          if (fileInput) fileInput.value = "";
+          if (attachPreview) attachPreview.style.display = "none";
+        }
+
+        await sendChatMessage({
+          chatId: activeChatSessionId,
+          senderId: currentUser ? currentUser.uid : "admin",
+          senderName: "Lanica Workshop & Admin",
+          senderRole: "admin",
+          text: text,
+          attachmentUrl: attachmentUrl,
+        });
+
+        if (chatInput) chatInput.value = "";
+      } catch (err) {
+        console.error("Chat send error:", err);
+        alert(err.message || "Failed to send reply.");
+      }
+    });
+  }
+}
+
+setupAdminLiveChat();
 
 syncBatchDeleteUi();
 

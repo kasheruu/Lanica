@@ -2,31 +2,54 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // 1. Product Models: Everyone can read, only authenticated users can trigger migration/upload
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Admin', 'ADMIN'];
+    }
+
+    // 1. Product Media/Images: Everyone can read, authenticated users can write
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // 2. Product 3D Models (.glb / .usdz): Everyone can read, authenticated users can write
     match /product_models/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSignedIn();
     }
 
-    // 2. User Profiles: Everyone can see photos, but only the owner can upload/change their own
+    // 3. User Profiles: Everyone can see avatar photos, authenticated users can upload
     match /user_profiles/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSignedIn();
     }
 
-    // 3. Chat Attachments: Only the sender or receiver should access these
+    // 4. Chat Attachments (Photos & Videos): Authenticated users, staff, & admins can read and write
     match /lanica_chats/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
 
-    // 4. Bug Reports: Only authenticated users can upload
+    // 5. Custom Furniture Design Attachments (Checkout Uploads): Authenticated users can read and write
+    match /custom_designs/{allPaths=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 6. Bug Reports & Support Attachments: Authenticated users can read and write
     match /bug_reports/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
 
-    // Global fallback (Safety)
-    match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2026, 6, 1);
+    // 7. Payment Slips & Order Receipts: Authenticated users can read and write
+    match /payment_slips/{allPaths=**} {
+      allow read, write: if isSignedIn();
+    }
+    match /lanica_slips/{allPaths=**} {
+      allow read, write: if isSignedIn();
     }
   }
 }

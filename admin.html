@@ -63,6 +63,18 @@
         </svg>
         Analytics
       </a>
+      <a href="#" class="nav-item" id="nav-workshop" data-section="workshop">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+        </svg>
+        Workshop Queue
+      </a>
+      <a href="#" class="nav-item" id="nav-chats" data-section="chats">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        Live Chat
+      </a>
       <a href="#" class="nav-item" id="nav-orders" data-section="orders">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
@@ -587,31 +599,153 @@
       </div>
     </div>
 
+    <!-- Workshop Production Queue (Made-to-Order) -->
+    <div id="workshop-section" class="admin-section is-hidden">
+      <header class="admin-header">
+        <div>
+          <h1>Workshop Crafting Queue</h1>
+          <p class="admin-subtitle">
+            Active Made-to-Order furniture production pipeline. Track carpenter assignments, custom specifications, and quality inspections.
+          </p>
+        </div>
+      </header>
+
+      <div class="stats-grid orders-stats">
+        <div class="stat-card">
+          <h3>Deposit Verified</h3>
+          <p class="stat-value" id="workshop-deposit-verified" style="color: #4338ca;">0</p>
+          <span style="font-size: 0.78rem; color: #6b7280;">Queued for timber allocation</span>
+        </div>
+        <div class="stat-card">
+          <h3>In Production</h3>
+          <p class="stat-value" id="workshop-in-production" style="color: #d97706;">0</p>
+          <span style="font-size: 0.78rem; color: #6b7280;">Artisans currently crafting</span>
+        </div>
+        <div class="stat-card">
+          <h3>QC Passed</h3>
+          <p class="stat-value" id="workshop-qc-passed" style="color: #059669;">0</p>
+          <span style="font-size: 0.78rem; color: #6b7280;">Ready for logistics dispatch</span>
+        </div>
+        <div class="stat-card">
+          <h3>Showroom Units</h3>
+          <p class="stat-value" id="workshop-showroom-units" style="color: #2563eb;">0</p>
+          <span style="font-size: 0.78rem; color: #6b7280;">Ready-to-ship display models</span>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <div style="padding: 14px 18px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; font-size: 1.05rem; color: #1f2937">Active Crafting Pipeline</h3>
+          <span style="font-size: 0.82rem; color: #6b7280;">Standard Lead Time: 14–21 Business Days</span>
+        </div>
+        <table class="inventory-table orders-table">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Custom Specifications / Notes</th>
+              <th>Deposit & Payment</th>
+              <th>Lead Time / Est. Ready</th>
+              <th>Stage</th>
+              <th>Advance Stage</th>
+            </tr>
+          </thead>
+          <tbody id="workshop-queue-list">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 24px; color: #6b7280;">Loading workshop queue…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Live Chat & Customer Inquiries Workspace -->
+    <div id="chats-section" class="admin-section is-hidden">
+      <header class="admin-header">
+        <div>
+          <h1>Customer Support & Workshop Inquiries</h1>
+          <p class="admin-subtitle">
+            Direct real-time communication with clients for custom dimensions, fabric swatches, and crafting progress.
+          </p>
+        </div>
+      </header>
+
+      <div class="admin-chat-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 650px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+        <!-- Left: Conversations List -->
+        <div style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
+          <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #fff;">
+            <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Active Conversations</h3>
+            <span style="font-size: 0.78rem; color: #6b7280;">Real-time customer inquiries</span>
+          </div>
+          <div id="admin-chat-sessions-list" style="flex: 1; overflow-y: auto;">
+            <div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">
+              Loading chat sessions...
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Active Chat Conversation -->
+        <div id="admin-active-chat-box" style="display: flex; flex-direction: column; height: 650px;">
+          <!-- Active Conversation Header -->
+          <div id="admin-chat-active-header" style="padding: 14px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #fff;">
+            <div>
+              <h3 id="admin-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827;">Select a conversation</h3>
+              <span id="admin-chat-customer-email" style="font-size: 0.8rem; color: #6b7280;">Choose a customer from the left panel</span>
+            </div>
+          </div>
+
+          <!-- Message History Scroll Area -->
+          <div id="admin-chat-messages" style="flex: 1; overflow-y: auto; padding: 20px; background: #fafafa; display: flex; flex-direction: column; gap: 12px;">
+            <div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.9rem;">
+              Select a conversation from the left to start chatting.
+            </div>
+          </div>
+
+          <!-- Attachment Preview -->
+          <div id="admin-chat-attachment-preview" style="display: none; padding: 8px 16px; background: #fef3c7; border-top: 1px solid #fde68a; align-items: center; justify-content: space-between;">
+            <span style="font-size: 0.82rem; color: #92400e;">Attached: <strong id="admin-chat-filename">image.jpg</strong></span>
+            <button type="button" id="admin-chat-cancel-attachment" style="background: none; border: none; cursor: pointer; color: #b45309; font-weight: 600;">✕ Remove</button>
+          </div>
+
+          <!-- Reply Input Bar -->
+          <form id="admin-chat-form" style="padding: 12px 16px; background: #fff; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; align-items: center;">
+            <input type="file" id="admin-chat-file-input" accept="image/*" style="display: none;" />
+            <button type="button" id="admin-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 8px 12px; border-radius: 8px; cursor: pointer;" title="Attach photo or swatch">
+              📎
+            </button>
+            <input type="text" id="admin-chat-input" placeholder="Type a message or WIP photo update..." style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none;" />
+            <button type="submit" class="btn-primary" style="padding: 10px 18px; border-radius: 8px; white-space: nowrap;">
+              Send Reply
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- Order Management -->
     <div id="orders-section" class="admin-section is-hidden">
       <header class="admin-header">
         <h1>Order Management</h1>
         <p class="admin-subtitle">
-          Admin workflow: review new orders, assign staff, and click <strong>Accept</strong>.
-          After acceptance, assigned staff will update shipping progress.
+          Admin workflow: review custom orders, verify downpayments, assign craftspeople/riders, and progress through manufacturing.
         </p>
       </header>
 
       <div class="stats-grid orders-stats users-stats">
         <div class="stat-card">
-          <h3>Pending</h3>
+          <h3>Placed</h3>
           <p class="stat-value" id="orders-pending">0</p>
         </div>
         <div class="stat-card">
-          <h3>Accepted</h3>
+          <h3>In Production</h3>
           <p class="stat-value" id="orders-processing">0</p>
         </div>
         <div class="stat-card">
-          <h3>Processing</h3>
+          <h3>QC Passed</h3>
           <p class="stat-value" id="orders-shipped">0</p>
         </div>
         <div class="stat-card">
-          <h3>Shipped</h3>
+          <h3>Delivered</h3>
           <p class="stat-value" id="orders-delivered">0</p>
         </div>
       </div>
@@ -621,11 +755,13 @@
           <label for="orders-status-filter" class="orders-filter-label">Filter</label>
           <select id="orders-status-filter" class="orders-filter-select">
             <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="accepted">Accepted</option>
-            <option value="processing">Processing</option>
+            <option value="placed">Placed / Awaiting Verification</option>
+            <option value="downpayment confirmed">Downpayment Confirmed</option>
+            <option value="in production">In Production (Crafting)</option>
+            <option value="quality checked">Quality Checked</option>
             <option value="shipped">Shipped</option>
-            <option value="declined">Declined</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
           </select>
           <button id="toggle-batch-delete-mode-btn" class="btn-secondary" type="button">
             Batch Delete Mode

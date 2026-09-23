@@ -30,16 +30,33 @@ import {
   getAvailableStock,
 } from "./cartService.js";
 
+import {
+  getOrCreateUserChatSession,
+  sendChatMessage,
+  subscribeToMessages,
+  uploadChatAttachment,
+} from "./chatService.js";
+
 // Global State
 let currentUser = null;
 let currentCartItems = [];
 let selectedAddressId = null;
 let savedAddresses = [];
-let selectedPaymentMethod = "COD";
+let selectedPaymentMethod = "GCash";
+let selectedPaymentTerm = "downpayment"; // "downpayment" (50%) or "full" (100%)
 let currentModalProduct = null;
 let currentSelectedMaterial = "Fabric";
 let currentSelectedQty = 1;
 let cartUnsubscribe = null;
+let chatUnsubscribe = null;
+let liveChatController = null;
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.innerText = text || "";
+  return div.innerHTML;
+}
 
 // Helper: Toast Notifications
 function showToast(message, type = "success") {
@@ -76,10 +93,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupMobileMenu();
 
   // 2. Initialize Authentication & Real-time Cart
+  liveChatController = setupLiveChatWidget();
+
   try {
     currentUser = await ensureAuth();
     setupCartSubscription(currentUser.uid);
     updateAuthUi(currentUser);
+    liveChatController?.initUserChat(currentUser);
   } catch (err) {
     console.error("Failed to initialize auth:", err);
   }
@@ -89,6 +109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       currentUser = user;
       setupCartSubscription(user.uid);
       updateAuthUi(user);
+      liveChatController?.initUserChat(user);
     }
   });
 
@@ -280,10 +301,7 @@ function updateVariantStockUI() {
   const matButtons = document.querySelectorAll(".material-btn");
   matButtons.forEach((btn) => {
     const mat = btn.getAttribute("data-material");
-    const stock = getAvailableStock(currentModalProduct, mat);
-
     btn.classList.toggle("selected", mat === currentSelectedMaterial);
-    btn.classList.toggle("out-of-stock", stock <= 0);
   });
 
   const available = getAvailableStock(currentModalProduct, currentSelectedMaterial);
@@ -293,25 +311,26 @@ function updateVariantStockUI() {
   const qtyPlus = document.getElementById("pv-qty-plus");
 
   if (available > 0) {
-    statusEl.textContent = `In Stock (${available} left)`;
+    statusEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#059669; display:inline-block;"></span> Ready to Ship (${available} left in showroom)</span>`;
     statusEl.style.color = "#059669";
     addBtn.disabled = false;
-    addBtn.textContent = "Add to Shopping Bag";
+    addBtn.textContent = "Add Ready Stock to Bag";
 
     if (currentSelectedQty < 1) currentSelectedQty = 1;
     if (currentSelectedQty > available) currentSelectedQty = available;
   } else {
-    statusEl.textContent = "Out of Stock";
-    statusEl.style.color = "#ef4444";
-    addBtn.disabled = true;
-    addBtn.textContent = "Out of Stock";
-    currentSelectedQty = 0;
+    statusEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#2563eb; display:inline-block;"></span> Made-to-Order (Lead Time: 14–21 Days)</span>`;
+    statusEl.style.color = "#2563eb";
+    addBtn.disabled = false;
+    addBtn.textContent = "Place Made-to-Order";
+
+    if (currentSelectedQty < 1) currentSelectedQty = 1;
   }
 
   document.getElementById("pv-qty-val").textContent = currentSelectedQty;
 
-  if (qtyMinus) qtyMinus.disabled = currentSelectedQty <= 1 || available <= 0;
-  if (qtyPlus) qtyPlus.disabled = currentSelectedQty >= available || available <= 0;
+  if (qtyMinus) qtyMinus.disabled = currentSelectedQty <= 1;
+  if (qtyPlus) qtyPlus.disabled = available > 0 ? currentSelectedQty >= available : currentSelectedQty >= 10;
 }
 
 // Phase 2: Render Cart Drawer
@@ -354,12 +373,25 @@ function renderCartDrawer(items) {
 
     const itemCard = document.createElement("div");
     itemCard.className = "cart-item-card";
+    const isMTO = item.orderType === "Made-to-Order";
     itemCard.innerHTML = `
       <img src="${item.url}" alt="${item.name}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
       <div class="cart-item-details">
         <div class="cart-item-title">${item.name}</div>
-        <span class="cart-item-material">${item.material || "Fabric"}</span>
-        <div class="cart-item-price">₱${itemTotal.toLocaleString()}</div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+          <span class="cart-item-material">${item.material || "Fabric"}</span>
+          ${
+            isMTO
+              ? '<span style="font-size: 0.72rem; color: #2563eb; background: #eff6ff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Made-to-Order (14-21d)</span>'
+              : '<span style="font-size: 0.72rem; color: #059669; background: #ecfdf5; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Ready Stock</span>'
+          }
+        </div>
+        ${
+          item.customNotes
+            ? `<p style="font-size: 0.74rem; color: #64748b; margin: 3px 0 0 0; font-style: italic;">Custom: ${escapeHtml(item.customNotes)}</p>`
+            : ""
+        }
+        <div class="cart-item-price" style="margin-top: 4px;">₱${itemTotal.toLocaleString()}</div>
         <div class="quantity-control" style="margin-top: 8px;">
           <button type="button" class="qty-btn cart-qty-minus" data-id="${item.id}">-</button>
           <span class="qty-value">${item.quantity}</span>
@@ -414,15 +446,7 @@ function renderCartDrawer(items) {
   });
 }
 
-// Phase 3 & 4: Setup Checkout Modal & Addresses
-async function openCheckoutModal() {
-  if (!currentUser || currentCartItems.length === 0) return;
-
-  const checkoutModal = document.getElementById("checkout-modal");
-  const subtotalEl = document.getElementById("checkout-subtotal");
-  const shippingEl = document.getElementById("checkout-shipping");
-  const totalEl = document.getElementById("checkout-total");
-
+function updateCheckoutTotals() {
   const subtotal = currentCartItems.reduce(
     (sum, item) => sum + Number(item.price) * Number(item.quantity),
     0
@@ -430,9 +454,46 @@ async function openCheckoutModal() {
   const shippingFee = 150;
   const grandTotal = subtotal + shippingFee;
 
+  const subtotalEl = document.getElementById("checkout-subtotal");
+  const shippingEl = document.getElementById("checkout-shipping");
+  const totalEl = document.getElementById("checkout-total");
+  const dueTodayEl = document.getElementById("checkout-due-today");
+  const balanceDueEl = document.getElementById("checkout-balance-due");
+  const downpaymentRow = document.getElementById("checkout-downpayment-row");
+  const balanceRow = document.getElementById("checkout-balance-row");
+
   if (subtotalEl) subtotalEl.textContent = `₱${subtotal.toLocaleString()}`;
   if (shippingEl) shippingEl.textContent = `₱${shippingFee.toLocaleString()}`;
   if (totalEl) totalEl.textContent = `₱${grandTotal.toLocaleString()}`;
+
+  if (selectedPaymentTerm === "downpayment") {
+    const down = Math.round(grandTotal * 0.5);
+    const bal = grandTotal - down;
+    if (dueTodayEl) dueTodayEl.textContent = `₱${down.toLocaleString()}`;
+    if (balanceDueEl) balanceDueEl.textContent = `₱${bal.toLocaleString()}`;
+    if (downpaymentRow) {
+      downpaymentRow.style.display = "flex";
+      const lbl = downpaymentRow.querySelector("span:first-child");
+      if (lbl) lbl.textContent = "Due Today (50% Deposit)";
+    }
+    if (balanceRow) balanceRow.style.display = "flex";
+  } else {
+    if (dueTodayEl) dueTodayEl.textContent = `₱${grandTotal.toLocaleString()}`;
+    if (downpaymentRow) {
+      downpaymentRow.style.display = "flex";
+      const lbl = downpaymentRow.querySelector("span:first-child");
+      if (lbl) lbl.textContent = "Due Today (Full Payment)";
+    }
+    if (balanceRow) balanceRow.style.display = "none";
+  }
+}
+
+// Phase 3 & 4: Setup Checkout Modal & Addresses
+async function openCheckoutModal() {
+  if (!currentUser || currentCartItems.length === 0) return;
+
+  const checkoutModal = document.getElementById("checkout-modal");
+  updateCheckoutTotals();
 
   // Load saved addresses
   await loadUserAddresses();
@@ -535,11 +596,12 @@ function setupStorefrontUI() {
   if (qtyPlus) {
     qtyPlus.addEventListener("click", () => {
       const maxStock = getAvailableStock(currentModalProduct, currentSelectedMaterial);
-      if (currentSelectedQty < maxStock) {
+      if (maxStock > 0 && currentSelectedQty >= maxStock) {
+        showToast(`Selected quantity exceeds available showroom stock (${maxStock}). Additional units will be Made-to-Order.`);
+      }
+      if (currentSelectedQty < 20) {
         currentSelectedQty++;
         updateVariantStockUI();
-      } else {
-        showToast(`Only ${maxStock} items available in stock.`, "error");
       }
     });
   }
@@ -547,6 +609,7 @@ function setupStorefrontUI() {
   if (addToCartBtn) {
     addToCartBtn.addEventListener("click", () => {
       if (!currentModalProduct) return;
+      const customNotes = document.getElementById("pv-custom-notes")?.value || "";
 
       requireAuth(async () => {
         try {
@@ -554,9 +617,14 @@ function setupStorefrontUI() {
             currentUser.uid,
             currentModalProduct,
             currentSelectedMaterial,
-            currentSelectedQty
+            currentSelectedQty,
+            customNotes
           );
-          showToast(`Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial}) to bag!`);
+          const available = getAvailableStock(currentModalProduct, currentSelectedMaterial);
+          const modeLabel = available > 0 ? "Ready Stock" : "Made-to-Order";
+          showToast(`Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial} - ${modeLabel}) to bag!`);
+          const notesBox = document.getElementById("pv-custom-notes");
+          if (notesBox) notesBox.value = "";
           pvModal.classList.remove("active");
           cartOverlay?.classList.add("active");
         } catch (err) {
@@ -565,6 +633,16 @@ function setupStorefrontUI() {
       });
     });
   }
+
+  // Payment Term Selection (50% Downpayment vs Full Payment)
+  document.querySelectorAll('input[name="checkoutPaymentTerm"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      selectedPaymentTerm = e.target.value;
+      document.querySelectorAll(".payment-term-card").forEach((c) => c.classList.remove("selected"));
+      e.target.closest(".payment-term-card")?.classList.add("selected");
+      updateCheckoutTotals();
+    });
+  });
 
   // Unauthenticated Sign-In Prompt Modal Toggles
   const authPromptModal = document.getElementById("auth-prompt-modal");
@@ -776,61 +854,55 @@ async function handlePlaceOrderSubmit() {
     submitBtn.disabled = true;
     submitBtn.textContent = "Processing Order...";
 
-    if (selectedPaymentMethod === "COD") {
-      // Phase 5: Atomic Order Placement & Inventory Deduction
-      const result = await placeOrderAtomic({
-        userId: currentUser.uid,
-        cartItems: currentCartItems,
-        totalAmount: totalAmount,
-        paymentMethod: "COD",
-        address: targetAddress,
-      });
-
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Place Order Now";
-      document.getElementById("checkout-modal")?.classList.remove("active");
-
-      showToast(`Order Placed Successfully! ID: ${result.orderId}. Redirecting to tracking...`, "success");
-      setTimeout(() => {
-        window.location.href = "orders.html";
-      }, 1500);
-    } else {
-      // Phase 4: Online Payment Integration (PayMongo for GCash / Bank Transfer)
-      sessionStorage.setItem(
-        "pending_order_data",
-        JSON.stringify({
-          userId: currentUser.uid,
-          cartItems: currentCartItems,
-          totalAmount: totalAmount,
-          paymentMethod: selectedPaymentMethod,
-          address: targetAddress,
-        })
-      );
-
-      const response = await fetch("/api/paymongo/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: currentCartItems,
-          subtotal: subtotal,
-          shippingFee: shippingFee,
-          totalAmount: totalAmount,
-          paymentMethod: selectedPaymentMethod,
-          userId: currentUser.uid,
-        }),
-      });
-
-      const data = await response.json();
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Place Order Now";
-
-      if (!response.ok || !data.checkout_url) {
-        throw new Error(data.error || "Failed to initiate online checkout.");
-      }
-
-      // Redirect to PayMongo hosted checkout
-      window.location.href = data.checkout_url;
+    // 1. Check if customer uploaded proof of payment slip
+    let paymentSlipUrl = "";
+    const slipInput = document.getElementById("checkout-payment-slip");
+    if (slipInput && slipInput.files && slipInput.files[0]) {
+      submitBtn.textContent = "Uploading Payment Slip...";
+      paymentSlipUrl = await uploadChatAttachment(slipInput.files[0], currentUser.uid);
     }
+
+    // 2. Atomic Order Placement with Made-to-Order & Downpayment Support
+    submitBtn.textContent = "Finalizing Order...";
+    const result = await placeOrderAtomic({
+      userId: currentUser.uid,
+      cartItems: currentCartItems,
+      totalAmount: totalAmount,
+      paymentMethod: selectedPaymentMethod,
+      paymentOption: selectedPaymentTerm,
+      address: targetAddress,
+      paymentDetails: {
+        paymentSlipUrl: paymentSlipUrl || null,
+        selectedTerm: selectedPaymentTerm,
+        accountName: targetAddress.recipientName,
+        submittedAt: new Date().toISOString(),
+      },
+    });
+
+    // 3. Post notification to customer's live chat session with the workshop
+    try {
+      const termLabel = selectedPaymentTerm === "downpayment" ? "50% Downpayment" : "Full Payment";
+      await sendChatMessage({
+        chatId: currentUser.uid,
+        senderId: currentUser.uid,
+        senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
+        senderRole: "customer",
+        text: `Hello! I have placed Order #${result.orderId} (${termLabel} via ${selectedPaymentMethod}). Total: ₱${totalAmount.toLocaleString()}.`,
+        attachmentUrl: paymentSlipUrl || null,
+        orderId: result.orderId,
+      });
+    } catch (chatErr) {
+      console.warn("Could not post auto chat confirmation:", chatErr);
+    }
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Place Order Now";
+    document.getElementById("checkout-modal")?.classList.remove("active");
+
+    showToast(`Order Placed Successfully! (ID: ${result.orderId}). Redirecting to order tracking...`, "success");
+    setTimeout(() => {
+      window.location.href = "orders.html";
+    }, 1500);
   } catch (err) {
     console.error("Place Order Error:", err);
     showToast(err.message || "Failed to place order.", "error");
@@ -1217,4 +1289,147 @@ function setupMobileMenu() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") toggleMenu(false);
   });
+}
+
+// Live Workshop Chat Widget
+function setupLiveChatWidget() {
+  const launcher = document.getElementById("lanica-chat-launcher");
+  const drawer = document.getElementById("lanica-chat-drawer");
+  const closeBtn = document.getElementById("close-chat-btn");
+  const form = document.getElementById("chat-input-form");
+  const textInput = document.getElementById("chat-text-input");
+  const fileInput = document.getElementById("chat-file-input");
+  const previewBox = document.getElementById("chat-attachment-preview");
+  const previewName = document.getElementById("chat-attachment-name");
+  const cancelAttachBtn = document.getElementById("chat-cancel-attachment");
+  const messagesArea = document.getElementById("chat-messages-area");
+  const unreadBadge = document.getElementById("chat-unread-badge");
+
+  let attachedFile = null;
+
+  if (launcher && drawer) {
+    launcher.addEventListener("click", () => {
+      drawer.classList.toggle("active");
+      if (drawer.classList.contains("active")) {
+        if (unreadBadge) unreadBadge.style.display = "none";
+        textInput?.focus();
+        scrollChatToBottom();
+      }
+    });
+  }
+
+  if (closeBtn && drawer) {
+    closeBtn.addEventListener("click", () => drawer.classList.remove("active"));
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files && fileInput.files[0]) {
+        attachedFile = fileInput.files[0];
+        if (previewBox && previewName) {
+          previewName.textContent = attachedFile.name;
+          previewBox.style.display = "flex";
+        }
+      }
+    });
+  }
+
+  if (cancelAttachBtn) {
+    cancelAttachBtn.addEventListener("click", () => {
+      attachedFile = null;
+      if (fileInput) fileInput.value = "";
+      if (previewBox) previewBox.style.display = "none";
+    });
+  }
+
+  function scrollChatToBottom() {
+    if (messagesArea) {
+      messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+  }
+
+  function initUserChat(user) {
+    if (!user) return;
+    if (chatUnsubscribe) chatUnsubscribe();
+
+    getOrCreateUserChatSession(user.uid, user.email, user.displayName);
+
+    chatUnsubscribe = subscribeToMessages(user.uid, (messages) => {
+      if (!messagesArea) return;
+
+      let html = `
+        <div class="chat-welcome-card">
+          <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Workshop Support. You can ask for custom furniture dimensions, wood stains, fabric swatches, or inquire about your crafting order progress!</p>
+        </div>
+      `;
+
+      messages.forEach((m) => {
+        const isMe = m.senderId === user.uid;
+        const roleClass = isMe ? "customer" : (m.senderRole || "staff");
+        const senderLabel = isMe ? "You" : (m.senderName || "Workshop Support");
+        const timeStr = m.createdAt?.toDate
+          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        html += `
+          <div class="chat-msg-row ${roleClass}">
+            <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
+            <div class="chat-msg-bubble">
+              ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+              ${
+                m.attachmentUrl
+                  ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" class="chat-msg-img" alt="Attachment" /></a>`
+                  : ""
+              }
+            </div>
+            ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
+          </div>
+        `;
+      });
+
+      messagesArea.innerHTML = html;
+      scrollChatToBottom();
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textInput?.value || "";
+      if (!text.trim() && !attachedFile) return;
+
+      if (!currentUser) {
+        showToast("Please sign in to send a message to our workshop.", "error");
+        document.getElementById("auth-modal")?.classList.add("active");
+        return;
+      }
+
+      try {
+        let attachmentUrl = "";
+        if (attachedFile) {
+          attachmentUrl = await uploadChatAttachment(attachedFile, currentUser.uid);
+          attachedFile = null;
+          if (fileInput) fileInput.value = "";
+          if (previewBox) previewBox.style.display = "none";
+        }
+
+        await sendChatMessage({
+          chatId: currentUser.uid,
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || currentUser.email || "Customer",
+          senderRole: "customer",
+          text: text,
+          attachmentUrl: attachmentUrl,
+        });
+
+        if (textInput) textInput.value = "";
+        scrollChatToBottom();
+      } catch (err) {
+        console.error("Chat error:", err);
+        showToast(err.message || "Failed to send message.", "error");
+      }
+    });
+  }
+
+  return { initUserChat };
 }

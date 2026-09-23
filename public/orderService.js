@@ -34,23 +34,65 @@ export const db = getFirestore(app);
 export { ensureAuth } from "./cartService.js";
 
 /**
- * Standardizes order status values into Mobile App Canonical Strings:
- * 1. "Placed"   (Step 0)
- * 2. "Packed"   (Step 1)
- * 3. "Shipped"  (Step 2)
- * 4. "Arrived"  (Step 3)
- * 5. "Cancelled" (-1)
+ * Standardizes order status values into Made-to-Order Canonical Strings:
+ * 0. "Placed"                 (Step 0: Order received, awaiting downpayment/review)
+ * 1. "Downpayment Confirmed"  (Step 1: Downpayment/payment confirmed, ready for crafting)
+ * 2. "In Production"          (Step 2: Carpentry/framing, upholstery & crafting active)
+ * 3. "Quality Checked"        (Step 3: Crafting complete, passed QC inspection)
+ * 4. "Shipped"                (Step 4: Out for delivery / dispatched)
+ * 5. "Delivered"              (Step 5: Handed over to client)
+ * -1. "Cancelled"             (-1: Cancelled prior to production)
  */
 export function normalizeOrderStatus(rawStatus) {
   if (!rawStatus) return "Placed";
   const s = String(rawStatus).trim().toLowerCase();
-  
+
   if (s === "pending" || s === "order placed" || s === "placed") return "Placed";
-  if (s === "processing" || s === "accepted" || s === "packed") return "Packed";
-  if (s === "to ship" || s === "shipped" || s === "shipping" || s === "in transit") return "Shipped";
-  if (s === "to receive" || s === "out for delivery" || s === "delivered" || s === "completed" || s === "arrived" || s === "received") return "Arrived";
-  if (s === "cancelled" || s === "canceled" || s === "declined") return "Cancelled";
-  
+  if (
+    s === "downpayment confirmed" ||
+    s === "deposit confirmed" ||
+    s === "payment verified" ||
+    s === "confirmed"
+  ) {
+    return "Downpayment Confirmed";
+  }
+  if (
+    s === "in production" ||
+    s === "crafting" ||
+    s === "fabrication" ||
+    s === "upholstery" ||
+    s === "processing" ||
+    s === "accepted" ||
+    s === "packed"
+  ) {
+    return "In Production";
+  }
+  if (
+    s === "quality checked" ||
+    s === "quality check" ||
+    s === "ready" ||
+    s === "ready to ship" ||
+    s === "ready for delivery"
+  ) {
+    return "Quality Checked";
+  }
+  if (
+    s === "to ship" ||
+    s === "shipped" ||
+    s === "shipping" ||
+    s === "in transit" ||
+    s === "to receive" ||
+    s === "out for delivery"
+  ) {
+    return "Shipped";
+  }
+  if (s === "delivered" || s === "completed" || s === "arrived" || s === "received") {
+    return "Delivered";
+  }
+  if (s === "cancelled" || s === "canceled" || s === "declined") {
+    return "Cancelled";
+  }
+
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -87,19 +129,23 @@ export function getRiderName(order) {
 
 /**
  * Checks whether an order is cancellable by the customer.
- * Rule: Only "Placed" or "Packed" (Pending / Processing) orders can be cancelled.
+ * Rule: For Made-to-Order furniture, cancellation is STRICTLY FORBIDDEN
+ * once materials and crafting have started ("In Production" or later).
+ * Only "Placed" or "Downpayment Confirmed" can be cancelled.
  */
 export function isOrderCancellable(status) {
   const norm = normalizeOrderStatus(status);
-  return norm === "Placed" || norm === "Packed";
+  return norm === "Placed" || norm === "Downpayment Confirmed";
 }
 
 /**
- * Returns tracking step index matching the Mobile App 4-Stage Stepper:
+ * Returns tracking step index matching the 6-Stage Made-to-Order Stepper:
  * 0: PLACED
- * 1: PACKED
- * 2: SHIPPED
- * 3: ARRIVED
+ * 1: DOWNPAYMENT CONFIRMED
+ * 2: IN PRODUCTION
+ * 3: QUALITY CHECKED
+ * 4: SHIPPED
+ * 5: DELIVERED
  * Returns -1 for Cancelled
  */
 export function getTrackingStepIndex(status) {
@@ -107,12 +153,16 @@ export function getTrackingStepIndex(status) {
   switch (norm) {
     case "Placed":
       return 0;
-    case "Packed":
+    case "Downpayment Confirmed":
       return 1;
-    case "Shipped":
+    case "In Production":
       return 2;
-    case "Arrived":
+    case "Quality Checked":
       return 3;
+    case "Shipped":
+      return 4;
+    case "Delivered":
+      return 5;
     case "Cancelled":
     default:
       return -1;
@@ -121,13 +171,20 @@ export function getTrackingStepIndex(status) {
 
 /**
  * Calculates or formats estimated delivery date window.
- * Syncs with admin/staff overrides (estimatedDeliveryMin / Max / manualDeliveryOverride / estimatedDeliveryDate).
+ * For Made-to-Order items: Default is 14 to 21 business days lead time.
+ * For Ready-to-Ship items: 3 to 5 business days.
+ * Syncs with admin/staff overrides.
  */
 export function calculateEstimatedDelivery(orderOrCreatedAt) {
   let order = {};
   let createdAt;
 
-  if (orderOrCreatedAt && typeof orderOrCreatedAt === "object" && !orderOrCreatedAt.seconds && !orderOrCreatedAt.toDate) {
+  if (
+    orderOrCreatedAt &&
+    typeof orderOrCreatedAt === "object" &&
+    !orderOrCreatedAt.seconds &&
+    !orderOrCreatedAt.toDate
+  ) {
     order = orderOrCreatedAt;
     createdAt = order.createdAt;
   } else {
@@ -160,7 +217,14 @@ export function calculateEstimatedDelivery(orderOrCreatedAt) {
     }
   }
 
-  // Add business days helper (+3 to +5 business days)
+  const isMTO =
+    order.isMadeToOrder ||
+    Boolean(
+      Array.isArray(order.items) &&
+        order.items.some((i) => i.orderType === "Made-to-Order")
+    );
+
+  // Add business days helper
   const addBusinessDays = (date, days) => {
     const result = new Date(date);
     let added = 0;
@@ -174,8 +238,11 @@ export function calculateEstimatedDelivery(orderOrCreatedAt) {
     return result;
   };
 
-  const minDate = addBusinessDays(baseDate, 3);
-  const maxDate = addBusinessDays(baseDate, 5);
+  const minDays = isMTO ? 14 : 3;
+  const maxDays = isMTO ? 21 : 5;
+
+  const minDate = addBusinessDays(baseDate, minDays);
+  const maxDate = addBusinessDays(baseDate, maxDays);
 
   const formatShort = (d) =>
     d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -183,9 +250,9 @@ export function calculateEstimatedDelivery(orderOrCreatedAt) {
     d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   if (minDate.getMonth() === maxDate.getMonth()) {
-    return `${formatShort(minDate)} - ${maxDate.getDate()}, ${maxDate.getFullYear()}`;
+    return `${formatShort(minDate)} - ${maxDate.getDate()}, ${maxDate.getFullYear()}${isMTO ? " (Crafting Lead Time)" : ""}`;
   }
-  return `${formatShort(minDate)} - ${formatFull(maxDate)}`;
+  return `${formatShort(minDate)} - ${formatFull(maxDate)}${isMTO ? " (Crafting Lead Time)" : ""}`;
 }
 
 /**

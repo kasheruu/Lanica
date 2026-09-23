@@ -26,6 +26,12 @@ import {
   reload,
   sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+import {
+  subscribeToAllChats,
+  subscribeToMessages,
+  sendChatMessage,
+  uploadChatAttachment,
+} from "./chatService.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb2kDAVp9N_afxgOw5hSzDIvQ3UAIZVNU",
@@ -528,16 +534,22 @@ function setStaffNameAcrossUi(name) {
   if (staffAccountNameEl) staffAccountNameEl.textContent = label;
 }
 const navOrders = document.getElementById("nav-orders");
+const navStaffChats = document.getElementById("nav-staff-chats");
 const navMyAccount = document.getElementById("nav-my-account");
 const staffOrdersSection = document.getElementById("staff-orders-section");
+const staffChatsSection = document.getElementById("staff-chats-section");
 const staffAccountSection = document.getElementById("staff-account-section");
 const staffHeaderTitle = document.getElementById("staff-header-title");
 const staffHeaderBlurb = document.getElementById("staff-header-blurb");
 
 const STAFF_HEADER_ORDERS_HTML = {
-  title: "Staff Order Updates",
+  title: "Staff Workshop & Order Updates",
   blurb:
-    'Update only your assigned accepted orders: <strong>Accepted → Processing → Shipped → Delivered</strong>. Your assignment name comes from your profile.',
+    'Crafting progression: <strong>Downpayment Confirmed → In Production → Quality Checked → Shipped → Delivered</strong>. Check item custom specs and customer consultations.',
+};
+const STAFF_HEADER_CHATS_HTML = {
+  title: "Customer Support & Consultations",
+  blurb: "Direct chat with customers for custom dimensions, wood stains, fabric swatches, and WIP photos.",
 };
 const STAFF_HEADER_PROFILE_HTML = {
   title: "My Profile",
@@ -669,14 +681,23 @@ async function logStaffAction(action, details, success = true) {
 
 function showStaffSection(name) {
   const showOrders = name === "orders";
+  const showChats = name === "chats";
   const showAccount = name === "my-account";
+
   if (staffOrdersSection) staffOrdersSection.classList.toggle("is-hidden", !showOrders);
+  if (staffChatsSection) staffChatsSection.classList.toggle("is-hidden", !showChats);
   if (staffAccountSection) staffAccountSection.classList.toggle("is-hidden", !showAccount);
+
   if (navOrders) navOrders.classList.toggle("active", showOrders);
+  if (navStaffChats) navStaffChats.classList.toggle("active", showChats);
   if (navMyAccount) navMyAccount.classList.toggle("active", showAccount);
 
   if (staffHeaderTitle && staffHeaderBlurb) {
-    const block = showOrders ? STAFF_HEADER_ORDERS_HTML : STAFF_HEADER_PROFILE_HTML;
+    const block = showOrders
+      ? STAFF_HEADER_ORDERS_HTML
+      : showChats
+      ? STAFF_HEADER_CHATS_HTML
+      : STAFF_HEADER_PROFILE_HTML;
     staffHeaderTitle.textContent = block.title;
     if (showOrders) {
       staffHeaderBlurb.innerHTML = block.blurb;
@@ -690,6 +711,13 @@ if (navOrders) {
   navOrders.addEventListener("click", (e) => {
     e.preventDefault();
     showStaffSection("orders");
+  });
+}
+
+if (navStaffChats) {
+  navStaffChats.addEventListener("click", (e) => {
+    e.preventDefault();
+    showStaffSection("chats");
   });
 }
 
@@ -1012,22 +1040,26 @@ async function hydrateCustomerNamesForOrders(orders) {
 }
 
 function normalizeOrderStatus(raw) {
-  if (raw == null) return "pending";
+  if (raw == null) return "placed";
   const s = String(raw).toLowerCase().trim();
+  if (s === "pending") return "placed";
+  if (s === "accepted") return "downpayment confirmed";
+  if (s === "processing" || s === "packed") return "in production";
+  if (s === "declined") return "cancelled";
+  if (s === "completed" || s === "received" || s === "arrived") return "delivered";
   if (
     [
-      "pending",
-      "accepted",
-      "processing",
+      "placed",
+      "downpayment confirmed",
+      "in production",
+      "quality checked",
       "shipped",
       "delivered",
-      "declined",
-      "completed",
-      "received",
+      "cancelled",
     ].includes(s)
   )
     return s;
-  return "pending";
+  return "placed";
 }
 
 function isOrderCompleted(order) {
@@ -1056,21 +1088,22 @@ function formatOrderItemsSummary(items) {
     .map((it) => {
       const q = it.quantity != null ? it.quantity : 1;
       const nm = it.name || it.productName || "Item";
-      return `${nm} x ${q}`;
+      const notes = it.customNotes ? ` [Custom: ${it.customNotes}]` : "";
+      return `${nm} x ${q}${notes}`;
     })
     .join(", ");
 }
 
 function updateStats() {
-  const counts = { accepted: 0, processing: 0, shipped: 0, delivered: 0 };
+  const counts = { "downpayment confirmed": 0, "in production": 0, "quality checked": 0, delivered: 0 };
   allAssignedOrders.forEach((o) => {
     const st = normalizeOrderStatus(o.status);
     if (counts[st] !== undefined) counts[st] += 1;
   });
 
-  acceptedStatEl.textContent = String(counts.accepted);
-  processingStatEl.textContent = String(counts.processing);
-  shippedStatEl.textContent = String(counts.shipped);
+  acceptedStatEl.textContent = String(counts["downpayment confirmed"]);
+  processingStatEl.textContent = String(counts["in production"]);
+  shippedStatEl.textContent = String(counts["quality checked"]);
   if (deliveredStatEl) deliveredStatEl.textContent = String(counts.delivered);
 }
 
@@ -1081,11 +1114,11 @@ function renderOrders() {
   const visibleOrders = allAssignedOrders.filter(
     (o) =>
       !isOrderCompleted(o) &&
-      ["accepted", "processing", "shipped", "delivered"].includes(normalizeOrderStatus(o.status))
+      ["placed", "downpayment confirmed", "in production", "quality checked", "shipped", "delivered"].includes(normalizeOrderStatus(o.status))
   );
 
   if (visibleOrders.length === 0) {
-    ordersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#6b7280;">No assigned accepted/processing orders found.</td></tr>`;
+    ordersListEl.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:#6b7280;">No assigned active crafting orders found.</td></tr>`;
     return;
   }
 
@@ -1107,8 +1140,10 @@ function renderOrders() {
         : "—";
 
     const updateOptions = [];
-    if (st === "accepted") updateOptions.push("processing");
-    if (st === "processing") updateOptions.push("shipped");
+    if (st === "placed") updateOptions.push("downpayment confirmed");
+    if (st === "downpayment confirmed") updateOptions.push("in production");
+    if (st === "in production") updateOptions.push("quality checked");
+    if (st === "quality checked") updateOptions.push("shipped");
     if (st === "shipped") updateOptions.push("delivered");
 
     // Calculate delivery estimate for current order
@@ -2962,3 +2997,191 @@ if (logoutBtn) {
     }
   });
 }
+
+// Staff Live Chat Workspace
+let activeStaffChatSessionId = null;
+let activeStaffChatUnsubscribe = null;
+let allStaffChatSessions = [];
+
+function setupStaffLiveChat() {
+  const sessionsListEl = document.getElementById("staff-chat-sessions-list");
+  const messagesEl = document.getElementById("staff-chat-messages");
+  const customerNameEl = document.getElementById("staff-chat-customer-name");
+  const customerEmailEl = document.getElementById("staff-chat-customer-email");
+  const chatForm = document.getElementById("staff-chat-form");
+  const chatInput = document.getElementById("staff-chat-input");
+  const fileInput = document.getElementById("staff-chat-file-input");
+  const attachBtn = document.getElementById("staff-chat-attach-btn");
+  const attachPreview = document.getElementById("staff-chat-attachment-preview");
+  const attachFilename = document.getElementById("staff-chat-filename");
+  const cancelAttachBtn = document.getElementById("staff-chat-cancel-attachment");
+
+  let attachedFile = null;
+
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+          alert("Attachment must be under 5MB.");
+          fileInput.value = "";
+          return;
+        }
+        attachedFile = file;
+        if (attachPreview && attachFilename) {
+          attachFilename.textContent = attachedFile.name;
+          attachPreview.style.display = "flex";
+        }
+      }
+    });
+  }
+
+  if (cancelAttachBtn) {
+    cancelAttachBtn.addEventListener("click", () => {
+      attachedFile = null;
+      if (fileInput) fileInput.value = "";
+      if (attachPreview) attachPreview.style.display = "none";
+    });
+  }
+
+  subscribeToAllChats((sessions) => {
+    allStaffChatSessions = sessions;
+    renderStaffChatSessionsList(sessions);
+  });
+
+  function renderStaffChatSessionsList(sessions) {
+    if (!sessionsListEl) return;
+    if (sessions.length === 0) {
+      sessionsListEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No active customer chats.</div>`;
+      return;
+    }
+
+    sessionsListEl.innerHTML = "";
+    sessions.forEach((s) => {
+      const isSelected = s.id === activeStaffChatSessionId;
+      const item = document.createElement("div");
+      item.className = "chat-session-item";
+      item.style.cssText = `padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
+        isSelected ? "#eff6ff" : "#fff"
+      }; transition: background 0.15s;`;
+
+      const timeStr = s.updatedAt?.toDate
+        ? s.updatedAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
+
+      item.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <strong style="font-size: 0.88rem; color: #111827;">${escapeHtml(
+            s.userName || s.userEmail || "Customer"
+          )}</strong>
+          <span style="font-size: 0.72rem; color: #9ca3af;">${timeStr}</span>
+        </div>
+        <div style="font-size: 0.78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${escapeHtml(s.lastMessage || "No messages yet")}
+        </div>
+      `;
+
+      item.addEventListener("click", () => {
+        selectStaffChatSession(s);
+      });
+
+      sessionsListEl.appendChild(item);
+    });
+  }
+
+  function selectStaffChatSession(session) {
+    activeStaffChatSessionId = session.id;
+    if (customerNameEl) customerNameEl.textContent = session.userName || session.userEmail || "Customer";
+    if (customerEmailEl)
+      customerEmailEl.textContent = session.userEmail
+        ? `${session.userEmail} (ID: ${session.id})`
+        : `User ID: ${session.id}`;
+
+    renderStaffChatSessionsList(allStaffChatSessions);
+
+    if (activeStaffChatUnsubscribe) activeStaffChatUnsubscribe();
+
+    activeStaffChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
+      if (!messagesEl) return;
+      if (messages.length === 0) {
+        messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this conversation yet. Send a greeting!</div>`;
+        return;
+      }
+
+      messagesEl.innerHTML = "";
+      messages.forEach((m) => {
+        const isStaff = m.senderRole === "admin" || m.senderRole === "staff";
+        const row = document.createElement("div");
+        row.style.cssText = `display: flex; flex-direction: column; align-items: ${
+          isStaff ? "flex-end" : "flex-start"
+        }; margin-bottom: 10px;`;
+
+        const senderLabel = isStaff ? "Workshop Artisan" : m.senderName || "Customer";
+        const timeStr = m.createdAt?.toDate
+          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        row.innerHTML = `
+          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">${escapeHtml(
+            senderLabel
+          )} • ${timeStr}</span>
+          <div style="max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
+            isStaff ? "#6b4423" : "#ffffff"
+          }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
+          isStaff ? "#6b4423" : "#e5e7eb"
+        };">
+            ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+            ${
+              m.attachmentUrl
+                ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" style="max-width: 220px; max-height: 160px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
+                : ""
+            }
+          </div>
+        `;
+        messagesEl.appendChild(row);
+      });
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+  }
+
+  if (chatForm) {
+    chatForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = chatInput?.value || "";
+      if (!text.trim() && !attachedFile) return;
+      if (!activeStaffChatSessionId) {
+        alert("Please select a customer conversation first.");
+        return;
+      }
+
+      try {
+        let attachmentUrl = "";
+        if (attachedFile) {
+          attachmentUrl = await uploadChatAttachment(attachedFile, activeStaffChatSessionId);
+          attachedFile = null;
+          if (fileInput) fileInput.value = "";
+          if (attachPreview) attachPreview.style.display = "none";
+        }
+
+        await sendChatMessage({
+          chatId: activeStaffChatSessionId,
+          senderId: currentUser ? currentUser.uid : "staff",
+          senderName: currentUser?.displayName || "Workshop Artisan",
+          senderRole: "staff",
+          text: text,
+          attachmentUrl: attachmentUrl,
+        });
+
+        if (chatInput) chatInput.value = "";
+      } catch (err) {
+        console.error("Chat send error:", err);
+        alert(err.message || "Failed to send reply.");
+      }
+    });
+  }
+}
+
+setupStaffLiveChat();
+

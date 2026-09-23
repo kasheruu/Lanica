@@ -120,8 +120,16 @@ export function subscribeToCart(userId, callback) {
 /**
  * Add or update item in cart subcollection.
  * Path: users/{userId}/cart/{itemId}
+ * Supports Made-to-Order (MTO) when stock <= 0 (lead time: 14-21 days)
+ * and Ready-to-Ship (RTS) when stock > 0 (1-3 units available).
  */
-export async function addToCart(userId, product, material = "Fabric", quantity = 1) {
+export async function addToCart(
+  userId,
+  product,
+  material = "Fabric",
+  quantity = 1,
+  customNotes = ""
+) {
   if (!userId || !product || !product.id) {
     throw new Error("Invalid parameters for addToCart");
   }
@@ -143,11 +151,10 @@ export async function addToCart(userId, product, material = "Fabric", quantity =
   const existingQty = existingDoc.exists() ? Number(existingDoc.data().quantity || 0) : 0;
   const targetQty = existingQty + Number(quantity);
 
-  if (targetQty > availableStock) {
-    throw new Error(
-      `Requested quantity (${targetQty}) exceeds available ${mat} stock (${availableStock}).`
-    );
-  }
+  // Determine availability mode:
+  // If there is physical stock available, mark as Ready-to-Ship; otherwise Made-to-Order
+  const isMadeToOrder = availableStock <= 0 || targetQty > availableStock;
+  const leadTime = isMadeToOrder ? "14-21 Business Days (Crafted upon order)" : "3-5 Business Days (Ready stock)";
 
   const displayImage =
     freshProduct.thumbnail ||
@@ -163,6 +170,10 @@ export async function addToCart(userId, product, material = "Fabric", quantity =
     url: displayImage,
     quantity: targetQty,
     material: mat,
+    customNotes: String(customNotes || "").trim(),
+    orderType: isMadeToOrder ? "Made-to-Order" : "Ready-to-Ship",
+    leadTime: leadTime,
+    availableStockSnapshot: availableStock,
     updatedAt: serverTimestamp(),
   };
 
@@ -182,23 +193,26 @@ export async function updateCartItemQuantity(userId, itemId, newQuantity) {
     return;
   }
 
-  // Stock check
   const snap = await getDoc(itemRef);
   if (!snap.exists()) return;
   const itemData = snap.data();
 
   const freshProduct = await fetchProductById(itemData.productId);
+  let isMadeToOrder = false;
+  let leadTime = "3-5 Business Days (Ready stock)";
+
   if (freshProduct) {
     const availableStock = getAvailableStock(freshProduct, itemData.material);
-    if (newQuantity > availableStock) {
-      throw new Error(
-        `Cannot set quantity to ${newQuantity}. Only ${availableStock} available in stock.`
-      );
-    }
+    isMadeToOrder = availableStock <= 0 || newQuantity > availableStock;
+    leadTime = isMadeToOrder
+      ? "14-21 Business Days (Crafted upon order)"
+      : "3-5 Business Days (Ready stock)";
   }
 
   await updateDoc(itemRef, {
     quantity: Number(newQuantity),
+    orderType: isMadeToOrder ? "Made-to-Order" : "Ready-to-Ship",
+    leadTime: leadTime,
     updatedAt: serverTimestamp(),
   });
 }
@@ -246,10 +260,9 @@ export async function saveUserAddress(userId, addressData) {
 /**
  * ATOMIC ORDER PLACEMENT & INVENTORY DEDUCTION (Phase 5)
  * Executes a Firestore Atomic Transaction:
- * 1. Stock Re-verification (reads products inside transaction)
- * 2. Inventory Decrement (updates stock/FabricStocks/LeatherStocks)
- * 3. Order Creation (writes orders/{orderId})
- * 4. Cart Purge (deletes all docs in users/{userId}/cart)
+ * 1. Inventory Check & Selective Decrement (Decrements physical stock if available; flags as Made-to-Order if stock <= 0)
+ * 2. Order Creation with MTO & 50% Downpayment Tracking
+ * 3. Cart Purge
  */
 export async function placeOrderAtomic({
   userId,
@@ -257,6 +270,8 @@ export async function placeOrderAtomic({
   totalAmount,
   paymentMethod,
   address,
+  paymentOption = "full", // "full" or "downpayment" (50% deposit)
+  customNotes = "",
   paymentDetails = {},
 }) {
   if (!userId) throw new Error("User ID is required to place an order.");
@@ -267,15 +282,15 @@ export async function placeOrderAtomic({
   const orderRef = doc(db, "orders", orderId);
 
   await runTransaction(db, async (transaction) => {
-    // Phase 5 Step 1: Stock Re-verification
     const productUpdates = [];
+    let hasMadeToOrderItems = false;
 
     for (const item of cartItems) {
       const productRef = doc(db, "products", item.productId);
       const productSnap = await transaction.get(productRef);
 
       if (!productSnap.exists()) {
-        throw new Error(`Product "${item.name}" no longer exists.`);
+        throw new Error(`Product "${item.name}" is no longer listed in catalog.`);
       }
 
       const pData = productSnap.data();
@@ -291,13 +306,11 @@ export async function placeOrderAtomic({
         available = typeof pData.stock === "number" ? pData.stock : 0;
       }
 
-      if (reqQty > available) {
-        throw new Error(
-          `Insufficient stock for "${item.name}" (${item.material}). Available: ${available}, Requested: ${reqQty}`
-        );
+      if (available <= 0 || reqQty > available) {
+        hasMadeToOrderItems = true;
       }
 
-      // Prepare updates
+      // If physical stock is available, decrement up to available amount; otherwise keep at 0
       const currentGeneralStock = typeof pData.stock === "number" ? pData.stock : 0;
       const newGeneralStock = Math.max(0, currentGeneralStock - reqQty);
 
@@ -315,33 +328,54 @@ export async function placeOrderAtomic({
       productUpdates.push({ ref: productRef, updates: updatePayload });
     }
 
-    // Read cart docs so we can purge them inside transaction
+    // Read cart docs to purge inside transaction
     const cartRef = collection(db, "users", userId, "cart");
     const cartSnap = await getDocs(cartRef);
 
-    // Phase 5 Step 2: Inventory Decrement
+    // Apply stock decrements
     for (const pUpd of productUpdates) {
       transaction.update(pUpd.ref, pUpd.updates);
     }
 
-    // Phase 5 Step 3: Order Creation
+    // Build Item Breakdown
     const orderItemsBreakdown = cartItems.map((item) => ({
       productId: item.productId,
       name: item.name,
       price: Number(item.price),
       quantity: Number(item.quantity),
       material: item.material || "Fabric",
+      customNotes: item.customNotes || customNotes || "",
+      orderType: item.orderType || (hasMadeToOrderItems ? "Made-to-Order" : "Ready-to-Ship"),
+      leadTime: item.leadTime || (hasMadeToOrderItems ? "14-21 Business Days" : "3-5 Business Days"),
       url: item.url || "",
       subtotal: Number(item.price) * Number(item.quantity),
     }));
+
+    const isDownpayment = paymentOption === "downpayment";
+    const parsedTotal = Number(totalAmount);
+    const downpaymentAmount = isDownpayment ? Math.round(parsedTotal * 0.5) : parsedTotal;
+    const balanceDue = isDownpayment ? parsedTotal - downpaymentAmount : 0;
 
     const orderDocData = {
       orderId: orderId,
       userId: userId,
       items: orderItemsBreakdown,
-      totalAmount: Number(totalAmount),
+      totalAmount: parsedTotal,
+      paymentOption: isDownpayment ? "downpayment" : "full",
+      downpaymentAmount: downpaymentAmount,
+      balanceDue: balanceDue,
       paymentMethod: paymentMethod, // "COD", "GCash", or "Bank Transfer"
-      orderStatus: "Pending", // "Pending", "Processing", "Delivered"
+      paymentStatus: isDownpayment
+        ? "Downpayment Pending Verification"
+        : paymentMethod === "COD"
+          ? "Unpaid (COD)"
+          : "Paid / Pending Verification",
+      orderStatus: "Placed", // Canonical: Placed -> Downpayment Confirmed -> In Production -> Quality Checked -> Shipped -> Delivered
+      status: "Placed",
+      isMadeToOrder: hasMadeToOrderItems,
+      estimatedLeadTime: hasMadeToOrderItems
+        ? "14-21 Business Days (Crafted Upon Order)"
+        : "3-5 Business Days (Ready Stock)",
       address: {
         recipientName: address.recipientName || "",
         phoneNumber: address.phoneNumber || "",
@@ -349,13 +383,14 @@ export async function placeOrderAtomic({
         latitude: address.latitude || null,
         longitude: address.longitude || null,
       },
+      customNotes: String(customNotes || "").trim(),
       paymentDetails: paymentDetails || {},
       createdAt: serverTimestamp(),
     };
 
     transaction.set(orderRef, orderDocData);
 
-    // Phase 5 Step 4: Cart Purge
+    // Cart Purge
     cartSnap.docs.forEach((cartDoc) => {
       transaction.delete(cartDoc.ref);
     });

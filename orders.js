@@ -21,6 +21,12 @@ import {
 } from "./orderService.js";
 
 import { ensureAuth, subscribeToCart } from "./cartService.js";
+import {
+  getOrCreateUserChatSession,
+  sendChatMessage,
+  subscribeToMessages,
+  uploadChatAttachment,
+} from "./chatService.js";
 
 // Global State
 let currentUser = null;
@@ -29,6 +35,15 @@ let activeTabStatus = "all";
 let pendingCancelOrderId = null;
 let ordersUnsubscribe = null;
 let cartUnsubscribe = null;
+let chatUnsubscribe = null;
+let liveChatController = null;
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.innerText = text || "";
+  return div.innerHTML;
+}
 
 // Helper: Toast Notifications
 function showToast(message, type = "success") {
@@ -68,6 +83,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupHeaderAndAuthUI();
 
   // 3. Initialize Authentication Session & Real-time Listeners
+  liveChatController = setupLiveChatWidget();
+
   try {
     currentUser = await ensureAuth();
     updateAuthUi(currentUser);
@@ -75,6 +92,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (currentUser) {
       setupOrdersSubscription(currentUser.uid);
       setupCartSubscription(currentUser.uid);
+      liveChatController?.initUserChat(currentUser);
     }
   } catch (err) {
     console.error("Initialization error on Orders page:", err);
@@ -88,6 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (user) {
       setupOrdersSubscription(user.uid);
       setupCartSubscription(user.uid);
+      liveChatController?.initUserChat(user);
     } else {
       window.location.href = "index.html";
     }
@@ -329,26 +348,26 @@ function updateTabBadges(orders) {
   const counts = {
     all: orders.length,
     placed: 0,
-    packed: 0,
+    inProduction: 0,
     shipped: 0,
-    arrived: 0,
+    delivered: 0,
     cancelled: 0,
   };
 
   orders.forEach((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (st === "Placed") counts.placed++;
-    else if (st === "Packed") counts.packed++;
+    if (st === "Placed" || st === "Downpayment Confirmed") counts.placed++;
+    else if (st === "In Production" || st === "Quality Checked") counts.inProduction++;
     else if (st === "Shipped") counts.shipped++;
-    else if (st === "Arrived") counts.arrived++;
+    else if (st === "Delivered") counts.delivered++;
     else if (st === "Cancelled") counts.cancelled++;
   });
 
   if (document.getElementById("badge-all")) document.getElementById("badge-all").textContent = counts.all;
   if (document.getElementById("badge-placed")) document.getElementById("badge-placed").textContent = counts.placed;
-  if (document.getElementById("badge-packed")) document.getElementById("badge-packed").textContent = counts.packed;
+  if (document.getElementById("badge-in-production")) document.getElementById("badge-in-production").textContent = counts.inProduction;
   if (document.getElementById("badge-shipped")) document.getElementById("badge-shipped").textContent = counts.shipped;
-  if (document.getElementById("badge-arrived")) document.getElementById("badge-arrived").textContent = counts.arrived;
+  if (document.getElementById("badge-delivered")) document.getElementById("badge-delivered").textContent = counts.delivered;
   if (document.getElementById("badge-cancelled")) document.getElementById("badge-cancelled").textContent = counts.cancelled;
 }
 
@@ -371,10 +390,10 @@ function filterOrdersByTab(orders, tabStatus) {
 
   return orders.filter((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (tabStatus === "placed") return st === "Placed";
-    if (tabStatus === "packed") return st === "Packed";
+    if (tabStatus === "placed") return st === "Placed" || st === "Downpayment Confirmed";
+    if (tabStatus === "in-production") return st === "In Production" || st === "Quality Checked";
     if (tabStatus === "shipped") return st === "Shipped";
-    if (tabStatus === "arrived") return st === "Arrived";
+    if (tabStatus === "delivered") return st === "Delivered";
     if (tabStatus === "cancelled") return st === "Cancelled";
     return true;
   });
@@ -418,18 +437,31 @@ function renderOrdersList() {
       if (orderId) openCancelModal(orderId);
     });
   });
+
+  // Bind Chat Workshop buttons on order cards
+  container.querySelectorAll(".btn-chat-order").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const orderId = btn.getAttribute("data-order-id");
+      const drawer = document.getElementById("lanica-chat-drawer");
+      const input = document.getElementById("chat-text-input");
+      if (drawer) drawer.classList.add("active");
+      if (input && orderId) {
+        input.value = `Inquiring about Order #${orderId}: `;
+        input.focus();
+      }
+  });
 }
 
 function getTabDisplayName(statusKey) {
   switch (statusKey) {
     case "placed":
-      return "Placed";
-    case "packed":
-      return "Packed";
+      return "Placed / Awaiting Verification";
+    case "in-production":
+      return "In Production";
     case "shipped":
       return "Shipped";
-    case "arrived":
-      return "Arrived";
+    case "delivered":
+      return "Delivered";
     case "cancelled":
       return "Cancelled";
     case "all":
@@ -453,6 +485,7 @@ function createOrderCardElement(order) {
   const cancellable = isOrderCancellable(normStatus);
   const estDeliveryText = calculateEstimatedDelivery(order);
   const stepIdx = getTrackingStepIndex(normStatus);
+  const isMTO = Boolean(order.isMadeToOrder || (Array.isArray(order.items) && order.items.some(i => i.isMadeToOrder || i.orderType === "Made-to-Order")));
 
   // Build items HTML
   const items = Array.isArray(order.items) ? order.items : [];
@@ -462,16 +495,23 @@ function createOrderCardElement(order) {
       const material = item.material || "Fabric";
       const qty = Number(item.quantity || 1);
       const priceFormatted = parseFloat(item.price || 0).toLocaleString();
+      const itemIsMTO = item.isMadeToOrder || item.orderType === "Made-to-Order";
 
       return `
         <div class="order-item-row">
-          <img src="${imgUrl}" alt="${item.name}" class="item-thumb" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <img src="${imgUrl}" alt="${escapeHtml(item.name)}" class="item-thumb" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
           <div class="item-info">
-            <div class="item-name">${item.name}</div>
+            <div class="item-name">${escapeHtml(item.name)}</div>
             <div>
-              <span class="item-variant-tag">${material}</span>
+              <span class="item-variant-tag">${escapeHtml(material)}</span>
               <span class="item-qty">x ${qty}</span>
+              ${itemIsMTO ? `<span style="background: #eef2ff; color: #4338ca; font-size: 0.72rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Made-to-Order</span>` : `<span style="background: #ecfdf5; color: #047857; font-size: 0.72rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Showroom Unit</span>`}
             </div>
+            ${item.customNotes ? `
+              <div class="item-custom-notes" style="font-size: 0.78rem; color: #b45309; background: #fef3c7; padding: 4px 8px; border-radius: 4px; margin-top: 4px; display: inline-block;">
+                <strong>Custom Specs:</strong> ${escapeHtml(item.customNotes)}
+              </div>
+            ` : ""}
           </div>
           <div class="item-price">₱${priceFormatted}</div>
         </div>
@@ -479,7 +519,7 @@ function createOrderCardElement(order) {
     })
     .join("");
 
-  // Build Mobile App Match Stepper Box
+  // Build 6-Stage Tracking Box
   let trackingBoxHTML;
   if (normStatus === "Cancelled") {
     trackingBoxHTML = `
@@ -496,22 +536,31 @@ function createOrderCardElement(order) {
       </div>
     `;
   } else {
-    // Hero Banner Status Icon & Subtitle
-    let heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`;
-    let heroSubtitle = "We are tracking your furniture";
+    // Hero Banner Status Icon & Subtitle for 6 Stages
+    let heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
+    let heroSubtitle = "Your order has been placed successfully";
 
     if (normStatus === "Placed") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
-      heroSubtitle = "Your order has been placed successfully";
-    } else if (normStatus === "Packed") {
-      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`;
-      heroSubtitle = "Your furniture is being carefully packed";
-    } else if (normStatus === "Arrived") {
+      heroSubtitle = "Order placed! Our workshop team is reviewing your custom order details.";
+    } else if (normStatus === "Downpayment Confirmed") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>`;
+      heroSubtitle = "50% Downpayment verified! Timber and materials are allocated for production.";
+    } else if (normStatus === "In Production") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`;
+      heroSubtitle = "Lanica master artisans are actively crafting your furniture.";
+    } else if (normStatus === "Quality Checked") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 12 15 16 10"></polyline></svg>`;
+      heroSubtitle = "Crafting completed and inspected! Passed all quality and finish checks.";
+    } else if (normStatus === "Shipped") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`;
+      heroSubtitle = "Your piece is carefully padded and on the delivery truck.";
+    } else if (normStatus === "Delivered") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
-      heroSubtitle = "Your furniture has arrived safely!";
+      heroSubtitle = "Your handcrafted Lanica furniture has arrived safely!";
     }
 
-    // Handled By Rider Card (Mobile App Exact Copy)
+    // Rider Card
     let riderCardHTML = "";
     if (riderName) {
       riderCardHTML = `
@@ -525,7 +574,7 @@ function createOrderCardElement(order) {
             </div>
             <div>
               <div class="handled-by-text-label">Handled By</div>
-              <div class="handled-by-name">${riderName}</div>
+              <div class="handled-by-name">${escapeHtml(riderName)}</div>
             </div>
           </div>
           <svg class="verified-badge-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -535,7 +584,7 @@ function createOrderCardElement(order) {
       `;
     }
 
-    // Estimated Delivery Card (Mobile App Exact Copy)
+    // Estimated Delivery Card
     const estDeliveryCardHTML = `
       <div class="est-delivery-card">
         <div class="est-delivery-icon-box">
@@ -548,33 +597,43 @@ function createOrderCardElement(order) {
           </svg>
         </div>
         <div>
-          <div class="est-delivery-label">Estimated Delivery</div>
+          <div class="est-delivery-label">Estimated Delivery / Lead Time</div>
           <div class="est-delivery-date">📅 ${estDeliveryText}</div>
         </div>
       </div>
     `;
 
-    // 4-Stage App Stepper (PLACED, PACKED, SHIPPED, ARRIVED)
+    // 6-Stage Stepper
     const steps = [
       {
         key: "Placed",
         label: "PLACED",
-        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`,
+        icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`,
       },
       {
-        key: "Packed",
-        label: "PACKED",
-        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
+        key: "Downpayment Confirmed",
+        label: "DEPOSIT",
+        icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>`,
+      },
+      {
+        key: "In Production",
+        label: "CRAFTING",
+        icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`,
+      },
+      {
+        key: "Quality Checked",
+        label: "QC PASSED",
+        icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 12 15 16 10"></polyline></svg>`,
       },
       {
         key: "Shipped",
         label: "SHIPPED",
-        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`,
+        icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`,
       },
       {
-        key: "Arrived",
-        label: "ARRIVED",
-        icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`,
+        key: "Delivered",
+        label: "DELIVERED",
+        icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`,
       },
     ];
 
@@ -598,7 +657,7 @@ function createOrderCardElement(order) {
       })
       .join("");
 
-    const linePercent = Math.min(100, Math.max(0, (stepIdx / 3) * 100));
+    const linePercent = Math.min(100, Math.max(0, (stepIdx / 5) * 100));
 
     trackingBoxHTML = `
       <div class="tracking-box">
@@ -633,9 +692,34 @@ function createOrderCardElement(order) {
     `;
   } else if (normStatus !== "Cancelled") {
     cancelButtonHTML = `
-      <button type="button" class="btn-cancel-order" disabled title="Orders in ${normStatus} status cannot be cancelled">
-        Cancel Disabled (${normStatus})
+      <button type="button" class="btn-cancel-order" disabled title="Orders in ${normStatus} status cannot be cancelled as manufacturing has begun">
+        Cancel Locked (${normStatus})
       </button>
+    `;
+  }
+
+  // Payment Breakdown
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  let paymentDetailsHTML = "";
+  if (isDownpayment) {
+    paymentDetailsHTML = `
+      <div class="payment-terms-box" style="margin-top: 8px; font-size: 0.82rem; background: var(--clr-bg-subtle, #f9fafb); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--clr-border, #e5e7eb);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+          <span>50% Downpayment (Paid):</span>
+          <strong style="color: #059669;">₱${parseFloat(order.downpaymentAmount || 0).toLocaleString()}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>Remaining Balance Due upon Delivery:</span>
+          <strong style="color: #d97706;">₱${parseFloat(order.balanceDue || 0).toLocaleString()}</strong>
+        </div>
+        ${order.paymentDetails?.paymentSlipUrl ? `
+          <div style="margin-top: 4px;">
+            <a href="${order.paymentDetails.paymentSlipUrl}" target="_blank" rel="noopener" style="color: var(--clr-primary, #6b4423); text-decoration: underline; font-weight: 500;">
+              View Attached Payment Slip ↗
+            </a>
+          </div>
+        ` : ""}
+      </div>
     `;
   }
 
@@ -644,6 +728,7 @@ function createOrderCardElement(order) {
       <div class="order-meta">
         <span class="order-id">Order #${orderId}</span>
         <span class="order-date">Placed on ${formattedDate}</span>
+        ${isMTO ? `<span style="background: #eef2ff; color: #4338ca; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; margin-left: 8px;">Made-to-Order</span>` : ""}
       </div>
       <div class="status-badge ${statusClass}">
         <span class="status-dot"></span>
@@ -659,16 +744,25 @@ function createOrderCardElement(order) {
 
     <div class="order-card-footer">
       <div class="payment-method-info">
-        <span>Payment Method:</span>
-        <strong style="color: var(--clr-black);">${paymentMethod}</strong>
+        <div>
+          <span>Payment Method:</span>
+          <strong style="color: var(--clr-black);">${escapeHtml(paymentMethod)}</strong>
+        </div>
+        ${paymentDetailsHTML}
       </div>
 
       <div class="order-total-box">
-        <span class="total-label">Total Amount:</span>
+        <span class="total-label">Total Contract Price:</span>
         <span class="total-amount">₱${totalAmountFormatted}</span>
       </div>
 
-      ${cancelButtonHTML}
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button type="button" class="btn-chat-order" data-order-id="${orderId}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: var(--clr-primary-light, #f4eee7); color: var(--clr-primary, #6b4423); font-weight: 600; font-size: 0.82rem; border: 1px solid var(--clr-primary, #6b4423); cursor: pointer; transition: all 0.2s;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>Chat Workshop</span>
+        </button>
+        ${cancelButtonHTML}
+      </div>
     </div>
   `;
 
@@ -781,3 +875,154 @@ function setupMobileMenu() {
     if (e.key === "Escape") toggleMenu(false);
   });
 }
+
+function setupLiveChatWidget() {
+  const launcher = document.getElementById("lanica-chat-launcher");
+  const drawer = document.getElementById("lanica-chat-drawer");
+  const closeBtn = document.getElementById("close-chat-drawer-btn");
+  const form = document.getElementById("chat-send-form");
+  const textInput = document.getElementById("chat-text-input");
+  const fileInput = document.getElementById("chat-file-input");
+  const attachBtn = document.getElementById("chat-attach-btn");
+  const previewBox = document.getElementById("chat-attachment-preview");
+  const previewName = document.getElementById("chat-preview-filename");
+  const cancelAttachBtn = document.getElementById("chat-cancel-attachment-btn");
+  const messagesArea = document.getElementById("chat-messages-area");
+
+  let attachedFile = null;
+
+  if (launcher && drawer) {
+    launcher.addEventListener("click", () => {
+      drawer.classList.toggle("active");
+      if (drawer.classList.contains("active")) {
+        textInput?.focus();
+        scrollChatToBottom();
+      }
+    });
+  }
+
+  if (closeBtn && drawer) {
+    closeBtn.addEventListener("click", () => {
+      drawer.classList.remove("active");
+    });
+  }
+
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+          showToast("Attachment size must be under 5MB.", "error");
+          fileInput.value = "";
+          return;
+        }
+        attachedFile = file;
+        if (previewBox && previewName) {
+          previewName.textContent = attachedFile.name;
+          previewBox.style.display = "flex";
+        }
+      }
+    });
+  }
+
+  if (cancelAttachBtn) {
+    cancelAttachBtn.addEventListener("click", () => {
+      attachedFile = null;
+      if (fileInput) fileInput.value = "";
+      if (previewBox) previewBox.style.display = "none";
+    });
+  }
+
+  function scrollChatToBottom() {
+    if (messagesArea) {
+      messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+  }
+
+  function initUserChat(user) {
+    if (!user) return;
+    if (chatUnsubscribe) chatUnsubscribe();
+
+    getOrCreateUserChatSession(user.uid, user.email, user.displayName);
+
+    chatUnsubscribe = subscribeToMessages(user.uid, (messages) => {
+      if (!messagesArea) return;
+
+      let html = `
+        <div class="chat-welcome-card">
+          <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Workshop Support. You can ask for custom furniture dimensions, wood stains, fabric swatches, or inquire about your crafting order progress!</p>
+        </div>
+      `;
+
+      messages.forEach((m) => {
+        const isMe = m.senderId === user.uid;
+        const roleClass = isMe ? "customer" : (m.senderRole || "staff");
+        const senderLabel = isMe ? "You" : (m.senderName || "Workshop Support");
+        const timeStr = m.createdAt?.toDate
+          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        html += `
+          <div class="chat-msg-row ${roleClass}">
+            <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
+            <div class="chat-msg-bubble">
+              ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+              ${
+                m.attachmentUrl
+                  ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" class="chat-msg-img" alt="Attachment" /></a>`
+                  : ""
+              }
+            </div>
+            ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
+          </div>
+        `;
+      });
+
+      messagesArea.innerHTML = html;
+      scrollChatToBottom();
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textInput?.value || "";
+      if (!text.trim() && !attachedFile) return;
+
+      if (!currentUser) {
+        showToast("Please sign in to send a message to our workshop.", "error");
+        document.getElementById("auth-modal")?.classList.add("active");
+        return;
+      }
+
+      try {
+        let attachmentUrl = "";
+        if (attachedFile) {
+          attachmentUrl = await uploadChatAttachment(attachedFile, currentUser.uid);
+          attachedFile = null;
+          if (fileInput) fileInput.value = "";
+          if (previewBox) previewBox.style.display = "none";
+        }
+
+        await sendChatMessage({
+          chatId: currentUser.uid,
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || currentUser.email || "Customer",
+          senderRole: "customer",
+          text: text,
+          attachmentUrl: attachmentUrl,
+        });
+
+        if (textInput) textInput.value = "";
+        scrollChatToBottom();
+      } catch (err) {
+        console.error("Chat error:", err);
+        showToast(err.message || "Failed to send message.", "error");
+      }
+    });
+  }
+
+  return { initUserChat };
+}
+
