@@ -32,6 +32,7 @@ import {
   subscribeToMessages,
   sendChatMessage,
   uploadChatAttachment,
+  markOrderMessagesAsRead,
 } from "./chatService.js";
 
 // Your web app's Firebase configuration
@@ -104,6 +105,7 @@ onAuthStateChanged(auth, async (user) => {
     return;
   } else {
     console.log(" ADMIN PAGE - Admin user confirmed, staying on admin page");
+    loadStaffMembers();
   }
 
   // If role is null/undefined, stay on admin page and let the user see what happens
@@ -1912,20 +1914,19 @@ if (dashLinkAllOrders) {
 
 async function loadStaffMembers() {
   try {
-    // Read all users and filter client-side so role casing like "Staff"/"STAFF" still works.
+    // Read all users and filter client-side for staff, artisan, or admin
     const snap = await getDocs(collection(db, "users"));
     staffMembers = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
-      .filter(
-        (u) =>
-          String(u.role || "")
-            .toLowerCase()
-            .trim() === "staff"
-      )
+      .filter((u) => {
+        const r = String(u.role || "").toLowerCase().trim();
+        return r === "staff" || r === "artisan" || r === "admin";
+      })
       .map((u) => ({
         uid: u.uid || u.id,
         email: u.email || "",
-        displayName: u.displayName || u.name || u.email || u.id,
+        displayName: pickFirstNonEmpty(u.displayName, u.name, u.fullName, u.email, u.id),
+        role: u.role || "staff",
       }))
       .filter((u) => !!u.uid);
 
@@ -1933,7 +1934,6 @@ async function loadStaffMembers() {
     applyOrdersFilter();
   } catch (e) {
     console.warn("Could not load staff users (check Firestore rules / index):", e);
-    staffMembers = [];
   }
 }
 
@@ -2046,7 +2046,20 @@ onSnapshot(
         const bName = pickFirstNonEmpty(b.displayName, b.name, b.email, b.id).toLowerCase();
         return aName.localeCompare(bName);
       });
+    staffMembers = allUsers
+      .filter((u) => {
+        const r = String(u.role || "").toLowerCase().trim();
+        return r === "staff" || r === "artisan" || r === "admin";
+      })
+      .map((u) => ({
+        uid: u.uid || u.id,
+        email: u.email || "",
+        displayName: pickFirstNonEmpty(u.displayName, u.name, u.fullName, u.email, u.id),
+        role: u.role || "staff",
+      }))
+      .filter((u) => !!u.uid);
     applyUsersFilter();
+    applyOrdersFilter();
   },
   (err) => {
     console.warn("Could not load users for admin management:", err);
@@ -2513,37 +2526,38 @@ function renderOrdersList(orders) {
         )}</span>
       </td>
       <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign rider" ${st !== "pending" ? "disabled" : ""}>
+        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" ? "disabled" : ""}>
           <option value="">Unassigned</option>
           ${staffMembers
             .map((s) => {
               const sel = order.assignedToUid === s.uid ? "selected" : "";
-              return `<option value="${escapeHtml(s.uid)}" ${sel}>${escapeHtml(s.displayName)}</option>`;
+              const roleSuffix = s.role && s.role !== "staff" ? ` (${s.role})` : "";
+              return `<option value="${escapeHtml(s.uid)}" ${sel}>${escapeHtml(s.displayName)}${roleSuffix}</option>`;
             })
             .join("")}
         </select>
       </td>
       <td>
         ${
-          st === "pending"
+          st === "placed" || st === "pending"
             ? `<div class="order-action-group">
                 <button class="btn-icon order-action-btn order-action-accept btn-accept-order" data-order-id="${escapeHtml(
                   order.id
-                )}" aria-label="Accept order" title="Accept">
+                )}" aria-label="Accept order" title="Accept Order & Confirm Downpayment">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </button>
                 <button class="btn-icon order-action-btn order-action-decline btn-decline-order" data-order-id="${escapeHtml(
                   order.id
-                )}" aria-label="Decline order" title="Decline">
+                )}" aria-label="Decline order" title="Decline Order">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
                 </button>
               </div>`
-            : st === "declined"
+            : st === "declined" || st === "cancelled"
               ? `<button class="btn-icon order-action-btn order-action-delete btn-delete-order" data-order-id="${escapeHtml(
                   order.id
                 )}" aria-label="Delete declined order" title="Delete">
@@ -2552,7 +2566,7 @@ function renderOrdersList(orders) {
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                   </svg>
                 </button>`
-              : `<span style="font-size:0.82rem;color:#6b7280;">No action</span>`
+              : `<span style="font-size:0.82rem;color:#059669;font-weight:500;text-transform:capitalize;">${escapeHtml(st)}</span>`
         }
       </td>
     `;
@@ -2705,23 +2719,11 @@ async function handleOrderAccept(orderId) {
   if (!current) return;
 
   const prev = normalizeOrderStatus(current.status);
-  if (prev !== "pending") return;
+  if (prev !== "placed" && prev !== "pending") return;
 
   const items = Array.isArray(current.items) ? current.items : [];
   if (items.length === 0) {
     alert("This order has no items.");
-    return;
-  }
-
-  for (const it of items) {
-    if (!it.productId) {
-      alert("This order has a line without productId. Fix the order data first.");
-      return;
-    }
-  }
-
-  if (!current.assignedToUid) {
-    alert("Assign a staff member first before accepting the order.");
     return;
   }
 
@@ -2731,19 +2733,20 @@ async function handleOrderAccept(orderId) {
       if (!oSnap.exists()) throw new Error("Order missing");
       const oData = oSnap.data();
       const latestStatus = normalizeOrderStatus(oData.status);
-      if (latestStatus !== "pending") return;
+      if (latestStatus !== "placed" && latestStatus !== "pending") return;
 
       transaction.update(orderRef, {
-        status: "accepted",
-        orderStatus: "accepted",
+        status: "downpayment confirmed",
+        orderStatus: "downpayment confirmed",
         stockDeducted: !!oData.stockDeducted,
         acceptedAt: Timestamp.now(),
         acceptedByUid: currentUser ? currentUser.uid : null,
         updatedAt: Timestamp.now(),
       });
     });
+    console.log(`Accepted order ${orderId} -> downpayment confirmed`);
   } catch (e) {
-    console.error(e);
+    console.error("Order accept error:", e);
     alert(e.message || "Could not accept order.");
   }
 }
@@ -2754,20 +2757,22 @@ async function handleOrderDecline(orderId) {
   if (!current) return;
 
   const prev = normalizeOrderStatus(current.status);
-  if (prev !== "pending") return;
+  if (prev !== "placed" && prev !== "pending") return;
 
   if (!confirm("Decline this order?")) return;
 
   try {
     await updateDoc(orderRef, {
       status: "declined",
+      orderStatus: "declined",
       declinedAt: Timestamp.now(),
       declinedByUid: currentUser ? currentUser.uid : null,
       updatedAt: Timestamp.now(),
     });
+    console.log(`Declined order ${orderId}`);
   } catch (e) {
-    console.error(e);
-    alert("Could not decline order.");
+    console.error("Order decline error:", e);
+    alert(e.message || "Could not decline order.");
   }
 }
 
@@ -2798,15 +2803,17 @@ async function handleDeclinedOrderDelete(orderId) {
 async function handleOrderAssign(orderId, staffUid) {
   const orderRef = doc(db, "orders", orderId);
   const staff = staffMembers.find((s) => s.uid === staffUid);
+  const staffName = staff ? staff.displayName : (staffUid ? "Staff Member" : null);
   try {
     await updateDoc(orderRef, {
       assignedToUid: staffUid || null,
-      assignedToName: staff ? staff.displayName : null,
+      assignedToName: staffName,
       updatedAt: Timestamp.now(),
     });
+    console.log(`Assigned order ${orderId} to ${staffName || "Unassigned"}`);
   } catch (e) {
-    console.error(e);
-    alert("Failed to assign rider.");
+    console.error("Order assignment failed:", e);
+    alert("Failed to assign staff member: " + (e.message || ""));
     applyOrdersFilter();
   }
 }
@@ -3007,6 +3014,96 @@ if (workshopQueueTable) {
 let activeChatSessionId = null;
 let activeChatUnsubscribe = null;
 let allChatSessions = [];
+const sessionMessageUnsubs = new Map();
+const sessionUnreadCounts = new Map();
+const sessionLatestMessages = new Map();
+
+function playChatNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (e) {
+    // Autoplay policy might mute until user interaction, ignore safely
+  }
+}
+
+function showChatNotificationToast(messageText, session) {
+  let container = document.getElementById("lanica-chat-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "lanica-chat-toast-container";
+    container.style.cssText =
+      "position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 360px;";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.style.cssText =
+    "background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-left: 4px solid #ef4444; transition: transform 0.2s, opacity 0.2s;";
+  toast.innerHTML = `
+    <div style="flex: 1; margin-right: 10px;">
+      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px;">💬 New Customer Message</div>
+      <div style="color: #f3f4f6; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;">
+        <strong>${escapeHtml(session?.customerName || "Customer")}:</strong> ${escapeHtml(messageText)}
+      </div>
+    </div>
+    <button type="button" style="background: none; border: none; color: #9ca3af; font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 4px;">✕</button>
+  `;
+
+  toast.addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON" && session) {
+      const chatNav = document.getElementById("nav-chats");
+      if (chatNav) chatNav.click();
+      const sessionsListEl = document.getElementById("admin-chat-sessions-list");
+      if (sessionsListEl) {
+        const item = sessionsListEl.querySelector(`[data-session-id="${session.id}"]`);
+        if (item) item.click();
+      }
+    }
+    toast.remove();
+  });
+
+  const closeBtn = toast.querySelector("button");
+  if (closeBtn) closeBtn.addEventListener("click", () => toast.remove());
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentNode) toast.remove();
+  }, 7000);
+}
+
+function updateAdminNavChatBadge() {
+  let totalUnread = 0;
+  sessionUnreadCounts.forEach((count) => {
+    totalUnread += count;
+  });
+
+  const navBadge = document.getElementById("nav-chat-unread-badge");
+  if (navBadge) {
+    if (totalUnread > 0) {
+      navBadge.textContent = totalUnread > 99 ? "99+" : String(totalUnread);
+      navBadge.style.display = "inline-block";
+    } else {
+      navBadge.style.display = "none";
+    }
+  }
+}
 
 function setupAdminLiveChat() {
   const sessionsListEl = document.getElementById("admin-chat-sessions-list");
@@ -3050,41 +3147,227 @@ function setupAdminLiveChat() {
     });
   }
 
-  // Subscribe to all chat sessions in Firestore
+  let currentChatFilter = "all";
+  const filterAllBtn = document.getElementById("admin-chat-filter-all");
+  const filterSupportBtn = document.getElementById("admin-chat-filter-support");
+  const filterOrdersBtn = document.getElementById("admin-chat-filter-orders");
+
+  function setChatFilter(filter) {
+    currentChatFilter = filter;
+    [filterAllBtn, filterSupportBtn, filterOrdersBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.style.background = "#fff";
+      btn.style.color = "#374151";
+      btn.style.border = "1px solid #d1d5db";
+    });
+    const activeBtn =
+      filter === "support"
+        ? filterSupportBtn
+        : filter === "orders"
+        ? filterOrdersBtn
+        : filterAllBtn;
+    if (activeBtn) {
+      activeBtn.style.background = "#111827";
+      activeBtn.style.color = "#fff";
+      activeBtn.style.border = "none";
+    }
+    renderChatSessionsList(allChatSessions);
+  }
+
+  if (filterAllBtn) filterAllBtn.addEventListener("click", () => setChatFilter("all"));
+  if (filterSupportBtn) filterSupportBtn.addEventListener("click", () => setChatFilter("support"));
+  if (filterOrdersBtn) filterOrdersBtn.addEventListener("click", () => setChatFilter("orders"));
+
+  // Subscribe to all conversations (both live support & orders)
   subscribeToAllChats((sessions) => {
     allChatSessions = sessions;
+    attachMessageListeners(sessions);
     renderChatSessionsList(sessions);
   });
 
+  function attachMessageListeners(sessions) {
+    sessions.forEach((s) => {
+      if (sessionMessageUnsubs.has(s.id)) return;
+
+      const isSupport = s.sessionType === "support" || s.isUserSupport || String(s.id).startsWith("user_");
+      const cleanUid = s.userId || s.actualId || String(s.id).replace(/^user_/, "");
+      const messagesColRef = isSupport
+        ? collection(db, "users", cleanUid, "messages")
+        : collection(db, "orders", s.id, "messages");
+
+      const unsub = onSnapshot(messagesColRef, (snapshot) => {
+        let unread = 0;
+        let latestMsg = null;
+        let latestTime = 0;
+
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          const isFromStaff =
+            d.senderRole === "admin" ||
+            d.senderRole === "staff" ||
+            d.senderId === "support_admin";
+
+          // Unread by admin if sent by customer and isRead is false
+          if (!isFromStaff && d.isRead === false) {
+            unread++;
+          }
+
+          const msgTime =
+            d.timestamp?.toMillis?.() ||
+            d.createdAt?.toMillis?.() ||
+            (d.timestamp?.seconds ? d.timestamp.seconds * 1000 : 0) ||
+            (d.createdAt?.seconds ? d.createdAt.seconds * 1000 : 0) ||
+            0;
+
+          if (msgTime >= latestTime) {
+            latestTime = msgTime;
+            latestMsg = d;
+          }
+        });
+
+        const prevUnread = sessionUnreadCounts.get(s.id) || 0;
+        sessionUnreadCounts.set(s.id, unread);
+
+        if (latestMsg) {
+          const textPreview =
+            latestMsg.content ||
+            latestMsg.text ||
+            latestMsg.message ||
+            (latestMsg.type === 1 || latestMsg.attachmentUrl || latestMsg.imageUrl
+              ? "[Photo Attachment]"
+              : "");
+
+          sessionLatestMessages.set(s.id, {
+            text: textPreview,
+            time: latestMsg.timestamp || latestMsg.createdAt,
+            timeMs: latestTime,
+            isFromStaff:
+              latestMsg.senderRole === "admin" ||
+              latestMsg.senderRole === "staff" ||
+              latestMsg.senderId === "support_admin",
+          });
+        }
+
+        // New unread customer message notification
+        if (unread > prevUnread && activeChatSessionId !== s.id) {
+          playChatNotificationSound();
+          const preview =
+            latestMsg?.content ||
+            latestMsg?.text ||
+            latestMsg?.message ||
+            "Sent an attachment";
+          showChatNotificationToast(preview, s);
+        }
+
+        // If this conversation is currently open, mark read immediately
+        if (activeChatSessionId === s.id && unread > 0) {
+          markOrderMessagesAsRead(s.id, "admin", isSupport);
+          sessionUnreadCounts.set(s.id, 0);
+        }
+
+        updateAdminNavChatBadge();
+        renderChatSessionsList(allChatSessions);
+      });
+
+      sessionMessageUnsubs.set(s.id, unsub);
+    });
+  }
+
   function renderChatSessionsList(sessions) {
     if (!sessionsListEl) return;
-    if (sessions.length === 0) {
-      sessionsListEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No active customer chats.</div>`;
+
+    // Filter by active category tab
+    const filteredSessions = sessions.filter((s) => {
+      if (currentChatFilter === "support") return s.sessionType === "support";
+      if (currentChatFilter === "orders") return s.sessionType === "order";
+      return true;
+    });
+
+    if (filteredSessions.length === 0) {
+      sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
+        currentChatFilter === "support"
+          ? "general live support"
+          : currentChatFilter === "orders"
+          ? "order crafting"
+          : "active"
+      } conversations found.</div>`;
       return;
     }
 
+    // Sort: Unread conversations first, then by most recent message/order time
+    const sorted = [...filteredSessions].sort((a, b) => {
+      const unreadA = sessionUnreadCounts.get(a.id) || 0;
+      const unreadB = sessionUnreadCounts.get(b.id) || 0;
+      if (unreadA > 0 && unreadB === 0) return -1;
+      if (unreadB > 0 && unreadA === 0) return 1;
+
+      const timeA =
+        sessionLatestMessages.get(a.id)?.timeMs ||
+        a.updatedAt?.toMillis?.() ||
+        a.createdAt?.toMillis?.() ||
+        0;
+      const timeB =
+        sessionLatestMessages.get(b.id)?.timeMs ||
+        b.updatedAt?.toMillis?.() ||
+        b.createdAt?.toMillis?.() ||
+        0;
+      return timeB - timeA;
+    });
+
     sessionsListEl.innerHTML = "";
-    sessions.forEach((s) => {
+    sorted.forEach((s) => {
       const isSelected = s.id === activeChatSessionId;
+      const unreadCount = sessionUnreadCounts.get(s.id) || 0;
+      const latestInfo = sessionLatestMessages.get(s.id);
+      const displayMessage = latestInfo?.text || s.lastMessage || "No messages yet";
+      const isSupport = s.sessionType === "support";
+
+      const timeVal = latestInfo?.time || s.updatedAt || s.createdAt;
+      const timeStr = timeVal?.toDate
+        ? timeVal.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
+
       const item = document.createElement("div");
       item.className = "chat-session-item";
+      item.setAttribute("data-session-id", s.id);
       item.style.cssText = `padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
-        isSelected ? "#eff6ff" : "#fff"
+        isSelected ? "#eff6ff" : unreadCount > 0 ? "#fef2f2" : "#fff"
+      }; border-left: ${
+        isSelected ? "4px solid #3b82f6" : unreadCount > 0 ? "4px solid #ef4444" : "4px solid transparent"
       }; transition: background 0.15s;`;
-
-      const timeStr = s.updatedAt?.toDate
-        ? s.updatedAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : "";
 
       item.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <strong style="font-size: 0.88rem; color: #111827;">${escapeHtml(
-            s.userName || s.userEmail || "Customer"
-          )}</strong>
+          <strong style="font-size: 0.85rem; color: ${unreadCount > 0 ? "#991b1b" : "#111827"}; display: flex; align-items: center; gap: 6px;">
+            ${escapeHtml(s.customerName || "Customer")}
+            ${
+              isSupport
+                ? `<span style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Live Support</span>`
+                : `<span style="font-weight: 400; color: #6b7280; font-size: 0.76rem;">#${escapeHtml(s.orderId || s.id)}</span>`
+            }
+          </strong>
           <span style="font-size: 0.72rem; color: #9ca3af;">${timeStr}</span>
         </div>
-        <div style="font-size: 0.78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${escapeHtml(s.lastMessage || "No messages yet")}
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+          <span style="font-size: 0.70rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: ${
+            isSupport ? "#ecfdf5" : "#f3f4f6"
+          }; color: ${isSupport ? "#047857" : "#4b5563"};">
+            ${escapeHtml(s.status || (isSupport ? "Live Support" : "Placed"))}
+          </span>
+          ${
+            unreadCount > 0
+              ? `<span style="background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount}</span>`
+              : ""
+          }
+        </div>
+        <div style="font-size: 0.78rem; color: ${
+          unreadCount > 0 ? "#111827" : "#6b7280"
+        }; font-weight: ${
+        unreadCount > 0 ? "600" : "400"
+      }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${unreadCount > 0 ? `<span style="color: #ef4444; margin-right: 4px;">●</span>` : ""}${escapeHtml(
+        displayMessage
+      )}
         </div>
       `;
 
@@ -3098,11 +3381,35 @@ function setupAdminLiveChat() {
 
   function selectChatSession(session) {
     activeChatSessionId = session.id;
-    if (customerNameEl) customerNameEl.textContent = session.userName || session.userEmail || "Customer";
-    if (customerEmailEl)
-      customerEmailEl.textContent = session.userEmail
-        ? `${session.userEmail} (ID: ${session.id})`
-        : `User ID: ${session.id}`;
+    const isSupport = session.sessionType === "support";
+
+    // Immediately clear unread status for this session
+    sessionUnreadCounts.set(session.id, 0);
+    updateAdminNavChatBadge();
+    markOrderMessagesAsRead(session.id, "admin", isSupport);
+
+    if (customerNameEl) {
+      if (isSupport) {
+        customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">💬 LIVE SUPPORT</span>${escapeHtml(
+          session.customerName || "Customer"
+        )}`;
+      } else {
+        customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">🧵 ORDER #${escapeHtml(
+          session.orderId || session.id
+        )}</span>${escapeHtml(session.customerName || "Customer")}`;
+      }
+    }
+    if (customerEmailEl) {
+      if (isSupport) {
+        customerEmailEl.textContent = `Email: ${session.customerEmail || "Not provided"} • Customer ID: ${
+          session.userId || session.actualId
+        }`;
+      } else {
+        customerEmailEl.textContent = `Status: ${session.status || "Placed"} | Total: ₱${Number(
+          session.totalAmount || 0
+        ).toLocaleString()} (Doc ID: ${session.id})`;
+      }
+    }
 
     renderChatSessionsList(allChatSessions);
 
@@ -3110,37 +3417,63 @@ function setupAdminLiveChat() {
 
     activeChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
       if (!messagesEl) return;
+
+      // Mark messages read in real time as they arrive while chat is open
+      markOrderMessagesAsRead(session.id, "admin", isSupport);
+      sessionUnreadCounts.set(session.id, 0);
+      updateAdminNavChatBadge();
+
       if (messages.length === 0) {
-        messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this conversation yet. Send a greeting!</div>`;
+        messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this ${
+          isSupport ? "support" : "order"
+        } thread yet. Send a greeting!</div>`;
         return;
       }
 
       messagesEl.innerHTML = "";
       messages.forEach((m) => {
-        const isStaff = m.senderRole === "admin" || m.senderRole === "staff";
+        const isStaff =
+          m.senderRole === "admin" ||
+          m.senderRole === "staff" ||
+          m.senderId === "support_admin";
+
         const row = document.createElement("div");
         row.style.cssText = `display: flex; flex-direction: column; align-items: ${
           isStaff ? "flex-end" : "flex-start"
-        }; margin-bottom: 10px;`;
+        }; margin-bottom: 12px;`;
 
-        const senderLabel = isStaff ? "Lanica Workshop" : m.senderName || "Customer";
-        const timeStr = m.createdAt?.toDate
-          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        const senderLabel = isStaff
+          ? "Lanica Workshop & Admin"
+          : session.customerName || m.senderName || "Customer";
+
+        const timeVal = m.timestamp || m.createdAt;
+        const timeStr = timeVal?.toDate
+          ? timeVal.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           : "";
 
+        const textContent = m.content || m.text || m.message || "";
+        const mediaUrl =
+          m.attachmentUrl || m.imageUrl || (m.type === 1 ? m.content : "") || "";
+
         row.innerHTML = `
-          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">${escapeHtml(
-            senderLabel
-          )} • ${timeStr}</span>
+          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
+            ${escapeHtml(senderLabel)} • ${timeStr}
+          </span>
           <div style="max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
             isStaff ? "#6b4423" : "#ffffff"
           }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
           isStaff ? "#6b4423" : "#e5e7eb"
-        };">
-            ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+        }; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             ${
-              m.attachmentUrl
-                ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" style="max-width: 220px; max-height: 160px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
+              m.isUnsent
+                ? `<p style="margin: 0; font-style: italic; color: #9ca3af;">This message was unsent</p>`
+                : textContent
+                ? `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(textContent)}</p>`
+                : ""
+            }
+            ${
+              mediaUrl && !m.isUnsent
+                ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" style="max-width: 240px; max-height: 180px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
                 : ""
             }
           </div>
@@ -3149,7 +3482,7 @@ function setupAdminLiveChat() {
       });
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
-    });
+    }, null, isSupport);
   }
 
   if (chatForm) {
@@ -3162,20 +3495,30 @@ function setupAdminLiveChat() {
         return;
       }
 
+      const activeSession = allChatSessions.find((s) => s.id === activeChatSessionId);
+      const isSupport = activeSession?.sessionType === "support";
+
       try {
         let attachmentUrl = "";
         if (attachedFile) {
-          attachmentUrl = await uploadChatAttachment(attachedFile, activeChatSessionId);
+          attachmentUrl = await uploadChatAttachment(
+            attachedFile,
+            isSupport ? `support_${activeSession?.userId || "user"}` : activeChatSessionId
+          );
           attachedFile = null;
           if (fileInput) fileInput.value = "";
           if (attachPreview) attachPreview.style.display = "none";
         }
 
         await sendChatMessage({
-          chatId: activeChatSessionId,
-          senderId: currentUser ? currentUser.uid : "admin",
+          orderId: isSupport ? null : activeChatSessionId,
+          userId: isSupport ? (activeSession?.userId || activeSession?.actualId) : null,
+          sessionType: activeSession?.sessionType || "order",
+          isUserSupport: isSupport,
+          senderId: currentUser ? currentUser.uid : "support_admin",
           senderName: "Lanica Workshop & Admin",
           senderRole: "admin",
+          receiverId: activeSession?.userId || "customer",
           text: text,
           attachmentUrl: attachmentUrl,
         });

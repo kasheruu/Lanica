@@ -69,11 +69,12 @@
         </svg>
         Workshop Queue
       </a>
-      <a href="#" class="nav-item" id="nav-chats" data-section="chats">
+      <a href="#" class="nav-item" id="nav-chats" data-section="chats" style="position: relative;">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>
-        Live Chat
+        <span>Live Chat</span>
+        <span id="nav-chat-unread-badge" style="display: none; margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">0</span>
       </a>
       <a href="#" class="nav-item" id="nav-orders" data-section="orders">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -675,7 +676,12 @@
         <div style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
           <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #fff;">
             <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Active Conversations</h3>
-            <span style="font-size: 0.78rem; color: #6b7280;">Real-time customer inquiries</span>
+            <span style="font-size: 0.78rem; color: #6b7280;">Real-time customer inquiries & workshop chats</span>
+          </div>
+          <div style="display: flex; gap: 6px; padding: 8px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
+            <button type="button" id="admin-chat-filter-all" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #111827; color: #fff;">All</button>
+            <button type="button" id="admin-chat-filter-support" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer; background: #fff; color: #374151;">💬 Support</button>
+            <button type="button" id="admin-chat-filter-orders" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer; background: #fff; color: #374151;">🧵 Orders</button>
           </div>
           <div id="admin-chat-sessions-list" style="flex: 1; overflow-y: auto;">
             <div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">

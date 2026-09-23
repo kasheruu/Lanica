@@ -308,63 +308,182 @@
       </div>
     </div>
 
-    <!-- Floating Live Chat Widget Button -->
-    <div id="lanica-chat-launcher" class="chat-launcher-btn" title="Chat with Lanica Workshop">
+    <!-- Floating Live Support / Chat Widget Button -->
+    <div id="lanica-chat-launcher" class="chat-launcher-btn" title="Contact Lanica Support">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
-      <span class="chat-launcher-label">Chat Workshop</span>
+      <span class="chat-launcher-label">Contact Support</span>
       <span id="chat-unread-badge" class="chat-badge-bubble" style="display: none;">0</span>
     </div>
 
-    <!-- Live Chat Drawer / Window -->
+    <!-- Contact Support & Live Chat Drawer Container -->
     <div id="lanica-chat-drawer" class="chat-drawer-container">
-      <div class="chat-drawer-header">
-        <div class="chat-header-info">
-          <div class="chat-avatar-ring">
-            <span class="chat-status-dot"></span>
-            <img src="assets/lanicalogo.jpg" alt="Lanica Workshop Support" />
+      
+      <!-- SCREEN 1: CONTACT SUPPORT MENU (Matches App Image 3) -->
+      <div id="support-menu-screen" class="support-screen active">
+        <div class="support-screen-header">
+          <span class="support-screen-title">CONTACT SUPPORT</span>
+          <button type="button" class="chat-close-btn close-support-drawer" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="support-menu-body">
+          <div class="support-intro-card">
+            <h2>We're here to help</h2>
+            <p>Have a question about an order or our AR furniture? Reach out to us through any of these channels.</p>
           </div>
-          <div>
-            <h4>Lanica Design & Workshop</h4>
-            <small>Direct line for custom orders & updates</small>
+
+          <div class="support-section-label">CHOOSE YOUR PREFERRED METHOD</div>
+
+          <div class="support-methods-list">
+            <!-- 1. Live Support Chat -->
+            <div id="open-live-chat-btn" class="support-method-card" role="button" tabindex="0">
+              <div class="method-icon-box yellow">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </div>
+              <div class="method-info">
+                <h4>Live Support Chat</h4>
+                <p>Chat with our staff in real time</p>
+                <span class="method-badge active">Active Now</span>
+              </div>
+              <svg class="method-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+
+            <!-- 2. Email Us -->
+            <a href="mailto:support@lanica.com" class="support-method-card text-decoration-none">
+              <div class="method-icon-box blue">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+              </div>
+              <div class="method-info">
+                <h4>Email Us</h4>
+                <p>Response within 24 hours</p>
+                <span class="method-link">support@lanica.com</span>
+              </div>
+              <svg class="method-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </a>
+
+            <!-- 3. Call Our Hotline -->
+            <a href="tel:+639000000000" class="support-method-card text-decoration-none">
+              <div class="method-icon-box green">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+              </div>
+              <div class="method-info">
+                <h4>Call Our Hotline</h4>
+                <p>Mon - Fri, 9am - 5pm</p>
+                <span class="method-link phone">+63 9XX XXX XXXX</span>
+              </div>
+              <svg class="method-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </a>
+          </div>
+
+          <div class="support-footer-section">
+            <span class="support-footer-label">FOLLOW US</span>
+            <div class="support-social-row">
+              <a href="https://facebook.com" target="_blank" rel="noopener" class="social-bubble fb" aria-label="Facebook">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                </svg>
+              </a>
+              <a href="https://instagram.com" target="_blank" rel="noopener" class="social-bubble ig" aria-label="Instagram">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+              </a>
+              <a href="https://lanica.com" target="_blank" rel="noopener" class="social-bubble web" aria-label="Website">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
-        <button id="close-chat-btn" class="chat-close-btn" aria-label="Close Chat">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
       </div>
 
-      <div id="chat-messages-area" class="chat-messages-body">
-        <div class="chat-welcome-card">
-          <p>👋 <strong>Kumusta!</strong> Have a question about your order progress or customization? Message our workshop craftsmen directly right here.</p>
+      <!-- SCREEN 2: LIVE SUPPORT CHAT CONVERSATION (Matches App Image 2) -->
+      <div id="live-chat-screen" class="support-screen">
+        <div class="chat-drawer-header">
+          <div class="chat-header-info">
+            <button type="button" id="back-to-support-menu-btn" class="chat-back-btn" title="Back to Contact Options">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <div class="chat-avatar-ring">
+              <span class="chat-status-dot"></span>
+              <img src="assets/lanicalogo.jpg" alt="Lanica Support" />
+            </div>
+            <div>
+              <h4 id="chat-header-title">LANICA SUPPORT</h4>
+              <small id="chat-header-status">Online · Replies in 5m</small>
+            </div>
+          </div>
+          <button type="button" id="close-chat-btn" class="chat-close-btn close-support-drawer" aria-label="Close Chat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
+
+        <!-- Thread Switcher (Overall Concern vs Order Channel) -->
+        <div id="customer-chat-channel-bar" class="chat-channel-bar" style="display: none;">
+          <!-- Dynamically populated if customer has active orders -->
+        </div>
+
+        <div id="chat-messages-area" class="chat-messages-body">
+          <div class="chat-welcome-card">
+            <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Live Support. You can ask us about order status, custom dimensions, wood finishes, or questions about our AR app!</p>
+          </div>
+        </div>
+
+        <!-- Attachment Preview -->
+        <div id="chat-attachment-preview" class="chat-attachment-preview" style="display: none;">
+          <span id="chat-attachment-name">attachment.jpg</span>
+          <button type="button" id="chat-cancel-attachment">&times;</button>
+        </div>
+
+        <!-- Input Form -->
+        <form id="chat-input-form" class="chat-input-container">
+          <label for="chat-file-input" class="chat-attach-btn" title="Attach photo or swatch">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            <input type="file" id="chat-file-input" accept="image/*" style="display: none;" />
+          </label>
+          <input type="text" id="chat-text-input" placeholder="Type a message..." autocomplete="off" />
+          <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send Message">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
       </div>
 
-      <!-- Attachment Preview -->
-      <div id="chat-attachment-preview" class="chat-attachment-preview" style="display: none;">
-        <span id="chat-attachment-name">attachment.jpg</span>
-        <button type="button" id="chat-cancel-attachment">&times;</button>
-      </div>
-
-      <form id="chat-input-form" class="chat-input-container">
-        <label for="chat-file-input" class="chat-attach-btn" title="Attach photo or swatch">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-          </svg>
-          <input type="file" id="chat-file-input" accept="image/*" style="display: none;" />
-        </label>
-        <input type="text" id="chat-text-input" placeholder="Type a message or inquiry..." autocomplete="off" />
-        <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send Message">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
-        </button>
-      </form>
     </div>
 
     <!-- Toast Notification Container -->

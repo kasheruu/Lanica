@@ -31,6 +31,7 @@ import {
   subscribeToMessages,
   sendChatMessage,
   uploadChatAttachment,
+  markOrderMessagesAsRead,
 } from "./chatService.js";
 
 const firebaseConfig = {
@@ -1207,17 +1208,21 @@ function renderOrders() {
       <td>${manualOverrideInput}</td>
       <td>
         ${
-          updateOptions.length > 0
-            ? `<select class="staff-status-select" data-order-id="${escapeHtml(order.id)}" aria-label="Update order status">
-                <option value="">Select update</option>
-                ${updateOptions
-                  .map(
-                    (opt) =>
-                      `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`
-                  )
-                  .join("")}
-              </select>`
-            : `<span style="font-size:0.82rem;color:#6b7280;">No actions</span>`
+          order.assignedToUid === currentUser?.uid
+            ? updateOptions.length > 0
+              ? `<select class="staff-status-select" data-order-id="${escapeHtml(order.id)}" aria-label="Update order status">
+                  <option value="">Select update</option>
+                  ${updateOptions
+                    .map(
+                      (opt) =>
+                        `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`
+                    )
+                    .join("")}
+                </select>`
+              : `<span style="font-size:0.82rem;color:#059669;font-weight:500;">In Progress</span>`
+            : `<button type="button" class="btn-primary btn-claim-order" data-order-id="${escapeHtml(order.id)}" style="padding: 5px 12px; font-size: 0.78rem; border-radius: 6px; white-space: nowrap; background: #6b4423; color: #fff; border: none; cursor: pointer; font-weight: 500;">
+                Claim Order
+              </button>`
         }
       </td>
     `;
@@ -1881,9 +1886,15 @@ onAuthStateChanged(auth, async (user) => {
 
   await loadMyProfile();
 
-  const ordersQuery = query(collection(db, "orders"), where("assignedToUid", "==", user.uid));
+  const ordersQuery = query(collection(db, "orders"));
   onSnapshot(ordersQuery, (snapshot) => {
-    allAssignedOrders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const all = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Include orders assigned to this staff member, OR unassigned active crafting orders
+    allAssignedOrders = all.filter((o) => {
+      const isAssignedToMe = o.assignedToUid === user.uid;
+      const isUnassigned = !o.assignedToUid;
+      return isAssignedToMe || isUnassigned;
+    });
     allAssignedOrders.sort((a, b) => {
       const aTs = a.createdAt && a.createdAt.seconds ? a.createdAt.seconds : 0;
       const bTs = b.createdAt && b.createdAt.seconds ? b.createdAt.seconds : 0;
@@ -2956,9 +2967,32 @@ if (ordersListEl) {
     updateOrderStatus(id, val);
   });
 
-  // Add event listener for manual override buttons
-  ordersListEl.addEventListener("click", (e) => {
+  // Add event listener for manual override and claim buttons
+  ordersListEl.addEventListener("click", async (e) => {
     const t = e.target;
+    const claimBtn = t.closest(".btn-claim-order");
+    if (claimBtn) {
+      const orderId = claimBtn.getAttribute("data-order-id");
+      if (!orderId || !currentUser) return;
+      try {
+        claimBtn.disabled = true;
+        claimBtn.textContent = "Claiming...";
+        const staffName = pickFirstNonEmpty(currentUser.displayName, currentUser.name, currentUser.email, "Staff Artisan");
+        await updateDoc(doc(db, "orders", orderId), {
+          assignedToUid: currentUser.uid,
+          assignedToName: staffName,
+          updatedAt: Timestamp.now(),
+        });
+        console.log(`Staff ${currentUser.uid} claimed order ${orderId}`);
+      } catch (err) {
+        console.error("Failed to claim order:", err);
+        alert("Failed to claim order: " + (err.message || ""));
+        claimBtn.disabled = false;
+        claimBtn.textContent = "Claim Order";
+      }
+      return;
+    }
+
     if (!t.classList.contains("apply-manual-date-btn")) return;
 
     const orderId = t.getAttribute("data-order-id");
@@ -3002,6 +3036,96 @@ if (logoutBtn) {
 let activeStaffChatSessionId = null;
 let activeStaffChatUnsubscribe = null;
 let allStaffChatSessions = [];
+const staffSessionMessageUnsubs = new Map();
+const staffSessionUnreadCounts = new Map();
+const staffSessionLatestMessages = new Map();
+
+function playStaffChatNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (e) {
+    // Autoplay policy might mute until user interaction, ignore safely
+  }
+}
+
+function showStaffChatNotificationToast(messageText, session) {
+  let container = document.getElementById("staff-chat-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "staff-chat-toast-container";
+    container.style.cssText =
+      "position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 360px;";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.style.cssText =
+    "background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-left: 4px solid #ef4444; transition: transform 0.2s, opacity 0.2s;";
+  toast.innerHTML = `
+    <div style="flex: 1; margin-right: 10px;">
+      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px;">💬 Customer Message</div>
+      <div style="color: #f3f4f6; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;">
+        <strong>${escapeHtml(session?.customerName || "Customer")}:</strong> ${escapeHtml(messageText)}
+      </div>
+    </div>
+    <button type="button" style="background: none; border: none; color: #9ca3af; font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 4px;">✕</button>
+  `;
+
+  toast.addEventListener("click", (e) => {
+    if (e.target.tagName !== "BUTTON" && session) {
+      const chatNav = document.getElementById("nav-staff-chats");
+      if (chatNav) chatNav.click();
+      const sessionsListEl = document.getElementById("staff-chat-sessions-list");
+      if (sessionsListEl) {
+        const item = sessionsListEl.querySelector(`[data-session-id="${session.id}"]`);
+        if (item) item.click();
+      }
+    }
+    toast.remove();
+  });
+
+  const closeBtn = toast.querySelector("button");
+  if (closeBtn) closeBtn.addEventListener("click", () => toast.remove());
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentNode) toast.remove();
+  }, 7000);
+}
+
+function updateStaffNavChatBadge() {
+  let totalUnread = 0;
+  staffSessionUnreadCounts.forEach((count) => {
+    totalUnread += count;
+  });
+
+  const navBadge = document.getElementById("staff-nav-chat-unread-badge");
+  if (navBadge) {
+    if (totalUnread > 0) {
+      navBadge.textContent = totalUnread > 99 ? "99+" : String(totalUnread);
+      navBadge.style.display = "inline-block";
+    } else {
+      navBadge.style.display = "none";
+    }
+  }
+}
 
 function setupStaffLiveChat() {
   const sessionsListEl = document.getElementById("staff-chat-sessions-list");
@@ -3045,40 +3169,221 @@ function setupStaffLiveChat() {
     });
   }
 
+  let currentStaffChatFilter = "all";
+  const filterAllBtn = document.getElementById("staff-chat-filter-all");
+  const filterSupportBtn = document.getElementById("staff-chat-filter-support");
+  const filterOrdersBtn = document.getElementById("staff-chat-filter-orders");
+
+  function setStaffChatFilter(filter) {
+    currentStaffChatFilter = filter;
+    [filterAllBtn, filterSupportBtn, filterOrdersBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.style.background = "#fff";
+      btn.style.color = "#374151";
+      btn.style.border = "1px solid #d1d5db";
+    });
+    const activeBtn =
+      filter === "support"
+        ? filterSupportBtn
+        : filter === "orders"
+        ? filterOrdersBtn
+        : filterAllBtn;
+    if (activeBtn) {
+      activeBtn.style.background = "#111827";
+      activeBtn.style.color = "#fff";
+      activeBtn.style.border = "none";
+    }
+    renderStaffChatSessionsList(allStaffChatSessions);
+  }
+
+  if (filterAllBtn) filterAllBtn.addEventListener("click", () => setStaffChatFilter("all"));
+  if (filterSupportBtn) filterSupportBtn.addEventListener("click", () => setStaffChatFilter("support"));
+  if (filterOrdersBtn) filterOrdersBtn.addEventListener("click", () => setStaffChatFilter("orders"));
+
   subscribeToAllChats((sessions) => {
     allStaffChatSessions = sessions;
+    attachStaffMessageListeners(sessions);
     renderStaffChatSessionsList(sessions);
   });
 
+  function attachStaffMessageListeners(sessions) {
+    sessions.forEach((s) => {
+      if (staffSessionMessageUnsubs.has(s.id)) return;
+
+      const isSupport = s.sessionType === "support" || s.isUserSupport || String(s.id).startsWith("user_");
+      const cleanUid = s.userId || s.actualId || String(s.id).replace(/^user_/, "");
+      const messagesColRef = isSupport
+        ? collection(db, "users", cleanUid, "messages")
+        : collection(db, "orders", s.id, "messages");
+
+      const unsub = onSnapshot(messagesColRef, (snapshot) => {
+        let unread = 0;
+        let latestMsg = null;
+        let latestTime = 0;
+
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          const isFromStaff =
+            d.senderRole === "admin" ||
+            d.senderRole === "staff" ||
+            d.senderId === "support_admin";
+
+          if (!isFromStaff && d.isRead === false) {
+            unread++;
+          }
+
+          const msgTime =
+            d.timestamp?.toMillis?.() ||
+            d.createdAt?.toMillis?.() ||
+            (d.timestamp?.seconds ? d.timestamp.seconds * 1000 : 0) ||
+            (d.createdAt?.seconds ? d.createdAt.seconds * 1000 : 0) ||
+            0;
+
+          if (msgTime >= latestTime) {
+            latestTime = msgTime;
+            latestMsg = d;
+          }
+        });
+
+        const prevUnread = staffSessionUnreadCounts.get(s.id) || 0;
+        staffSessionUnreadCounts.set(s.id, unread);
+
+        if (latestMsg) {
+          const textPreview =
+            latestMsg.content ||
+            latestMsg.text ||
+            latestMsg.message ||
+            (latestMsg.type === 1 || latestMsg.attachmentUrl || latestMsg.imageUrl
+              ? "[Photo Attachment]"
+              : "");
+
+          staffSessionLatestMessages.set(s.id, {
+            text: textPreview,
+            time: latestMsg.timestamp || latestMsg.createdAt,
+            timeMs: latestTime,
+            isFromStaff:
+              latestMsg.senderRole === "admin" ||
+              latestMsg.senderRole === "staff" ||
+              latestMsg.senderId === "support_admin",
+          });
+        }
+
+        if (unread > prevUnread && activeStaffChatSessionId !== s.id) {
+          playStaffChatNotificationSound();
+          const preview =
+            latestMsg?.content ||
+            latestMsg?.text ||
+            latestMsg?.message ||
+            "Sent an attachment";
+          showStaffChatNotificationToast(preview, s);
+        }
+
+        if (activeStaffChatSessionId === s.id && unread > 0) {
+          markOrderMessagesAsRead(s.id, "staff", isSupport);
+          staffSessionUnreadCounts.set(s.id, 0);
+        }
+
+        updateStaffNavChatBadge();
+        renderStaffChatSessionsList(allStaffChatSessions);
+      });
+
+      staffSessionMessageUnsubs.set(s.id, unsub);
+    });
+  }
+
   function renderStaffChatSessionsList(sessions) {
     if (!sessionsListEl) return;
-    if (sessions.length === 0) {
-      sessionsListEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No active customer chats.</div>`;
+
+    const filteredSessions = sessions.filter((s) => {
+      if (currentStaffChatFilter === "support") return s.sessionType === "support";
+      if (currentStaffChatFilter === "orders") return s.sessionType === "order";
+      return true;
+    });
+
+    if (filteredSessions.length === 0) {
+      sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
+        currentStaffChatFilter === "support"
+          ? "general live support"
+          : currentStaffChatFilter === "orders"
+          ? "order crafting"
+          : "active"
+      } conversations found.</div>`;
       return;
     }
 
+    const sorted = [...filteredSessions].sort((a, b) => {
+      const unreadA = staffSessionUnreadCounts.get(a.id) || 0;
+      const unreadB = staffSessionUnreadCounts.get(b.id) || 0;
+      if (unreadA > 0 && unreadB === 0) return -1;
+      if (unreadB > 0 && unreadA === 0) return 1;
+
+      const timeA =
+        staffSessionLatestMessages.get(a.id)?.timeMs ||
+        a.updatedAt?.toMillis?.() ||
+        a.createdAt?.toMillis?.() ||
+        0;
+      const timeB =
+        staffSessionLatestMessages.get(b.id)?.timeMs ||
+        b.updatedAt?.toMillis?.() ||
+        b.createdAt?.toMillis?.() ||
+        0;
+      return timeB - timeA;
+    });
+
     sessionsListEl.innerHTML = "";
-    sessions.forEach((s) => {
+    sorted.forEach((s) => {
       const isSelected = s.id === activeStaffChatSessionId;
+      const unreadCount = staffSessionUnreadCounts.get(s.id) || 0;
+      const latestInfo = staffSessionLatestMessages.get(s.id);
+      const displayMessage = latestInfo?.text || s.lastMessage || "No messages yet";
+      const isSupport = s.sessionType === "support";
+
+      const timeVal = latestInfo?.time || s.updatedAt || s.createdAt;
+      const timeStr = timeVal?.toDate
+        ? timeVal.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
+
       const item = document.createElement("div");
       item.className = "chat-session-item";
+      item.setAttribute("data-session-id", s.id);
       item.style.cssText = `padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
-        isSelected ? "#eff6ff" : "#fff"
+        isSelected ? "#eff6ff" : unreadCount > 0 ? "#fef2f2" : "#fff"
+      }; border-left: ${
+        isSelected ? "4px solid #3b82f6" : unreadCount > 0 ? "4px solid #ef4444" : "4px solid transparent"
       }; transition: background 0.15s;`;
-
-      const timeStr = s.updatedAt?.toDate
-        ? s.updatedAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : "";
 
       item.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <strong style="font-size: 0.88rem; color: #111827;">${escapeHtml(
-            s.userName || s.userEmail || "Customer"
-          )}</strong>
+          <strong style="font-size: 0.85rem; color: ${unreadCount > 0 ? "#991b1b" : "#111827"}; display: flex; align-items: center; gap: 6px;">
+            ${escapeHtml(s.customerName || "Customer")}
+            ${
+              isSupport
+                ? `<span style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Live Support</span>`
+                : `<span style="font-weight: 400; color: #6b7280; font-size: 0.76rem;">#${escapeHtml(s.orderId || s.id)}</span>`
+            }
+          </strong>
           <span style="font-size: 0.72rem; color: #9ca3af;">${timeStr}</span>
         </div>
-        <div style="font-size: 0.78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${escapeHtml(s.lastMessage || "No messages yet")}
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+          <span style="font-size: 0.70rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: ${
+            isSupport ? "#ecfdf5" : "#f3f4f6"
+          }; color: ${isSupport ? "#047857" : "#4b5563"};">
+            ${escapeHtml(s.status || (isSupport ? "Live Support" : "Placed"))}
+          </span>
+          ${
+            unreadCount > 0
+              ? `<span style="background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount}</span>`
+              : ""
+          }
+        </div>
+        <div style="font-size: 0.78rem; color: ${
+          unreadCount > 0 ? "#111827" : "#6b7280"
+        }; font-weight: ${
+        unreadCount > 0 ? "600" : "400"
+      }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${unreadCount > 0 ? `<span style="color: #ef4444; margin-right: 4px;">●</span>` : ""}${escapeHtml(
+        displayMessage
+      )}
         </div>
       `;
 
@@ -3092,11 +3397,34 @@ function setupStaffLiveChat() {
 
   function selectStaffChatSession(session) {
     activeStaffChatSessionId = session.id;
-    if (customerNameEl) customerNameEl.textContent = session.userName || session.userEmail || "Customer";
-    if (customerEmailEl)
-      customerEmailEl.textContent = session.userEmail
-        ? `${session.userEmail} (ID: ${session.id})`
-        : `User ID: ${session.id}`;
+    const isSupport = session.sessionType === "support";
+
+    staffSessionUnreadCounts.set(session.id, 0);
+    updateStaffNavChatBadge();
+    markOrderMessagesAsRead(session.id, "staff", isSupport);
+
+    if (customerNameEl) {
+      if (isSupport) {
+        customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">💬 LIVE SUPPORT</span>${escapeHtml(
+          session.customerName || "Customer"
+        )}`;
+      } else {
+        customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">🧵 ORDER #${escapeHtml(
+          session.orderId || session.id
+        )}</span>${escapeHtml(session.customerName || "Customer")}`;
+      }
+    }
+    if (customerEmailEl) {
+      if (isSupport) {
+        customerEmailEl.textContent = `Email: ${session.customerEmail || "Not provided"} • Customer ID: ${
+          session.userId || session.actualId
+        }`;
+      } else {
+        customerEmailEl.textContent = `Status: ${session.status || "Placed"} | Total: ₱${Number(
+          session.totalAmount || 0
+        ).toLocaleString()} (Doc ID: ${session.id})`;
+      }
+    }
 
     renderStaffChatSessionsList(allStaffChatSessions);
 
@@ -3104,37 +3432,62 @@ function setupStaffLiveChat() {
 
     activeStaffChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
       if (!messagesEl) return;
+
+      markOrderMessagesAsRead(session.id, "staff", isSupport);
+      staffSessionUnreadCounts.set(session.id, 0);
+      updateStaffNavChatBadge();
+
       if (messages.length === 0) {
-        messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this conversation yet. Send a greeting!</div>`;
+        messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this ${
+          isSupport ? "support" : "order"
+        } thread yet. Send a greeting!</div>`;
         return;
       }
 
       messagesEl.innerHTML = "";
       messages.forEach((m) => {
-        const isStaff = m.senderRole === "admin" || m.senderRole === "staff";
+        const isStaff =
+          m.senderRole === "admin" ||
+          m.senderRole === "staff" ||
+          m.senderId === "support_admin";
+
         const row = document.createElement("div");
         row.style.cssText = `display: flex; flex-direction: column; align-items: ${
           isStaff ? "flex-end" : "flex-start"
-        }; margin-bottom: 10px;`;
+        }; margin-bottom: 12px;`;
 
-        const senderLabel = isStaff ? "Workshop Artisan" : m.senderName || "Customer";
-        const timeStr = m.createdAt?.toDate
-          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        const senderLabel = isStaff
+          ? "Workshop Artisan & Staff"
+          : session.customerName || m.senderName || "Customer";
+
+        const timeVal = m.timestamp || m.createdAt;
+        const timeStr = timeVal?.toDate
+          ? timeVal.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           : "";
 
+        const textContent = m.content || m.text || m.message || "";
+        const mediaUrl =
+          m.attachmentUrl || m.imageUrl || (m.type === 1 ? m.content : "") || "";
+
         row.innerHTML = `
-          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">${escapeHtml(
-            senderLabel
-          )} • ${timeStr}</span>
+          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
+            ${escapeHtml(senderLabel)} • ${timeStr}
+          </span>
           <div style="max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
             isStaff ? "#6b4423" : "#ffffff"
           }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
           isStaff ? "#6b4423" : "#e5e7eb"
-        };">
-            ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+        }; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             ${
-              m.attachmentUrl
-                ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" style="max-width: 220px; max-height: 160px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
+              m.isUnsent
+                ? `<p style="margin: 0; font-style: italic; color: #9ca3af;">This message was unsent</p>`
+                : textContent
+                ? `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(textContent)}</p>`
+                : ""
+            }
+            ${
+              mediaUrl && !m.isUnsent
+                ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" style="max-width: 240px; max-height: 180px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
                 : ""
             }
           </div>
@@ -3143,7 +3496,7 @@ function setupStaffLiveChat() {
       });
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
-    });
+    }, null, isSupport);
   }
 
   if (chatForm) {
@@ -3152,24 +3505,34 @@ function setupStaffLiveChat() {
       const text = chatInput?.value || "";
       if (!text.trim() && !attachedFile) return;
       if (!activeStaffChatSessionId) {
-        alert("Please select a customer conversation first.");
+        alert("Please select a conversation first.");
         return;
       }
+
+      const activeSession = allStaffChatSessions.find((s) => s.id === activeStaffChatSessionId);
+      const isSupport = activeSession?.sessionType === "support";
 
       try {
         let attachmentUrl = "";
         if (attachedFile) {
-          attachmentUrl = await uploadChatAttachment(attachedFile, activeStaffChatSessionId);
+          attachmentUrl = await uploadChatAttachment(
+            attachedFile,
+            isSupport ? `support_${activeSession?.userId || "user"}` : activeStaffChatSessionId
+          );
           attachedFile = null;
           if (fileInput) fileInput.value = "";
           if (attachPreview) attachPreview.style.display = "none";
         }
 
         await sendChatMessage({
-          chatId: activeStaffChatSessionId,
+          orderId: isSupport ? null : activeStaffChatSessionId,
+          userId: isSupport ? (activeSession?.userId || activeSession?.actualId) : null,
+          sessionType: activeSession?.sessionType || "order",
+          isUserSupport: isSupport,
           senderId: currentUser ? currentUser.uid : "staff",
           senderName: currentUser?.displayName || "Workshop Artisan",
           senderRole: "staff",
+          receiverId: activeSession?.userId || "customer",
           text: text,
           attachmentUrl: attachmentUrl,
         });

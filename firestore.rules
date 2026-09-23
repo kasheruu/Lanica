@@ -55,6 +55,11 @@ service cloud.firestore {
       }
     }
 
+    // Allow collection group queries on messages for order chat and notifications
+    match /{path=**}/messages/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+
     // --- 4) VERIFICATION COLLECTIONS ---
     match /profile_verifications/{userId} {
       // Users can create and read their own verification records
@@ -90,14 +95,6 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Admins can update audit logs
       allow update: if isSignedIn();
-    }
-
-    // --- 7) CHATS ---
-    match /chats/{chatId} {
-      allow read, write: if isSignedIn();
-      match /messages/{messageId} {
-        allow read, write: if isSignedIn();
-      }
     }
   }
 }

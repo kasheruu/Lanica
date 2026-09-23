@@ -22,9 +22,10 @@ import {
 
 import { ensureAuth, subscribeToCart } from "./cartService.js";
 import {
-  getOrCreateUserChatSession,
   sendChatMessage,
   subscribeToMessages,
+  subscribeToUserSupportMessages,
+  markUserSupportMessagesAsRead,
   uploadChatAttachment,
 } from "./chatService.js";
 
@@ -341,6 +342,7 @@ function setupOrdersSubscription(userId) {
     allOrders = orders;
     updateTabBadges(orders);
     renderOrdersList();
+    liveChatController?.renderChannelBar?.();
   });
 }
 
@@ -442,15 +444,11 @@ function renderOrdersList() {
   container.querySelectorAll(".btn-chat-order").forEach((btn) => {
     btn.addEventListener("click", () => {
       const orderId = btn.getAttribute("data-order-id");
-      const drawer = document.getElementById("lanica-chat-drawer");
-      const input = document.getElementById("chat-text-input");
-      if (drawer) drawer.classList.add("active");
-      if (input && orderId) {
-        input.value = `Inquiring about Order #${orderId}: `;
-        input.focus();
+      if (orderId && liveChatController && liveChatController.openOrderChat) {
+        liveChatController.openOrderChat(orderId);
       }
+    });
   });
-}
 
 function getTabDisplayName(statusKey) {
   switch (statusKey) {
@@ -879,36 +877,81 @@ function setupMobileMenu() {
 function setupLiveChatWidget() {
   const launcher = document.getElementById("lanica-chat-launcher");
   const drawer = document.getElementById("lanica-chat-drawer");
-  const closeBtn = document.getElementById("close-chat-drawer-btn");
-  const form = document.getElementById("chat-send-form");
+  const menuScreen = document.getElementById("support-menu-screen");
+  const chatScreen = document.getElementById("live-chat-screen");
+  const openLiveChatBtn = document.getElementById("open-live-chat-btn");
+  const backToMenuBtn = document.getElementById("back-to-support-menu-btn");
+  const closeButtons = drawer ? drawer.querySelectorAll(".close-support-drawer") : [];
+  const channelBar = document.getElementById("customer-chat-channel-bar");
+  const form = document.getElementById("chat-input-form") || document.getElementById("chat-send-form");
   const textInput = document.getElementById("chat-text-input");
   const fileInput = document.getElementById("chat-file-input");
-  const attachBtn = document.getElementById("chat-attach-btn");
+  const attachBtn = document.getElementById("chat-attach-btn") || form?.querySelector(".chat-attach-btn");
   const previewBox = document.getElementById("chat-attachment-preview");
-  const previewName = document.getElementById("chat-preview-filename");
-  const cancelAttachBtn = document.getElementById("chat-cancel-attachment-btn");
+  const previewName = document.getElementById("chat-attachment-name") || document.getElementById("chat-preview-filename");
+  const cancelAttachBtn = document.getElementById("chat-cancel-attachment") || document.getElementById("chat-cancel-attachment-btn");
   const messagesArea = document.getElementById("chat-messages-area");
+  const unreadBadge = document.getElementById("chat-unread-badge");
+  const headerTitle = document.getElementById("chat-header-title");
+  const headerStatus = document.getElementById("chat-header-status");
 
   let attachedFile = null;
+  let currentChannel = "support"; // "support" | "order"
+  let activeChatOrderId = null;
+  let supportUnreadUnsubscribe = null;
+
+  function showScreen(screen) {
+    if (screen === "chat") {
+      menuScreen?.classList.remove("active");
+      chatScreen?.classList.add("active");
+    } else {
+      chatScreen?.classList.remove("active");
+      menuScreen?.classList.add("active");
+    }
+  }
 
   if (launcher && drawer) {
     launcher.addEventListener("click", () => {
+      const isOpening = !drawer.classList.contains("active");
       drawer.classList.toggle("active");
-      if (drawer.classList.contains("active")) {
-        textInput?.focus();
-        scrollChatToBottom();
+      if (isOpening) {
+        if (unreadBadge) unreadBadge.style.display = "none";
+        if (!chatScreen?.classList.contains("active")) {
+          showScreen("menu");
+        } else {
+          setTimeout(() => {
+            textInput?.focus();
+            scrollChatToBottom();
+          }, 100);
+        }
       }
     });
   }
 
-  if (closeBtn && drawer) {
-    closeBtn.addEventListener("click", () => {
-      drawer.classList.remove("active");
+  closeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      drawer?.classList.remove("active");
+    });
+  });
+
+  if (openLiveChatBtn) {
+    openLiveChatBtn.addEventListener("click", () => {
+      showScreen("chat");
+      switchChannel("support");
+      setTimeout(() => textInput?.focus(), 150);
     });
   }
 
-  if (attachBtn && fileInput) {
-    attachBtn.addEventListener("click", () => fileInput.click());
+  if (backToMenuBtn) {
+    backToMenuBtn.addEventListener("click", () => {
+      showScreen("menu");
+    });
+  }
+
+  if (fileInput) {
+    if (attachBtn && attachBtn.tagName !== "LABEL") {
+      attachBtn.addEventListener("click", () => fileInput.click());
+    }
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -940,37 +983,100 @@ function setupLiveChatWidget() {
     }
   }
 
-  function initUserChat(user) {
-    if (!user) return;
-    if (chatUnsubscribe) chatUnsubscribe();
+  function renderChannelBar() {
+    if (!channelBar) return;
+    if (!allOrders || allOrders.length === 0) {
+      channelBar.style.display = "none";
+      return;
+    }
 
-    getOrCreateUserChatSession(user.uid, user.email, user.displayName);
+    channelBar.style.display = "flex";
+    let barHtml = `
+      <button type="button" class="chat-channel-pill ${currentChannel === 'support' ? 'active' : ''}" data-channel="support">
+        💬 Live Support
+      </button>
+    `;
 
-    chatUnsubscribe = subscribeToMessages(user.uid, (messages) => {
-      if (!messagesArea) return;
+    allOrders.forEach((o) => {
+      const oId = o.id;
+      const orderNum = o.orderId || o.id;
+      const isSel = currentChannel === "order" && activeChatOrderId === oId;
+      barHtml += `
+        <button type="button" class="chat-channel-pill ${isSel ? 'active' : ''}" data-channel="order" data-order-id="${oId}">
+          🧵 #${orderNum}
+        </button>
+      `;
+    });
 
-      let html = `
+    channelBar.innerHTML = barHtml;
+
+    channelBar.querySelectorAll(".chat-channel-pill").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const ch = btn.getAttribute("data-channel");
+        const oId = btn.getAttribute("data-order-id");
+        if (ch === "support") {
+          switchChannel("support");
+        } else {
+          switchChannel("order", oId);
+        }
+      });
+    });
+  }
+
+  function renderMessagesList(messages, channelType, orderNum = "") {
+    if (!messagesArea) return;
+
+    let welcomeHtml = "";
+    if (channelType === "support") {
+      welcomeHtml = `
         <div class="chat-welcome-card">
-          <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Workshop Support. You can ask for custom furniture dimensions, wood stains, fabric swatches, or inquire about your crafting order progress!</p>
+          <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Live Support. Chat directly with our staff about custom builds, timber stains, finishes, or questions about our AR app!</p>
         </div>
       `;
+    } else {
+      welcomeHtml = `
+        <div class="chat-welcome-card">
+          <p>🧵 <strong>Order #${orderNum} Crafting Channel:</strong> Message our workshop team about dimensions, lumber finishes, fabric swatches, or crafting updates!</p>
+        </div>
+      `;
+    }
 
+    let html = welcomeHtml;
+
+    if (!messages || messages.length === 0) {
+      html += `<div style="text-align: center; color: #9ca3af; font-size: 0.82rem; margin: 30px auto;">No messages in this conversation yet. Say hello to start!</div>`;
+    } else {
       messages.forEach((m) => {
-        const isMe = m.senderId === user.uid;
+        const isMe = currentUser && m.senderId === currentUser.uid;
         const roleClass = isMe ? "customer" : (m.senderRole || "staff");
-        const senderLabel = isMe ? "You" : (m.senderName || "Workshop Support");
-        const timeStr = m.createdAt?.toDate
-          ? m.createdAt.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "";
+        const senderLabel = isMe ? "You" : (m.senderName || (channelType === "support" ? "Lanica Support" : "Workshop Support"));
+
+        const timeDate = m.timestamp?.toDate
+          ? m.timestamp.toDate()
+          : (m.createdAt?.toDate ? m.createdAt.toDate() : (m.timestamp || m.createdAt ? new Date(m.timestamp || m.createdAt) : null));
+        const timeStr = timeDate ? timeDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+
+        if (m.isUnsent) {
+          html += `
+            <div class="chat-msg-row ${roleClass}">
+              <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
+              <div class="chat-msg-bubble unsent">
+                This message was unsent
+              </div>
+              ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
+            </div>
+          `;
+          return;
+        }
 
         html += `
           <div class="chat-msg-row ${roleClass}">
             <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
             <div class="chat-msg-bubble">
-              ${m.text ? `<p style="margin: 0;">${escapeHtml(m.text)}</p>` : ""}
+              ${(m.text || m.message || m.content) ? `<p style="margin: 0;">${escapeHtml(m.text || m.message || m.content)}</p>` : ""}
               ${
-                m.attachmentUrl
-                  ? `<a href="${m.attachmentUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl}" class="chat-msg-img" alt="Attachment" /></a>`
+                (m.attachmentUrl || m.imageUrl)
+                  ? `<a href="${m.attachmentUrl || m.imageUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl || m.imageUrl}" class="chat-msg-img" alt="Attachment" /></a>`
                   : ""
               }
             </div>
@@ -978,10 +1084,96 @@ function setupLiveChatWidget() {
           </div>
         `;
       });
+    }
 
-      messagesArea.innerHTML = html;
-      scrollChatToBottom();
+    messagesArea.innerHTML = html;
+    scrollChatToBottom();
+  }
+
+  function switchChannel(channelType, orderId = null) {
+    currentChannel = channelType;
+    if (channelType === "order") {
+      activeChatOrderId = orderId;
+    }
+    renderChannelBar();
+
+    if (chatUnsubscribe) {
+      chatUnsubscribe();
+      chatUnsubscribe = null;
+    }
+
+    if (channelType === "support") {
+      if (headerTitle) headerTitle.textContent = "LANICA SUPPORT";
+      if (headerStatus) headerStatus.textContent = "Online · Replies in 5m";
+
+      if (!currentUser) {
+        if (messagesArea) {
+          messagesArea.innerHTML = `
+            <div class="chat-welcome-card">
+              <p style="margin: 0 0 8px 0;">👋 <strong>Kumusta!</strong> Welcome to Lanica Live Support.</p>
+              <p style="margin: 0 0 12px 0; color: #92400e;">Please sign in to start chatting with our customer care and workshop artisans.</p>
+              <button type="button" id="orders-chat-signin-btn" style="padding: 7px 16px; background: #6b4423; color: #fff; border: none; border-radius: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 600;">Sign In Now</button>
+            </div>
+          `;
+          document.getElementById("orders-chat-signin-btn")?.addEventListener("click", () => {
+            document.getElementById("auth-modal")?.classList.add("active");
+          });
+        }
+        return;
+      }
+
+      markUserSupportMessagesAsRead(currentUser.uid, "customer").catch(() => {});
+
+      chatUnsubscribe = subscribeToUserSupportMessages(currentUser.uid, (messages) => {
+        renderMessagesList(messages, "support");
+        if (drawer?.classList.contains("active")) {
+          markUserSupportMessagesAsRead(currentUser.uid, "customer").catch(() => {});
+        }
+      });
+    } else {
+      const matched = allOrders.find((o) => o.id === orderId);
+      const orderNum = matched ? (matched.orderId || matched.id) : orderId;
+      const statusText = matched ? (matched.orderStatus || matched.status || "In Production") : "Active";
+
+      if (headerTitle) headerTitle.textContent = `ORDER #${orderNum}`;
+      if (headerStatus) headerStatus.textContent = `Workshop Thread · ${statusText}`;
+
+      chatUnsubscribe = subscribeToMessages(orderId, (messages) => {
+        renderMessagesList(messages, "order", orderNum);
+      });
+    }
+  }
+
+  function initUserChat(user) {
+    if (!user) return;
+    renderChannelBar();
+
+    if (supportUnreadUnsubscribe) supportUnreadUnsubscribe();
+    supportUnreadUnsubscribe = subscribeToUserSupportMessages(user.uid, (messages) => {
+      const hasUnread = messages.some((m) => {
+        const isFromStaff = m.senderRole === "admin" || m.senderRole === "staff" || m.senderId === "support_admin";
+        return isFromStaff && m.isRead === false;
+      });
+
+      if (hasUnread && unreadBadge && !drawer?.classList.contains("active")) {
+        unreadBadge.style.display = "block";
+      }
     });
+  }
+
+  function openOrderChat(orderId) {
+    if (!orderId) return;
+    if (drawer) drawer.classList.add("active");
+    showScreen("chat");
+    switchChannel("order", orderId);
+    setTimeout(() => textInput?.focus(), 150);
+  }
+
+  function openSupportChat() {
+    if (drawer) drawer.classList.add("active");
+    showScreen("chat");
+    switchChannel("support");
+    setTimeout(() => textInput?.focus(), 150);
   }
 
   if (form) {
@@ -991,7 +1183,7 @@ function setupLiveChatWidget() {
       if (!text.trim() && !attachedFile) return;
 
       if (!currentUser) {
-        showToast("Please sign in to send a message to our workshop.", "error");
+        showToast("Please sign in to send a message to our support team.", "error");
         document.getElementById("auth-modal")?.classList.add("active");
         return;
       }
@@ -999,20 +1191,41 @@ function setupLiveChatWidget() {
       try {
         let attachmentUrl = "";
         if (attachedFile) {
-          attachmentUrl = await uploadChatAttachment(attachedFile, currentUser.uid);
+          const folderTarget = currentChannel === "support" ? currentUser.uid : activeChatOrderId;
+          attachmentUrl = await uploadChatAttachment(attachedFile, folderTarget);
           attachedFile = null;
           if (fileInput) fileInput.value = "";
           if (previewBox) previewBox.style.display = "none";
         }
 
-        await sendChatMessage({
-          chatId: currentUser.uid,
-          senderId: currentUser.uid,
-          senderName: currentUser.displayName || currentUser.email || "Customer",
-          senderRole: "customer",
-          text: text,
-          attachmentUrl: attachmentUrl,
-        });
+        if (currentChannel === "support") {
+          await sendChatMessage({
+            userId: currentUser.uid,
+            sessionType: "support",
+            isUserSupport: true,
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName || currentUser.email || "Customer",
+            senderRole: "customer",
+            receiverId: "support_admin",
+            text: text,
+            attachmentUrl: attachmentUrl,
+          });
+        } else {
+          if (!activeChatOrderId) {
+            showToast("Please select an order thread to message the workshop.", "error");
+            return;
+          }
+          await sendChatMessage({
+            orderId: activeChatOrderId,
+            sessionType: "order",
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName || currentUser.email || "Customer",
+            senderRole: "customer",
+            receiverId: "staff",
+            text: text,
+            attachmentUrl: attachmentUrl,
+          });
+        }
 
         if (textInput) textInput.value = "";
         scrollChatToBottom();
@@ -1023,6 +1236,6 @@ function setupLiveChatWidget() {
     });
   }
 
-  return { initUserChat };
+  return { initUserChat, openOrderChat, openSupportChat, renderChannelBar };
 }
 
