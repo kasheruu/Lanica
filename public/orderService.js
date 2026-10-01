@@ -413,3 +413,37 @@ export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
 
   return { success: true, orderId };
 }
+
+/**
+ * CUSTOMER REFUND REQUEST SUBMISSION FLOW
+ */
+export async function requestRefundAtomic({ orderId, userId, reason = "", details = "" }) {
+  if (!orderId) throw new Error("Order ID is required.");
+  if (!userId) throw new Error("User ID is required.");
+
+  const orderRef = doc(db, "orders", orderId);
+
+  await runTransaction(db, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef);
+    if (!orderSnap.exists()) {
+      throw new Error(`Order ${orderId} does not exist.`);
+    }
+
+    const orderData = orderSnap.data();
+    if (orderData.userId !== userId) {
+      throw new Error("Unauthorized to request refund for this order.");
+    }
+
+    transaction.update(orderRef, {
+      refundStatus: "refund_requested",
+      status: "cancellation_pending_review",
+      orderStatus: "Cancellation Pending Review",
+      refundReason: String(reason || "").trim(),
+      refundDetails: String(details || "").trim(),
+      refundRequestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  return { success: true, orderId };
+}

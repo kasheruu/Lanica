@@ -83,24 +83,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 2. Setup Auth & Cart UI Event Listeners
   setupHeaderAndAuthUI();
 
-  // 3. Initialize Authentication Session & Real-time Listeners
+  // Initialize Authentication Session & Real-time Listeners
   liveChatController = setupLiveChatWidget();
 
-  try {
-    currentUser = await ensureAuth();
-    updateAuthUi(currentUser);
-
-    if (currentUser) {
-      setupOrdersSubscription(currentUser.uid);
-      setupCartSubscription(currentUser.uid);
-      liveChatController?.initUserChat(currentUser);
-    }
-  } catch (err) {
-    console.error("Initialization error on Orders page:", err);
-    showToast("Failed to initialize user session.", "error");
-  }
-
-  // Listen to Auth Changes
+  // Listen to Auth Changes (Single Canonical Auth Listener)
   onAuthStateChanged(auth, (user) => {
     currentUser = user;
     updateAuthUi(user);
@@ -335,8 +321,18 @@ function renderCartDrawerUI(items) {
   container.innerHTML = html;
 }
 
+let currentSubscribedUserId = null;
+
 function setupOrdersSubscription(userId) {
-  if (ordersUnsubscribe) ordersUnsubscribe();
+  if (currentSubscribedUserId === userId && ordersUnsubscribe) return;
+
+  if (ordersUnsubscribe) {
+    ordersUnsubscribe();
+    ordersUnsubscribe = null;
+  }
+
+  currentSubscribedUserId = userId;
+  if (!userId) return;
 
   ordersUnsubscribe = subscribeToUserOrders(userId, (orders) => {
     allOrders = orders;
@@ -449,6 +445,7 @@ function renderOrdersList() {
       }
     });
   });
+}
 
 function getTabDisplayName(statusKey) {
   switch (statusKey) {
@@ -543,7 +540,7 @@ function createOrderCardElement(order) {
       heroSubtitle = "Order placed! Our workshop team is reviewing your custom order details.";
     } else if (normStatus === "Downpayment Confirmed") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>`;
-      heroSubtitle = "50% Downpayment verified! Timber and materials are allocated for production.";
+      heroSubtitle = "30% Downpayment verified! Timber and materials are allocated for production.";
     } else if (normStatus === "In Production") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`;
       heroSubtitle = "Lanica master artisans are actively crafting your furniture.";
@@ -697,26 +694,31 @@ function createOrderCardElement(order) {
   }
 
   // Payment Breakdown
+  const totalVal = Number(order.totalAmount ?? order.total ?? 0);
   const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+  const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+  const isBalanceSettled = order.balanceStatus === "settled" || remainingVal <= 0;
+  const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? 30 : 100);
+
   let paymentDetailsHTML = "";
   if (isDownpayment) {
     paymentDetailsHTML = `
-      <div class="payment-terms-box" style="margin-top: 8px; font-size: 0.82rem; background: var(--clr-bg-subtle, #f9fafb); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--clr-border, #e5e7eb);">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-          <span>50% Downpayment (Paid):</span>
-          <strong style="color: #059669;">₱${parseFloat(order.downpaymentAmount || 0).toLocaleString()}</strong>
+      <div class="payment-terms-box" style="margin-top: 8px; font-size: 0.82rem; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span>Upfront Downpayment (${paidPct}% Paid):</span>
+          <strong style="color: #059669;">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
         </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>Remaining Balance Due upon Delivery:</span>
-          <strong style="color: #d97706;">₱${parseFloat(order.balanceDue || 0).toLocaleString()}</strong>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span>Remaining Balance Due:</span>
+          <strong style="color: ${remainingVal > 0 ? '#d97706' : '#059669'};">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
         </div>
-        ${order.paymentDetails?.paymentSlipUrl ? `
-          <div style="margin-top: 4px;">
-            <a href="${order.paymentDetails.paymentSlipUrl}" target="_blank" rel="noopener" style="color: var(--clr-primary, #6b4423); text-decoration: underline; font-weight: 500;">
-              View Attached Payment Slip ↗
-            </a>
-          </div>
-        ` : ""}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
+          <span style="font-size: 0.78rem; color: #64748b;">Balance Status:</span>
+          <span style="font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; ${isBalanceSettled ? 'background: #dcfce7; color: #15803d;' : 'background: #fef3c7; color: #b45309;'}">
+            ${isBalanceSettled ? "✓ Settled" : "⏳ Pending Collection"}
+          </span>
+        </div>
       </div>
     `;
   }
@@ -1010,17 +1012,20 @@ function setupLiveChatWidget() {
 
     channelBar.innerHTML = barHtml;
 
-    channelBar.querySelectorAll(".chat-channel-pill").forEach((btn) => {
-      btn.addEventListener("click", () => {
+    if (!channelBar.dataset.listenerAttached) {
+      channelBar.dataset.listenerAttached = "true";
+      channelBar.addEventListener("click", (e) => {
+        const btn = e.target.closest(".chat-channel-pill");
+        if (!btn) return;
         const ch = btn.getAttribute("data-channel");
         const oId = btn.getAttribute("data-order-id");
         if (ch === "support") {
           switchChannel("support");
-        } else {
+        } else if (oId) {
           switchChannel("order", oId);
         }
       });
-    });
+    }
   }
 
   function renderMessagesList(messages, channelType, orderNum = "") {

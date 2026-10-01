@@ -1408,24 +1408,13 @@ async function hydrateCustomerNamesForOrders(orders) {
 function normalizeOrderStatus(raw) {
   if (raw == null) return "placed";
   const s = String(raw).toLowerCase().trim();
-  if (s === "pending") return "placed";
-  if (s === "accepted") return "downpayment confirmed";
-  if (s === "processing" || s === "packed") return "in production";
-  if (s === "declined") return "cancelled";
-  if (s === "completed" || s === "received" || s === "arrived") return "delivered";
-  if (
-    [
-      "placed",
-      "downpayment confirmed",
-      "in production",
-      "quality checked",
-      "shipped",
-      "delivered",
-      "cancelled",
-    ].includes(s)
-  ) {
-    return s;
-  }
+  if (s === "pending" || s === "order placed" || s === "placed") return "placed";
+  if (s === "accepted" || s === "confirmed" || s === "deposit confirmed" || s === "downpayment confirmed") return "downpayment confirmed";
+  if (s === "processing" || s === "packed" || s === "crafting" || s === "fabrication" || s === "in production") return "in production";
+  if (s === "inspected" || s === "qc passed" || s === "quality check" || s === "quality checked") return "quality checked";
+  if (s === "dispatched" || s === "out for delivery" || s === "shipped" || s === "shipping" || s === "in transit") return "shipped";
+  if (s === "completed" || s === "received" || s === "arrived" || s === "delivered") return "delivered";
+  if (s === "declined" || s === "cancelled" || s === "canceled") return "cancelled";
   return "placed";
 }
 
@@ -2122,8 +2111,11 @@ if (usersListEl) {
 }
 
 function updateOrderStats(orders) {
-  const counts = { placed: 0, "downpayment confirmed": 0, "in production": 0, "quality checked": 0, shipped: 0, delivered: 0 };
+  const counts = { placed: 0, "downpayment confirmed": 0, "in production": 0, "quality checked": 0, shipped: 0, delivered: 0, refund_requested: 0 };
   orders.forEach((o) => {
+    if (o.refundStatus === "refund_requested" || o.status === "cancellation_pending_review") {
+      counts.refund_requested++;
+    }
     const st = normalizeOrderStatus(o.status);
     if (counts[st] !== undefined) counts[st]++;
   });
@@ -2135,6 +2127,7 @@ function updateOrderStats(orders) {
   set("orders-processing", counts["in production"]);
   set("orders-shipped", counts["quality checked"]);
   set("orders-delivered", counts.delivered);
+  set("orders-refund-requests", counts.refund_requested);
 }
 
 function applyOrdersFilter() {
@@ -2144,7 +2137,17 @@ function applyOrdersFilter() {
 
   let rows = activeOrders;
   if (ordersFilterValue && ordersFilterValue !== "all") {
-    rows = activeOrders.filter((o) => normalizeOrderStatus(o.status) === ordersFilterValue);
+    if (ordersFilterValue === "refund_requested") {
+      rows = allOrders.filter(
+        (o) => o.refundStatus === "refund_requested" || o.status === "cancellation_pending_review"
+      );
+    } else if (ordersFilterValue === "refunded") {
+      rows = allOrders.filter(
+        (o) => o.refundStatus === "refund_completed" || o.status === "refunded"
+      );
+    } else {
+      rows = activeOrders.filter((o) => normalizeOrderStatus(o.status) === ordersFilterValue);
+    }
   }
   renderOrdersList(rows);
   renderCompletedOrdersHistory(allOrders.filter((o) => isOrderCompleted(o)));
@@ -2472,7 +2475,7 @@ function renderOrdersList(orders) {
   ordersListEl.innerHTML = "";
 
   if (orders.length === 0) {
-    ordersListEl.innerHTML = `<tr><td colspan="${isBatchDeleteMode ? 8 : 7}" style="text-align:center;padding:24px;color:#6b7280;">No orders yet. Orders created by the customer app appear here.</td></tr>`;
+    ordersListEl.innerHTML = `<tr><td colspan="${isBatchDeleteMode ? 9 : 8}" style="text-align:center;padding:24px;color:#6b7280;">No orders found. Orders created by the customer app appear here.</td></tr>`;
     syncBatchDeleteUi();
     return;
   }
@@ -2488,16 +2491,62 @@ function renderOrdersList(orders) {
     }
 
     const customer = resolveCustomerDisplay(order);
-    const total = order.total != null ? order.total : order.totalAmount;
-    const totalStr =
-      total != null && total !== ""
-        ? `₱${Number(total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-        : "—";
-    const connectionIssues = getOrderConnectionIssues(order);
-    const isConnected = connectionIssues.length === 0;
-    const connectionBadgeHtml = isConnected
-      ? `<div style="font-size:0.72rem;color:#137333;background:#e6f4ea;border-radius:999px;display:inline-block;padding:2px 8px;margin-top:6px;">Connected</div>`
-      : `<div title="${escapeHtml(connectionIssues.join(", "))}" style="font-size:0.72rem;color:#b06000;background:#fef7e0;border-radius:999px;display:inline-block;padding:2px 8px;margin-top:6px;">Needs fix</div>`;
+
+    // Fulfillment calculation & badge
+    const isPickup = order.fulfillmentType === "pickup" || order.address?.pickupAtWorkshop;
+    const addressObj = order.address || order.shippingAddress || order.deliveryAddress || {};
+    const fullAddr = addressObj.fullAddress || addressObj.address || addressObj.street || "";
+    const fulfillmentBadgeHtml = isPickup
+      ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop">🏪 Store Pickup</span>`
+      : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}">🚚 Delivery</span>`;
+
+    const addressDisplayHtml = !isPickup && fullAddr
+      ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>`
+      : isPickup
+        ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px;">Lanica Workshop</div>`
+        : ``;
+
+    // Financial Breakdown calculation
+    const totalVal = Number(order.totalAmount ?? order.total ?? 0);
+    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+    const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+    const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+    const isBalanceSettled = order.balanceStatus === "settled" || remainingVal <= 0;
+    const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? 30 : 100);
+
+    const financialBreakdownHtml = `
+      <div class="financial-breakdown-card">
+        <div>Total: <strong class="fin-total">₱${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+        <div>Upfront: <span class="fin-paid">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> <small style="color:#6b7280;">(${paidPct}%)</small></div>
+        <div>Due: <span class="fin-due">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+        <span class="balance-badge ${isBalanceSettled ? "settled" : "pending"}">${isBalanceSettled ? "✓ Settled" : "⏳ Pending"}</span>
+      </div>
+    `;
+
+    // Refund Status & Badges
+    const isRefundRequested = order.refundStatus === "refund_requested" || order.status === "cancellation_pending_review";
+    const isRefundCompleted = order.refundStatus === "refund_completed" || order.status === "refunded";
+    const isRefundRejected = order.refundStatus === "refund_rejected";
+
+    let refundBadgeHtml = "";
+    if (isRefundRequested) {
+      refundBadgeHtml = `<div><span class="refund-status-badge requested">💸 Refund Requested</span></div>`;
+    } else if (isRefundCompleted) {
+      refundBadgeHtml = `<div><span class="refund-status-badge completed">✅ Refunded (₱${Number(order.refundedAmount || paidVal).toLocaleString()})</span></div>`;
+    } else if (isRefundRejected) {
+      refundBadgeHtml = `<div><span class="refund-status-badge rejected">❌ Refund Rejected</span></div>`;
+    }
+
+    const statusColumnHtml = `
+      <div>
+        <span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(
+          st.charAt(0).toUpperCase() + st.slice(1)
+        )}</span>
+        ${refundBadgeHtml}
+      </div>
+    `;
+
+    const isMarkSettledVisible = !isBalanceSettled && remainingVal > 0 && st !== "placed" && st !== "pending" && st !== "cancelled" && st !== "declined";
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -2515,18 +2564,19 @@ function renderOrdersList(orders) {
       <td>
         <strong style="font-size:0.9rem;">${escapeHtml(order.id.slice(0, 8))}…</strong>
         <div style="font-size:0.75rem;color:#9ca3af;margin-top:4px;">${escapeHtml(dateStr)}</div>
-        ${connectionBadgeHtml}
       </td>
-      <td>${escapeHtml(String(customer))}</td>
+      <td>
+        <strong>${escapeHtml(String(customer))}</strong>
+      </td>
+      <td>
+        ${fulfillmentBadgeHtml}
+        ${addressDisplayHtml}
+      </td>
       <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
-      <td>${totalStr}</td>
+      <td>${financialBreakdownHtml}</td>
+      <td>${statusColumnHtml}</td>
       <td>
-        <span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(
-          st.charAt(0).toUpperCase() + st.slice(1)
-        )}</span>
-      </td>
-      <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" ? "disabled" : ""}>
+        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""}>
           <option value="">Unassigned</option>
           ${staffMembers
             .map((s) => {
@@ -2538,36 +2588,56 @@ function renderOrdersList(orders) {
         </select>
       </td>
       <td>
-        ${
-          st === "placed" || st === "pending"
-            ? `<div class="order-action-group">
-                <button class="btn-icon order-action-btn order-action-accept btn-accept-order" data-order-id="${escapeHtml(
+        <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+          ${
+            isRefundRequested
+              ? `<button class="btn-primary btn-review-refund" data-order-id="${escapeHtml(
                   order.id
-                )}" aria-label="Accept order" title="Accept Order & Confirm Downpayment">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </button>
-                <button class="btn-icon order-action-btn order-action-decline btn-decline-order" data-order-id="${escapeHtml(
-                  order.id
-                )}" aria-label="Decline order" title="Decline Order">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              </div>`
-            : st === "declined" || st === "cancelled"
-              ? `<button class="btn-icon order-action-btn order-action-delete btn-delete-order" data-order-id="${escapeHtml(
-                  order.id
-                )}" aria-label="Delete declined order" title="Delete">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
+                )}" type="button" style="font-size:0.76rem; padding:4px 10px; background:#dc2626; border-radius:6px; font-weight:600; white-space:nowrap;">
+                  Review Refund
                 </button>`
-              : `<span style="font-size:0.82rem;color:#059669;font-weight:500;text-transform:capitalize;">${escapeHtml(st)}</span>`
-        }
+              : ""
+          }
+          ${
+            isMarkSettledVisible
+              ? `<button class="btn-secondary btn-settle-balance" data-order-id="${escapeHtml(
+                  order.id
+                )}" type="button" style="font-size:0.75rem; padding:4px 8px; font-weight:600; white-space:nowrap;">
+                  Mark Balance Settled
+                </button>`
+              : ""
+          }
+          ${
+            st === "placed" || st === "pending"
+              ? `<div class="order-action-group">
+                  <button class="btn-icon order-action-btn order-action-accept btn-accept-order" data-order-id="${escapeHtml(
+                    order.id
+                  )}" aria-label="Accept order" title="Accept Order & Confirm Downpayment">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  </button>
+                  <button class="btn-icon order-action-btn order-action-decline btn-decline-order" data-order-id="${escapeHtml(
+                    order.id
+                  )}" aria-label="Decline order" title="Decline Order">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>`
+              : st === "declined" || st === "cancelled"
+                ? `<button class="btn-icon order-action-btn order-action-delete btn-delete-order" data-order-id="${escapeHtml(
+                    order.id
+                  )}" aria-label="Delete declined order" title="Delete">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>`
+                : `<span style="font-size:0.82rem;color:#059669;font-weight:500;text-transform:capitalize;">${escapeHtml(st)}</span>`
+          }
+        </div>
       </td>
     `;
     ordersListEl.appendChild(tr);
@@ -2663,7 +2733,10 @@ async function handleOrderStatusChange(orderId, newStatus) {
   const items = Array.isArray(current.items) ? current.items : [];
 
   const shouldDeductStock =
-    prev === "accepted" && next === "processing" && !current.stockDeducted && items.length > 0;
+    (prev === "downpayment confirmed" || prev === "accepted") &&
+    (next === "in production" || next === "processing") &&
+    !current.stockDeducted &&
+    items.length > 0;
 
   if (shouldDeductStock) {
     for (const it of items) {
@@ -2845,6 +2918,14 @@ if (ordersListEl) {
     const actionBtn = t.closest("button");
     if (!actionBtn) return;
 
+    if (actionBtn.classList.contains("btn-review-refund")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      if (id) openRefundModal(id);
+    }
+    if (actionBtn.classList.contains("btn-settle-balance")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      if (id) handleMarkBalanceSettled(id);
+    }
     if (actionBtn.classList.contains("btn-accept-order")) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) handleOrderAccept(id);
@@ -2860,155 +2941,301 @@ if (ordersListEl) {
   });
 }
 
-function renderWorkshopQueue(orders) {
-  const queueList = document.getElementById("workshop-queue-list");
-  if (!queueList) return;
+// Refund Modal & Balance Settlement Logic
+let currentRefundOrderId = null;
+const refundModalEl = document.getElementById("refund-modal");
+const closeRefundModalBtnEl = document.getElementById("close-refund-modal-btn");
+const refundFormEl = document.getElementById("refund-action-form");
+const rejectRefundBtnEl = document.getElementById("reject-refund-btn");
 
-  const craftingOrders = (orders || []).filter((o) => {
-    const st = normalizeOrderStatus(o.status);
-    return (
-      !isOrderCompleted(o) &&
-      normalizeOrderAction(o.action) !== "delete" &&
-      ["placed", "downpayment confirmed", "in production", "quality checked"].includes(st)
-    );
+function openRefundModal(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
+  currentRefundOrderId = orderId;
+
+  const customerName = resolveCustomerDisplay(order);
+  const customerEmail = pickFirstNonEmpty(order.customerEmail, order.email, order.userEmail, "—");
+  const totalVal = Number(order.totalAmount ?? order.total ?? 0);
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+
+  const elName = document.getElementById("refund-customer-name");
+  const elEmail = document.getElementById("refund-customer-email");
+  const elOrderId = document.getElementById("refund-order-id");
+  const elAmount = document.getElementById("refund-amount-paid");
+  const elReason = document.getElementById("refund-reason-text");
+  const elDetails = document.getElementById("refund-details-text");
+  const inputAmt = document.getElementById("refund-amount-input");
+  const inputTx = document.getElementById("refund-tx-id-input");
+  const inputNote = document.getElementById("refund-admin-note-input");
+
+  if (elName) elName.textContent = customerName;
+  if (elEmail) elEmail.textContent = customerEmail;
+  if (elOrderId) elOrderId.textContent = `#${orderId}`;
+  if (elAmount) elAmount.textContent = formatPeso(paidVal);
+  if (elReason) elReason.textContent = order.refundReason || order.cancellationReason || "Customer requested refund / cancellation";
+  if (elDetails) elDetails.textContent = order.refundDetails || "No additional details provided.";
+
+  if (inputAmt) inputAmt.value = paidVal.toFixed(2);
+  if (inputTx) inputTx.value = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+  if (inputNote) inputNote.value = "";
+
+  if (refundModalEl) refundModalEl.classList.add("active");
+}
+
+function closeRefundModal() {
+  currentRefundOrderId = null;
+  if (refundModalEl) refundModalEl.classList.remove("active");
+}
+
+if (closeRefundModalBtnEl) {
+  closeRefundModalBtnEl.addEventListener("click", closeRefundModal);
+}
+if (refundModalEl) {
+  refundModalEl.addEventListener("click", (e) => {
+    if (e.target === refundModalEl) closeRefundModal();
   });
+}
 
-  const queuedCount = craftingOrders.filter((o) => normalizeOrderStatus(o.status) === "downpayment confirmed").length;
-  const inProdCount = craftingOrders.filter((o) => normalizeOrderStatus(o.status) === "in production").length;
-  const qcPassedCount = craftingOrders.filter((o) => normalizeOrderStatus(o.status) === "quality checked").length;
-  const showroomCount = (allProducts || []).reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
+if (refundFormEl) {
+  refundFormEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!currentRefundOrderId) return;
+    const inputAmt = document.getElementById("refund-amount-input");
+    const inputTx = document.getElementById("refund-tx-id-input");
+    const inputNote = document.getElementById("refund-admin-note-input");
+    const approveBtn = document.getElementById("approve-refund-btn");
+
+    const refundAmt = Number(inputAmt ? inputAmt.value : 0);
+    const txId = inputTx ? inputTx.value.trim() : "";
+    const adminNote = inputNote ? inputNote.value.trim() : "";
+
+    if (!txId) {
+      alert("Transaction Reference ID is required for audit & refund approval.");
+      return;
+    }
+
+    try {
+      if (approveBtn) {
+        approveBtn.disabled = true;
+        approveBtn.textContent = "Processing Refund...";
+      }
+
+      const now = Timestamp.now();
+      await updateDoc(doc(db, "orders", currentRefundOrderId), {
+        refundStatus: "refund_completed",
+        status: "refunded",
+        orderStatus: "refunded",
+        refundedAmount: refundAmt,
+        refundTransactionId: txId,
+        refundAdminNote: adminNote,
+        refundCompletedAt: now,
+        updatedAt: now,
+      });
+
+      alert(`Refund for Order #${currentRefundOrderId} approved and marked completed successfully!`);
+      closeRefundModal();
+    } catch (err) {
+      console.error("Failed to approve refund:", err);
+      alert(err.message || "Failed to process refund.");
+    } finally {
+      if (approveBtn) {
+        approveBtn.disabled = false;
+        approveBtn.textContent = "Approve & Complete Refund";
+      }
+    }
+  });
+}
+
+if (rejectRefundBtnEl) {
+  rejectRefundBtnEl.addEventListener("click", async () => {
+    if (!currentRefundOrderId) return;
+    const inputNote = document.getElementById("refund-admin-note-input");
+    const adminNote = inputNote ? inputNote.value.trim() : "";
+
+    if (!confirm(`Reject refund request for Order #${currentRefundOrderId}?`)) return;
+
+    try {
+      rejectRefundBtnEl.disabled = true;
+      rejectRefundBtnEl.textContent = "Rejecting...";
+
+      const now = Timestamp.now();
+      await updateDoc(doc(db, "orders", currentRefundOrderId), {
+        refundStatus: "refund_rejected",
+        status: "placed",
+        orderStatus: "placed",
+        refundAdminNote: adminNote,
+        refundRejectedAt: now,
+        updatedAt: now,
+      });
+
+      alert(`Refund request for Order #${currentRefundOrderId} has been rejected.`);
+      closeRefundModal();
+    } catch (err) {
+      console.error("Failed to reject refund:", err);
+      alert(err.message || "Failed to reject refund request.");
+    } finally {
+      rejectRefundBtnEl.disabled = false;
+      rejectRefundBtnEl.textContent = "Reject Refund Request";
+    }
+  });
+}
+
+async function handleMarkBalanceSettled(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
+
+  const totalVal = Number(order.totalAmount ?? order.total ?? 0);
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+  const currentBalance = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+
+  if (!confirm(`Mark balance of ₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} settled for Order #${orderId.slice(0, 8)}...?`)) {
+    return;
+  }
+
+  try {
+    const now = Timestamp.now();
+    await updateDoc(doc(db, "orders", orderId), {
+      remainingBalance: 0,
+      balanceDue: 0,
+      balanceStatus: "settled",
+      balanceSettlementMethod: "cash",
+      balanceSettledAmount: currentBalance,
+      balanceSettledAt: now,
+      updatedAt: now,
+    });
+    console.log(`Marked balance settled for order ${orderId}`);
+  } catch (err) {
+    console.error("Failed to settle balance:", err);
+    alert(err.message || "Could not mark balance settled.");
+  }
+}
+
+function renderWorkshopQueue(orders) {
+  const containerQueued = document.getElementById("kanban-list-queued");
+  const containerProduction = document.getElementById("kanban-list-production");
+  const containerQC = document.getElementById("kanban-list-qc");
+  const containerShipped = document.getElementById("kanban-list-shipped");
+
+  if (!containerQueued || !containerProduction || !containerQC || !containerShipped) return;
+
+  const activeOrders = (orders || []).filter(
+    (o) => !isOrderCompleted(o) && normalizeOrderAction(o.action) !== "delete"
+  );
+
+  const groupQueued = activeOrders.filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return st === "downpayment confirmed" || st === "placed";
+  });
+  const groupProduction = activeOrders.filter((o) => normalizeOrderStatus(o.status) === "in production");
+  const groupQC = activeOrders.filter((o) => normalizeOrderStatus(o.status) === "quality checked");
+  const groupShipped = activeOrders.filter((o) => normalizeOrderStatus(o.status) === "shipped");
 
   const elQueued = document.getElementById("workshop-deposit-verified");
   const elInProd = document.getElementById("workshop-in-production");
   const elQc = document.getElementById("workshop-qc-passed");
   const elShowroom = document.getElementById("workshop-showroom-units");
 
-  if (elQueued) elQueued.textContent = String(queuedCount);
-  if (elInProd) elInProd.textContent = String(inProdCount);
-  if (elQc) elQc.textContent = String(qcPassedCount);
-  if (elShowroom) elShowroom.textContent = String(showroomCount);
+  if (elQueued) elQueued.textContent = String(groupQueued.length);
+  if (elInProd) elInProd.textContent = String(groupProduction.length);
+  if (elQc) elQc.textContent = String(groupQC.length);
+  if (elShowroom) elShowroom.textContent = String((allProducts || []).reduce((sum, p) => sum + (Number(p.stock) || 0), 0));
 
-  if (craftingOrders.length === 0) {
-    queueList.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #6b7280;">No active crafting orders in workshop queue.</td></tr>`;
-    return;
-  }
+  const setBadge = (id, count) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(count);
+  };
+  setBadge("kanban-count-queued", groupQueued.length);
+  setBadge("kanban-count-production", groupProduction.length);
+  setBadge("kanban-count-qc", groupQC.length);
+  setBadge("kanban-count-shipped", groupShipped.length);
 
-  queueList.innerHTML = "";
-  craftingOrders.forEach((o) => {
-    const st = normalizeOrderStatus(o.status);
-    const customer = resolveCustomerDisplay(o);
-    const items = Array.isArray(o.items) ? o.items : [];
+  const createKanbanCard = (order, nextStage, nextLabel) => {
+    const customer = resolveCustomerDisplay(order);
+    const items = Array.isArray(order.items) ? order.items : [];
 
-    const customSpecsHTML = items
+    const specsHTML = items
       .map((it) => {
         const notes = it.customNotes
-          ? `<div style="font-size: 0.78rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; margin-top: 3px; display: inline-block;"><strong>Custom Specs:</strong> ${escapeHtml(
-              it.customNotes
-            )}</div>`
+          ? `<div class="kanban-custom-specs" style="margin-top:4px;"><strong>Custom Specs:</strong> ${escapeHtml(it.customNotes)}</div>`
           : "";
         return `
           <div style="margin-bottom: 4px;">
-            <strong>${escapeHtml(it.name || "Item")}</strong> (${escapeHtml(it.material || "Standard")}) x${it.quantity || 1}
+            <strong>${escapeHtml(it.name || "Item")}</strong> (${escapeHtml(it.material || "Standard")}) ×${it.quantity || 1}
             ${notes}
           </div>
         `;
       })
       .join("");
 
-    const isDownpayment = o.paymentOption === "downpayment" || Number(o.downpaymentAmount) > 0;
-    const paymentHTML = isDownpayment
-      ? `
-      <div style="font-size: 0.82rem;">
-        <div>Paid: <strong style="color: #059669;">₱${parseFloat(o.downpaymentAmount || 0).toLocaleString()}</strong> (50%)</div>
-        <div>Bal: <strong style="color: #d97706;">₱${parseFloat(o.balanceDue || 0).toLocaleString()}</strong></div>
-        ${
-          o.paymentDetails?.paymentSlipUrl
-            ? `<a href="${o.paymentDetails.paymentSlipUrl}" target="_blank" rel="noopener" style="color: #4338ca; text-decoration: underline; font-weight: 500;">View Deposit Slip ↗</a>`
-            : ""
-        }
+    const card = document.createElement("div");
+    card.className = "kanban-card";
+    card.innerHTML = `
+      <div class="kanban-card-header">
+        <div>
+          <div class="kanban-order-id">#${escapeHtml(order.id.slice(0, 8))}</div>
+          <div class="kanban-customer-name">${escapeHtml(String(customer))}</div>
+        </div>
+        <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">${escapeHtml(order.orderType || "Made-to-Order")}</span>
       </div>
-    `
-      : `
-      <div style="font-size: 0.82rem;">
-        <div>Full: <strong>₱${parseFloat(o.total || o.totalAmount || 0).toLocaleString()}</strong></div>
-      </div>
-    `;
-
-    let nextStage = "";
-    let nextLabel = "";
-    if (st === "placed") {
-      nextStage = "downpayment confirmed";
-      nextLabel = "Verify Deposit";
-    } else if (st === "downpayment confirmed") {
-      nextStage = "in production";
-      nextLabel = "Start Crafting";
-    } else if (st === "in production") {
-      nextStage = "quality checked";
-      nextLabel = "Pass QC Check";
-    } else if (st === "quality checked") {
-      nextStage = "shipped";
-      nextLabel = "Dispatch / Ship";
-    }
-
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>
-        <strong style="font-size: 0.88rem;">${escapeHtml(o.id.slice(0, 8))}…</strong>
-        <div style="font-size: 0.72rem; color: #9ca3af; margin-top: 2px;">${escapeHtml(o.orderType || "Made-to-Order")}</div>
-      </td>
-      <td>${escapeHtml(String(customer))}</td>
-      <td style="max-width: 240px;">${customSpecsHTML}</td>
-      <td>${paymentHTML}</td>
-      <td style="font-size: 0.82rem;">${escapeHtml(o.estimatedLeadTime || "14–21 Business Days")}</td>
-      <td>
-        <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, "-"))}">
-          ${escapeHtml(st.toUpperCase())}
-        </span>
-      </td>
-      <td>
+      <div class="kanban-items-list">${specsHTML}</div>
+      <div class="kanban-card-footer">
+        <span class="kanban-lead-time">🕒 ${escapeHtml(order.estimatedLeadTime || "14–21 Days")}</span>
         ${
           nextStage
-            ? `
-          <button type="button" class="btn-primary btn-advance-crafting" data-order-id="${escapeHtml(
-            o.id
-          )}" data-next-status="${nextStage}" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; white-space: nowrap;">
-            ${nextLabel} &rarr;
-          </button>
-        `
-            : `<span style="font-size: 0.8rem; color: #6b7280;">Ready</span>`
+            ? `<button type="button" class="kanban-btn-next btn-advance-crafting" data-order-id="${escapeHtml(
+                order.id
+              )}" data-next-status="${nextStage}">
+                ${nextLabel}
+              </button>`
+            : `<span style="font-size:0.75rem; color:#059669; font-weight:600;">Dispatched ✓</span>`
         }
-      </td>
+      </div>
     `;
-    queueList.appendChild(tr);
-  });
-}
+    return card;
+  };
 
-const workshopQueueTable = document.getElementById("workshop-queue-list");
-if (workshopQueueTable) {
-  workshopQueueTable.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".btn-advance-crafting");
-    if (!btn) return;
-    const orderId = btn.getAttribute("data-order-id");
-    const nextStatus = btn.getAttribute("data-next-status");
-    if (!orderId || !nextStatus) return;
-
-    try {
-      btn.disabled = true;
-      btn.textContent = "Updating...";
-      await updateDoc(doc(db, "orders", orderId), {
-        status: nextStatus,
-        orderStatus: nextStatus,
-        updatedAt: Timestamp.now(),
-      });
-      console.log(`Advanced order ${orderId} to ${nextStatus}`);
-    } catch (err) {
-      console.error("Failed to advance crafting stage:", err);
-      alert(err.message || "Failed to update order status.");
-    } finally {
-      btn.disabled = false;
+  const renderCol = (container, group, nextStage, nextLabel, emptyText) => {
+    container.innerHTML = "";
+    if (group.length === 0) {
+      container.innerHTML = `<div class="kanban-empty">${emptyText}</div>`;
+      return;
     }
-  });
+    group.forEach((o) => {
+      container.appendChild(createKanbanCard(o, nextStage, nextLabel));
+    });
+  };
+
+  renderCol(containerQueued, groupQueued, "in production", "Start Crafting", "No queued orders");
+  renderCol(containerProduction, groupProduction, "quality checked", "Pass QC Check", "No orders in crafting");
+  renderCol(containerQC, groupQC, "shipped", "Dispatch Order", "No orders awaiting dispatch");
+  renderCol(containerShipped, groupShipped, null, null, "No recently shipped orders");
 }
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".btn-advance-crafting");
+  if (!btn) return;
+  const orderId = btn.getAttribute("data-order-id");
+  const nextStatus = btn.getAttribute("data-next-status");
+  if (!orderId || !nextStatus) return;
+
+  try {
+    btn.disabled = true;
+    btn.textContent = "Updating...";
+    await updateDoc(doc(db, "orders", orderId), {
+      status: nextStatus,
+      orderStatus: nextStatus,
+      updatedAt: Timestamp.now(),
+    });
+    console.log(`Advanced order ${orderId} to ${nextStatus}`);
+  } catch (err) {
+    console.error("Failed to advance crafting stage:", err);
+    alert(err.message || "Failed to update order status.");
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Live Chat Inbox Implementation
 let activeChatSessionId = null;

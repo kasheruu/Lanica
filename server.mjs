@@ -193,7 +193,7 @@ app.post("/api/paymongo/checkout", checkoutLimiter, async (req, res) => {
       process.env.PAYMONGO_SECRET_KEY || process.env.PAYMONGO_KEY || ""
     ).trim();
 
-    const { items, subtotal, shippingFee, totalAmount, paymentMethod, successUrl, cancelUrl } = req.body || {};
+    const { items, subtotal, shippingFee, totalAmount, paymentMethod, paymentOption, successUrl, cancelUrl } = req.body || {};
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "No items provided for checkout." });
@@ -208,10 +208,13 @@ app.post("/api/paymongo/checkout", checkoutLimiter, async (req, res) => {
     const finalSuccessUrl = successUrl || defaultSuccessUrl;
     const finalCancelUrl = cancelUrl || defaultCancelUrl;
 
+    const isDownpayment = paymentOption === "downpayment";
+    const multiplier = isDownpayment ? 0.30 : 1.0;
+
     const lineItems = items.map((item) => ({
       currency: "PHP",
-      amount: Math.round(Number(item.price) * 100), // convert to centavos
-      name: `${item.name} (${item.material || "Standard"})`,
+      amount: Math.round(Number(item.price) * multiplier * 100), // convert to centavos (30% if downpayment)
+      name: `${item.name} (${item.material || "Standard"})${isDownpayment ? " [30% Downpayment]" : ""}`,
       quantity: Number(item.quantity) || 1,
       images: item.url ? [item.url] : undefined,
     }));

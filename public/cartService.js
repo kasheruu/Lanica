@@ -353,8 +353,19 @@ export async function placeOrderAtomic({
 
     const isDownpayment = paymentOption === "downpayment";
     const parsedTotal = Number(totalAmount);
-    const downpaymentAmount = isDownpayment ? Math.round(parsedTotal * 0.5) : parsedTotal;
-    const balanceDue = isDownpayment ? parsedTotal - downpaymentAmount : 0;
+    const downpaymentAmount = isDownpayment ? Math.round(parsedTotal * 0.30) : parsedTotal;
+    const remainingBalance = isDownpayment ? parsedTotal - downpaymentAmount : 0;
+
+    const fulfillmentType = address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
+
+    const pMethodLower = String(paymentMethod || "").toLowerCase();
+    let paymentType = "cod";
+    if (pMethodLower.includes("gcash")) paymentType = "gcash";
+    else if (pMethodLower.includes("card") || pMethodLower.includes("paymongo")) paymentType = "card";
+    else if (pMethodLower.includes("bank")) paymentType = "bank";
+
+    const customerName = address.recipientName || address.fullName || address.name || "";
+    const customerEmail = address.email || "";
 
     const orderDocData = {
       orderId: orderId,
@@ -363,15 +374,24 @@ export async function placeOrderAtomic({
       totalAmount: parsedTotal,
       paymentOption: isDownpayment ? "downpayment" : "full",
       downpaymentAmount: downpaymentAmount,
-      balanceDue: balanceDue,
+      remainingBalance: remainingBalance,
+      balanceDue: remainingBalance,
+      balanceStatus: isDownpayment ? "pending" : "settled",
+      balanceSettlementMethod: isDownpayment ? null : "full_paid",
+      balanceSettledAmount: isDownpayment ? 0 : parsedTotal,
+      fulfillmentType: fulfillmentType,
+      customerName: customerName,
+      customerEmail: customerEmail,
+      paymentType: paymentType,
       paymentMethod: paymentMethod, // "COD", "GCash", or "Bank Transfer"
       paymentStatus: isDownpayment
         ? "Downpayment Pending Verification"
         : paymentMethod === "COD"
           ? "Unpaid (COD)"
           : "Paid / Pending Verification",
-      orderStatus: "Placed", // Canonical: Placed -> Downpayment Confirmed -> In Production -> Quality Checked -> Shipped -> Delivered
-      status: "Placed",
+      orderStatus: "placed", // Canonical lowercase: placed -> downpayment confirmed -> in production -> quality checked -> shipped -> delivered
+      status: "placed",
+      stockDeducted: true, // Prevents duplicate inventory deduction in admin dashboard
       isMadeToOrder: hasMadeToOrderItems,
       estimatedLeadTime: hasMadeToOrderItems
         ? "14-21 Business Days (Crafted Upon Order)"

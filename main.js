@@ -469,14 +469,14 @@ function updateCheckoutTotals() {
   if (totalEl) totalEl.textContent = `₱${grandTotal.toLocaleString()}`;
 
   if (selectedPaymentTerm === "downpayment") {
-    const down = Math.round(grandTotal * 0.5);
+    const down = Math.round(grandTotal * 0.30);
     const bal = grandTotal - down;
     if (dueTodayEl) dueTodayEl.textContent = `₱${down.toLocaleString()}`;
     if (balanceDueEl) balanceDueEl.textContent = `₱${bal.toLocaleString()}`;
     if (downpaymentRow) {
       downpaymentRow.style.display = "flex";
       const lbl = downpaymentRow.querySelector("span:first-child");
-      if (lbl) lbl.textContent = "Due Today (50% Deposit)";
+      if (lbl) lbl.textContent = "Due Today (30% Deposit)";
     }
     if (balanceRow) balanceRow.style.display = "flex";
   } else {
@@ -883,7 +883,7 @@ async function handlePlaceOrderSubmit() {
 
     // 3. Post notification to customer's live chat session with the workshop
     try {
-      const termLabel = selectedPaymentTerm === "downpayment" ? "50% Downpayment" : "Full Payment";
+      const termLabel = selectedPaymentTerm === "downpayment" ? "30% Downpayment" : "Full Payment";
       await sendChatMessage({
         orderId: result.orderId,
         senderId: currentUser.uid,
