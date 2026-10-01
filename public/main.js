@@ -28,6 +28,7 @@ import {
   saveUserAddress,
   placeOrderAtomic,
   getAvailableStock,
+  parsePrice,
 } from "./cartService.js";
 
 import {
@@ -167,15 +168,16 @@ function setupCartSubscription(userId) {
 }
 
 // Load Products Catalog & Render Cards with Variant & AR buttons
+// Load Products Catalog & Render Cards in Interactive Carousel
 async function loadProductsCatalog() {
-  const productsGrid = document.querySelector(".products-grid");
-  if (!productsGrid) return;
+  const carouselTrack = document.getElementById("carousel-track") || document.querySelector(".products-grid");
+  if (!carouselTrack) return;
 
   try {
     const querySnapshot = await getDocs(collection(db, "products"));
 
     if (!querySnapshot.empty) {
-      productsGrid.innerHTML = ""; // Clear static placeholders
+      carouselTrack.innerHTML = ""; // Clear static placeholders
 
       let delay = 0.1;
       querySnapshot.forEach((docSnap) => {
@@ -190,32 +192,35 @@ async function loadProductsCatalog() {
         const priceFormatted = parseFloat(product.price || 0).toLocaleString();
 
         const productHTML = `
-          <div class="product-card reveal" style="--delay: ${delay}s">
-            <div class="product-image-container">
-              <img src="${displayImage}" alt="${product.name}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                <span>3D</span>
-              </button>
-              <button class="btn-quick-order" data-product-id="${docSnap.id}">
-                Order Now
-              </button>
-            </div>
-            <div class="product-info">
-              <h3>${product.name}</h3>
-              <p class="price">₱${priceFormatted}</p>
+          <div class="product-card-slide">
+            <div class="product-card reveal" style="--delay: ${delay}s">
+              <div class="product-image-container">
+                <img src="${displayImage}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+                <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                  <span>3D</span>
+                </button>
+                <button class="btn-quick-order" data-product-id="${docSnap.id}">
+                  Order Now
+                </button>
+              </div>
+              <div class="product-info">
+                <h3>${escapeHtml(product.name)}</h3>
+                <p class="price">₱${priceFormatted}</p>
+              </div>
             </div>
           </div>
         `;
-        productsGrid.insertAdjacentHTML("beforeend", productHTML);
+        carouselTrack.insertAdjacentHTML("beforeend", productHTML);
         delay += 0.1;
       });
 
       // Bind AR & Quick Order buttons
       bindProductCardButtons();
+      setupCarouselControls();
     } else {
-      productsGrid.innerHTML = `
-        <div class="empty-state-container" style="grid-column: 1 / -1;">
+      carouselTrack.innerHTML = `
+        <div class="empty-state-container" style="width: 100%; grid-column: 1 / -1;">
           <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -227,15 +232,100 @@ async function loadProductsCatalog() {
     }
   } catch (error) {
     console.error("Error loading catalog products:", error);
-    if (productsGrid) {
-      productsGrid.innerHTML = `
-        <div class="empty-state-container" style="grid-column: 1 / -1;">
+    if (carouselTrack) {
+      carouselTrack.innerHTML = `
+        <div class="empty-state-container" style="width: 100%; grid-column: 1 / -1;">
           <h3 class="empty-state-title">Unable to Load Catalog</h3>
           <p class="empty-state-subtitle">There was an issue fetching products. Please check your connection and try again.</p>
         </div>
       `;
     }
   }
+}
+
+// Carousel Controls (Touch Swipe, Drag & Navigation Arrows)
+function setupCarouselControls() {
+  const container = document.getElementById("carousel-track-container");
+  const track = document.getElementById("carousel-track");
+  const prevBtn = document.getElementById("carousel-prev-btn");
+  const nextBtn = document.getElementById("carousel-next-btn");
+  const pagination = document.getElementById("carousel-pagination");
+
+  if (!container || !track) return;
+
+  const slides = track.querySelectorAll(".product-card-slide");
+  if (slides.length === 0) return;
+
+  // Build pagination dots
+  if (pagination) {
+    pagination.innerHTML = "";
+    slides.forEach((_, idx) => {
+      const dot = document.createElement("div");
+      dot.className = `carousel-dot ${idx === 0 ? "active" : ""}`;
+      dot.addEventListener("click", () => {
+        const slideWidth = slides[0].offsetWidth + 20;
+        container.scrollTo({ left: slideWidth * idx, behavior: "smooth" });
+      });
+      pagination.appendChild(dot);
+    });
+  }
+
+  // Update dots on scroll
+  const updatePagination = () => {
+    const slideWidth = slides[0].offsetWidth + 20;
+    const scrollPos = container.scrollLeft;
+    const activeIndex = Math.round(scrollPos / slideWidth);
+
+    if (pagination) {
+      const dots = pagination.querySelectorAll(".carousel-dot");
+      dots.forEach((dot, idx) => {
+        dot.classList.toggle("active", idx === activeIndex);
+      });
+    }
+  };
+
+  container.addEventListener("scroll", updatePagination, { passive: true });
+
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      const slideWidth = slides[0].offsetWidth + 20;
+      container.scrollBy({ left: -slideWidth, behavior: "smooth" });
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      const slideWidth = slides[0].offsetWidth + 20;
+      container.scrollBy({ left: slideWidth, behavior: "smooth" });
+    });
+  }
+
+  // Mouse drag support for desktop
+  let isDragging = false;
+  let startX = 0;
+  let scrollLeft = 0;
+
+  container.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    startX = e.pageX - container.offsetLeft;
+    scrollLeft = container.scrollLeft;
+  });
+
+  container.addEventListener("mouseleave", () => {
+    isDragging = false;
+  });
+
+  container.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
+
+  container.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const x = e.pageX - container.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    container.scrollLeft = scrollLeft - walk;
+  });
 }
 
 // Bind buttons on product cards
@@ -370,18 +460,18 @@ function renderCartDrawer(items) {
   container.innerHTML = "";
 
   items.forEach((item) => {
-    const itemTotal = Number(item.price) * Number(item.quantity);
+    const itemTotal = parsePrice(item.price) * Number(item.quantity);
     subtotal += itemTotal;
 
     const itemCard = document.createElement("div");
     itemCard.className = "cart-item-card";
     const isMTO = item.orderType === "Made-to-Order";
     itemCard.innerHTML = `
-      <img src="${item.url}" alt="${item.name}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+      <img src="${item.url}" alt="${escapeHtml(item.name || '')}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
       <div class="cart-item-details">
-        <div class="cart-item-title">${item.name}</div>
+        <div class="cart-item-title">${escapeHtml(item.name || '')}</div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
-          <span class="cart-item-material">${item.material || "Fabric"}</span>
+          <span class="cart-item-material">${escapeHtml(item.material || "Fabric")}</span>
           ${
             isMTO
               ? '<span style="font-size: 0.72rem; color: #2563eb; background: #eff6ff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Made-to-Order (14-21d)</span>'
@@ -448,12 +538,36 @@ function renderCartDrawer(items) {
   });
 }
 
-function updateCheckoutTotals() {
-  const subtotal = currentCartItems.reduce(
-    (sum, item) => sum + Number(item.price) * Number(item.quantity),
+function updateSubmitButtonText() {
+  const grandTotal = currentCartItems.reduce(
+    (sum, item) => sum + parsePrice(item.price) * Number(item.quantity),
     0
   );
-  const shippingFee = 150;
+  const downAmt = Math.round(grandTotal * 0.30);
+  const dueToday = selectedPaymentTerm === "downpayment" ? downAmt : grandTotal;
+
+  const submitBtn = document.getElementById("place-order-submit-btn");
+  if (submitBtn) {
+    submitBtn.textContent = `PLACE ORDER & PAY ₱${dueToday.toLocaleString()}`;
+  }
+}
+
+function updateProofOfPaymentBox() {
+  const proofBox = document.getElementById("proof-payment-box");
+  if (!proofBox) return;
+  if (selectedPaymentMethod === "COD" || selectedPaymentMethod === "Workshop") {
+    proofBox.style.display = "none";
+  } else {
+    proofBox.style.display = "block";
+  }
+}
+
+function updateCheckoutTotals() {
+  const subtotal = currentCartItems.reduce(
+    (sum, item) => sum + parsePrice(item.price) * Number(item.quantity),
+    0
+  );
+  const shippingFee = 0;
   const grandTotal = subtotal + shippingFee;
 
   const subtotalEl = document.getElementById("checkout-subtotal");
@@ -461,56 +575,84 @@ function updateCheckoutTotals() {
   const totalEl = document.getElementById("checkout-total");
   const dueTodayEl = document.getElementById("checkout-due-today");
   const balanceDueEl = document.getElementById("checkout-balance-due");
+  const termFullAmt = document.getElementById("term-full-amount");
+  const termDownAmt = document.getElementById("term-down-amount");
+  const summaryDueLabel = document.getElementById("term-summary-due-label");
+  const chargeLabel = document.getElementById("checkout-charge-label");
+  const chargeAmount = document.getElementById("checkout-charge-amount");
+  const balanceDueSummary = document.getElementById("checkout-balance-due-summary");
+  const itemCountEl = document.getElementById("checkout-item-count");
+  const itemsListEl = document.getElementById("checkout-items-list");
   const downpaymentRow = document.getElementById("checkout-downpayment-row");
   const balanceRow = document.getElementById("checkout-balance-row");
 
+  if (itemCountEl) {
+    const count = currentCartItems.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+    itemCountEl.textContent = count;
+  }
+
+  if (itemsListEl) {
+    itemsListEl.innerHTML = currentCartItems
+      .map(
+        (item) => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f9fafb; border-radius: 10px; border: 1px solid #f3f4f6;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <img src="${item.url || 'assets/product_sofa.png'}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <div>
+            <div style="font-weight: 600; font-size: 0.88rem; color: #111827;">${escapeHtml(item.name || '')}</div>
+            <div style="font-size: 0.78rem; color: #6b7280;">Qty: ${item.quantity} · ${escapeHtml(item.material || "Fabric")}</div>
+          </div>
+        </div>
+        <div style="font-weight: 700; font-size: 0.92rem; color: #111827;">₱${(parsePrice(item.price) * Number(item.quantity)).toLocaleString()}</div>
+      </div>
+    `
+      )
+      .join("");
+  }
+
+  const downAmt = Math.round(grandTotal * 0.30);
+  const balAmt = grandTotal - downAmt;
+
+  if (termFullAmt) termFullAmt.textContent = `₱${grandTotal.toLocaleString()}`;
+  if (termDownAmt) termDownAmt.textContent = `₱${downAmt.toLocaleString()}`;
+
   if (subtotalEl) subtotalEl.textContent = `₱${subtotal.toLocaleString()}`;
-  if (shippingEl) shippingEl.textContent = `₱${shippingFee.toLocaleString()}`;
+  if (shippingEl) shippingEl.textContent = shippingFee === 0 ? "FREE" : `₱${shippingFee.toLocaleString()}`;
   if (totalEl) totalEl.textContent = `₱${grandTotal.toLocaleString()}`;
 
+  let dueToday = grandTotal;
+  let remainingBal = 0;
+
   if (selectedPaymentTerm === "downpayment") {
-    const down = Math.round(grandTotal * 0.30);
-    const bal = grandTotal - down;
-    if (dueTodayEl) dueTodayEl.textContent = `₱${down.toLocaleString()}`;
-    if (balanceDueEl) balanceDueEl.textContent = `₱${bal.toLocaleString()}`;
+    dueToday = downAmt;
+    remainingBal = balAmt;
+    if (summaryDueLabel) summaryDueLabel.textContent = "Due Today (30% Downpayment):";
+    if (chargeLabel) chargeLabel.textContent = "Today's Charge (30% Downpayment)";
     if (downpaymentRow) {
       downpaymentRow.style.display = "flex";
       const lbl = downpaymentRow.querySelector("span:first-child");
-      if (lbl) lbl.textContent = "Due Today (30% Deposit)";
+      if (lbl) lbl.textContent = "Today's Charge (30% Downpayment)";
     }
     if (balanceRow) balanceRow.style.display = "flex";
   } else {
-    if (dueTodayEl) dueTodayEl.textContent = `₱${grandTotal.toLocaleString()}`;
+    dueToday = grandTotal;
+    remainingBal = 0;
+    if (summaryDueLabel) summaryDueLabel.textContent = "Due Today (Full 100%):";
+    if (chargeLabel) chargeLabel.textContent = "Today's Charge (Full 100%)";
     if (downpaymentRow) {
       downpaymentRow.style.display = "flex";
       const lbl = downpaymentRow.querySelector("span:first-child");
-      if (lbl) lbl.textContent = "Due Today (Full Payment)";
+      if (lbl) lbl.textContent = "Today's Charge (Full 100%)";
     }
     if (balanceRow) balanceRow.style.display = "none";
   }
-}
 
-function updateSubmitButtonText() {
-  const submitBtn = document.getElementById("place-order-submit-btn");
-  if (!submitBtn) return;
-  const method = (selectedPaymentMethod || "COD").toUpperCase();
-  if (method.includes("GCASH")) {
-    submitBtn.textContent = "PLACE ORDER (GCASH)";
-  } else if (method.includes("BANK")) {
-    submitBtn.textContent = "PLACE ORDER (BANK TRANSFER)";
-  } else {
-    submitBtn.textContent = "PLACE ORDER (COD)";
-  }
-}
+  if (dueTodayEl) dueTodayEl.textContent = `₱${dueToday.toLocaleString()}`;
+  if (balanceDueEl) balanceDueEl.textContent = `₱${remainingBal.toLocaleString()}`;
+  if (chargeAmount) chargeAmount.textContent = `₱${dueToday.toLocaleString()}`;
+  if (balanceDueSummary) balanceDueSummary.textContent = `₱${remainingBal.toLocaleString()}`;
 
-function updateProofOfPaymentBox() {
-  const proofBox = document.getElementById("proof-payment-box");
-  if (!proofBox) return;
-  if (selectedPaymentMethod === "COD") {
-    proofBox.style.display = "none";
-  } else {
-    proofBox.style.display = "block";
-  }
+  updateSubmitButtonText();
 }
 
 // Phase 3 & 4: Setup Checkout Modal & Addresses
@@ -839,6 +981,7 @@ function setupStorefrontUI() {
       await signOut(auth);
       showToast("Signed out.");
       authModal.classList.remove("active");
+      window.location.reload();
     });
   }
 }
@@ -875,10 +1018,10 @@ async function handlePlaceOrderSubmit() {
   }
 
   const subtotal = currentCartItems.reduce(
-    (sum, item) => sum + Number(item.price) * Number(item.quantity),
+    (sum, item) => sum + parsePrice(item.price) * Number(item.quantity),
     0
   );
-  const shippingFee = 150;
+  const shippingFee = 0;
   const totalAmount = subtotal + shippingFee;
 
   try {
@@ -892,6 +1035,15 @@ async function handlePlaceOrderSubmit() {
       submitBtn.textContent = "Uploading Payment Slip...";
       paymentSlipUrl = await uploadChatAttachment(slipInput.files[0], currentUser.uid);
     }
+
+    let customSketchUrl = "";
+    const sketchInput = document.getElementById("checkout-custom-sketch");
+    if (sketchInput && sketchInput.files && sketchInput.files[0]) {
+      submitBtn.textContent = "Uploading AR Sketch / Screenshot...";
+      customSketchUrl = await uploadChatAttachment(sketchInput.files[0], currentUser.uid);
+    }
+
+    const customComments = document.getElementById("checkout-custom-comments")?.value?.trim() || "";
 
     // 2. Atomic Order Placement with Made-to-Order & Downpayment Support
     submitBtn.textContent = "Finalizing Order...";
@@ -908,8 +1060,11 @@ async function handlePlaceOrderSubmit() {
       paymentMethod: selectedPaymentMethod,
       paymentOption: selectedPaymentTerm,
       address: addressWithLandmark,
+      customNotes: customComments,
       paymentDetails: {
         paymentSlipUrl: paymentSlipUrl || null,
+        customSketchUrl: customSketchUrl || null,
+        customComments: customComments,
         selectedTerm: selectedPaymentTerm,
         accountName: targetAddress.recipientName,
         submittedAt: new Date().toISOString(),
@@ -924,8 +1079,8 @@ async function handlePlaceOrderSubmit() {
         senderId: currentUser.uid,
         senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
         senderRole: "customer",
-        text: `Hello! I have placed Order #${result.orderId} (${termLabel} via ${selectedPaymentMethod}). Total: ₱${totalAmount.toLocaleString()}.`,
-        attachmentUrl: paymentSlipUrl || null,
+        text: `Hello! I have placed Order #${result.orderId} (${termLabel} via ${selectedPaymentMethod}). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
+        attachmentUrl: paymentSlipUrl || customSketchUrl || null,
       });
     } catch (chatErr) {
       console.warn("Could not post auto chat confirmation:", chatErr);

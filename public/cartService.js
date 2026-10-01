@@ -35,6 +35,14 @@ try {
   app = initializeApp(firebaseConfig);
 }
 
+export function parsePrice(val) {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  const cleaned = String(val).replace(/[^0-9.]/g, "");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
@@ -166,7 +174,7 @@ export async function addToCart(
   const cartPayload = {
     productId: freshProduct.id,
     name: freshProduct.name,
-    price: Number(freshProduct.price),
+    price: parsePrice(freshProduct.price || product.price),
     url: displayImage,
     quantity: targetQty,
     material: mat,

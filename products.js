@@ -51,8 +51,12 @@ let currentModalProduct = null;
 let currentSelectedMaterial = "Fabric";
 let currentSelectedQty = 1;
 let cartUnsubscribe = null;
-let chatUnsubscribe = null;
 let liveChatController = null;
+
+let allProductsList = [];
+let activeCategory = "all";
+let searchQuery = "";
+let currentSort = "default";
 
 // Helper: Escape HTML
 function escapeHtml(text) {
@@ -80,7 +84,89 @@ function showToast(message, type = "success") {
   }, 3500);
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+// Standalone Fallback Catalog when Firestore returns empty or errors
+function getFallbackProductsList() {
+  return [
+    {
+      id: "prod-aura-cloud-sofa",
+      name: "Aura Cloud Sofa",
+      category: "sofa",
+      price: 1299,
+      description: "Sink-in comfort with high-resilience memory foam & stain-resistant boucle linen upholstery.",
+      image: "assets/product_sofa.png",
+      thumbnail: "assets/product_sofa.png",
+      FabricStocks: 12,
+      LeatherStocks: 5,
+    },
+    {
+      id: "prod-lumina-accent-chair",
+      name: "Lumina Accent Chair",
+      category: "chair",
+      price: 549,
+      description: "Ergonomic curved silhouette with solid mahogany wood base & Italian leather cushion.",
+      image: "assets/product_sofa.png",
+      thumbnail: "assets/product_sofa.png",
+      FabricStocks: 8,
+      LeatherStocks: 4,
+    },
+    {
+      id: "prod-minimalist-oak-table",
+      name: "Minimalist Oak Coffee Table",
+      category: "table",
+      price: 899,
+      description: "Sustainably sourced white oak table with soft rounded edges & water-resistant matte finish.",
+      image: "assets/product_sofa.png",
+      thumbnail: "assets/product_sofa.png",
+      FabricStocks: 15,
+      LeatherStocks: 10,
+    },
+    {
+      id: "prod-velvet-swivel-armchair",
+      name: "Velvet Swivel Armchair",
+      category: "chair",
+      price: 699,
+      description: "360-degree silent brass swivel base wrapped in plush jewel-toned velvet fabric.",
+      image: "assets/product_sofa.png",
+      thumbnail: "assets/product_sofa.png",
+      FabricStocks: 6,
+      LeatherStocks: 2,
+    },
+    {
+      id: "prod-golden-arch-floor-lamp",
+      name: "Golden Arch Floor Lamp",
+      category: "lamp",
+      price: 299,
+      description: "Brushed brass arching arm with heavy marble base & warm ambient LED bulb included.",
+      image: "assets/product_sofa.png",
+      thumbnail: "assets/product_sofa.png",
+      FabricStocks: 20,
+      LeatherStocks: 20,
+    },
+    {
+      id: "prod-modular-sectional-sofa",
+      name: "Modular Sectional Sofa",
+      category: "sofa",
+      price: 1899,
+      description: "Customizable 4-piece sectional arrangement with deep seats & removable machine-washable covers.",
+      image: "assets/product_sofa.png",
+      thumbnail: "assets/product_sofa.png",
+      FabricStocks: 4,
+      LeatherStocks: 2,
+    },
+  ];
+}
+
+function getProductsContainer() {
+  return (
+    document.getElementById("products-catalog-container") ||
+    document.getElementById("products-grid") ||
+    document.getElementById("product-list") ||
+    document.querySelector(".products-catalog-grid") ||
+    document.querySelector(".products-grid")
+  );
+}
+
+async function initProductsApp() {
   // 1. Navbar Scroll Effect & Mobile Drawer Menu
   const navbar = document.querySelector(".navbar");
   if (navbar) {
@@ -116,21 +202,55 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // 3. Load Products from Firebase
-  await loadProductsCatalog();
+  // 3. Load & Setup Catalog Filtering
+  await fetchProductsList();
+  setupCatalogFilters();
 
-  // 4. Initialize Regular Animations & AR View Buttons
-  initAnimations();
-
-  // 5. Setup Storefront Event Listeners & Modals
+  // 4. Setup Storefront Event Listeners & Modals
   setupStorefrontUI();
 
-  // 6. Handle PayMongo Return Payment Redirect if applicable
-  await handlePaymentRedirect();
+  // 5. Initialize Animations & Reveal Triggers
+  initAnimations();
+}
 
-  // 7. Hidden Admin Trigger (Triple click Logo)
-  setupAdminLogoTrigger();
-});
+// Animations & Reveal Triggers Helper
+function initAnimations() {
+  const observerOptions = {
+    root: null,
+    rootMargin: "0px",
+    threshold: 0.05,
+  };
+
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("active");
+        obs.unobserve(entry.target);
+      }
+    });
+  }, observerOptions);
+
+  document.querySelectorAll(".slide-up, .reveal").forEach((el) => {
+    observer.observe(el);
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom >= 0) {
+      el.classList.add("active");
+    }
+  });
+
+  // Fallback to guarantee visibility even if IntersectionObserver is delayed
+  setTimeout(() => {
+    document.querySelectorAll(".slide-up, .reveal").forEach((el) => {
+      el.classList.add("active");
+    });
+  }, 100);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initProductsApp);
+} else {
+  initProductsApp();
+}
 
 // Auth Guard Interceptor
 function isRealUserLoggedIn() {
@@ -141,7 +261,6 @@ function requireAuth(actionCallback) {
   if (isRealUserLoggedIn()) {
     actionCallback();
   } else {
-    // Intercept unauthenticated guest action and open Sign-In Prompt Modal
     const promptModal = document.getElementById("auth-prompt-modal");
     if (promptModal) {
       promptModal.classList.add("active");
@@ -155,7 +274,6 @@ function requireAuth(actionCallback) {
 function setupCartSubscription(userId) {
   if (cartUnsubscribe) cartUnsubscribe();
 
-  // ONLY subscribe to Firestore cart subcollection if user is properly authenticated
   if (isRealUserLoggedIn()) {
     cartUnsubscribe = subscribeToCart(userId, (items) => {
       currentCartItems = items;
@@ -167,168 +285,146 @@ function setupCartSubscription(userId) {
   }
 }
 
-// Load Products Catalog & Render Cards with Variant & AR buttons
-// Load Products Catalog & Render Cards in Interactive Carousel
-async function loadProductsCatalog() {
-  const carouselTrack = document.getElementById("carousel-track") || document.querySelector(".products-grid");
-  if (!carouselTrack) return;
+// Fetch products from Firestore with Fallback Catalog
+async function fetchProductsList() {
+  const container = getProductsContainer();
+  if (!container) return;
 
   try {
     const querySnapshot = await getDocs(collection(db, "products"));
+    allProductsList = [];
 
-    if (!querySnapshot.empty) {
-      carouselTrack.innerHTML = ""; // Clear static placeholders
-
-      let delay = 0.1;
+    if (querySnapshot && !querySnapshot.empty) {
       querySnapshot.forEach((docSnap) => {
-        const product = docSnap.data();
-
-        const displayImage =
-          product.thumbnail ||
-          (product.images && (product.images.isoImage || product.images.frontBg)) ||
-          product.image ||
-          "assets/product_sofa.png";
-
-        const priceFormatted = parseFloat(product.price || 0).toLocaleString();
-
-        const productHTML = `
-          <div class="product-card-slide">
-            <div class="product-card reveal" style="--delay: ${delay}s">
-              <div class="product-image-container">
-                <img src="${displayImage}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-                <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                  <span>3D</span>
-                </button>
-                <button class="btn-quick-order" data-product-id="${docSnap.id}">
-                  Order Now
-                </button>
-              </div>
-              <div class="product-info">
-                <h3>${escapeHtml(product.name)}</h3>
-                <p class="price">₱${priceFormatted}</p>
-              </div>
-            </div>
-          </div>
-        `;
-        carouselTrack.insertAdjacentHTML("beforeend", productHTML);
-        delay += 0.1;
+        allProductsList.push({ id: docSnap.id, ...docSnap.data() });
       });
-
-      // Bind AR & Quick Order buttons
-      bindProductCardButtons();
-      setupCarouselControls();
-    } else {
-      carouselTrack.innerHTML = `
-        <div class="empty-state-container" style="width: 100%; grid-column: 1 / -1;">
-          <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <h3 class="empty-state-title">No Products Available</h3>
-          <p class="empty-state-subtitle">We couldn't find any products matching your selection. Please check back later or refresh.</p>
-        </div>
-      `;
     }
+
+    // Fallback if Firestore query returns empty set
+    if (allProductsList.length === 0) {
+      allProductsList = getFallbackProductsList();
+    }
+
+    renderFilteredProducts();
   } catch (error) {
-    console.error("Error loading catalog products:", error);
-    if (carouselTrack) {
-      carouselTrack.innerHTML = `
-        <div class="empty-state-container" style="width: 100%; grid-column: 1 / -1;">
-          <h3 class="empty-state-title">Unable to Load Catalog</h3>
-          <p class="empty-state-subtitle">There was an issue fetching products. Please check your connection and try again.</p>
+    console.warn("Firestore fetch error, falling back to local product catalogue:", error);
+    allProductsList = getFallbackProductsList();
+    renderFilteredProducts();
+  }
+}
+
+// Filter and Sort Products
+function renderFilteredProducts() {
+  const container = getProductsContainer();
+  if (!container) return;
+
+  let filtered = allProductsList.filter((product) => {
+    const nameStr = (product.name || "").toLowerCase();
+    const descStr = (product.description || "").toLowerCase();
+    const matchesSearch = !searchQuery || nameStr.includes(searchQuery) || descStr.includes(searchQuery);
+
+    let matchesCat = true;
+    if (activeCategory !== "all") {
+      const catStr = (product.category || "").toLowerCase();
+      matchesCat = catStr.includes(activeCategory) || nameStr.includes(activeCategory);
+    }
+
+    return matchesSearch && matchesCat;
+  });
+
+  // Sorting logic
+  if (currentSort === "price-low") {
+    filtered.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+  } else if (currentSort === "price-high") {
+    filtered.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+  } else if (currentSort === "name-asc") {
+    filtered.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state-container" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 40px 20px;">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <h3 class="empty-state-title" style="margin-top: 12px; font-size: 1.2rem;">No Products Found</h3>
+        <p class="empty-state-subtitle" style="color: #6b7280; font-size: 0.9rem;">Try adjusting your search query or category filters.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = "";
+  let delay = 0.05;
+
+  filtered.forEach((product) => {
+    const displayImage =
+      product.thumbnail ||
+      (product.images && (product.images.isoImage || product.images.frontBg)) ||
+      product.image ||
+      "assets/product_sofa.png";
+
+    const priceFormatted = parseFloat(product.price || 0).toLocaleString();
+
+    const productHTML = `
+      <div class="product-card reveal" style="--delay: ${delay}s">
+        <div class="product-image-container">
+          <img src="${displayImage}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <button class="btn-ar-view" data-product-id="${product.id}" title="View in 3D">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            <span>3D</span>
+          </button>
+          <button class="btn-quick-order" data-product-id="${product.id}">
+            Order Now
+          </button>
         </div>
-      `;
-    }
-  }
+        <div class="product-info">
+          <h3>${escapeHtml(product.name)}</h3>
+          <p class="price">₱${priceFormatted}</p>
+        </div>
+      </div>
+    `;
+
+    container.insertAdjacentHTML("beforeend", productHTML);
+    delay += 0.05;
+  });
+
+  bindProductCardButtons();
+  initAnimations();
 }
 
-// Carousel Controls (Touch Swipe, Drag & Navigation Arrows)
-function setupCarouselControls() {
-  const container = document.getElementById("carousel-track-container");
-  const track = document.getElementById("carousel-track");
-  const prevBtn = document.getElementById("carousel-prev-btn");
-  const nextBtn = document.getElementById("carousel-next-btn");
-  const pagination = document.getElementById("carousel-pagination");
+// Bind search, category pills & sort dropdown
+function setupCatalogFilters() {
+  const searchInput = document.getElementById("catalog-search-input");
+  const sortSelect = document.getElementById("catalog-sort-select");
+  const categoryButtons = document.querySelectorAll(".category-pill");
 
-  if (!container || !track) return;
-
-  const slides = track.querySelectorAll(".product-card-slide");
-  if (slides.length === 0) return;
-
-  // Build pagination dots
-  if (pagination) {
-    pagination.innerHTML = "";
-    slides.forEach((_, idx) => {
-      const dot = document.createElement("div");
-      dot.className = `carousel-dot ${idx === 0 ? "active" : ""}`;
-      dot.addEventListener("click", () => {
-        const slideWidth = slides[0].offsetWidth + 20;
-        container.scrollTo({ left: slideWidth * idx, behavior: "smooth" });
-      });
-      pagination.appendChild(dot);
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      searchQuery = e.target.value.toLowerCase().trim();
+      renderFilteredProducts();
     });
   }
 
-  // Update dots on scroll
-  const updatePagination = () => {
-    const slideWidth = slides[0].offsetWidth + 20;
-    const scrollPos = container.scrollLeft;
-    const activeIndex = Math.round(scrollPos / slideWidth);
-
-    if (pagination) {
-      const dots = pagination.querySelectorAll(".carousel-dot");
-      dots.forEach((dot, idx) => {
-        dot.classList.toggle("active", idx === activeIndex);
-      });
-    }
-  };
-
-  container.addEventListener("scroll", updatePagination, { passive: true });
-
-  if (prevBtn) {
-    prevBtn.addEventListener("click", () => {
-      const slideWidth = slides[0].offsetWidth + 20;
-      container.scrollBy({ left: -slideWidth, behavior: "smooth" });
+  if (sortSelect) {
+    sortSelect.addEventListener("change", (e) => {
+      currentSort = e.target.value;
+      renderFilteredProducts();
     });
   }
 
-  if (nextBtn) {
-    nextBtn.addEventListener("click", () => {
-      const slideWidth = slides[0].offsetWidth + 20;
-      container.scrollBy({ left: slideWidth, behavior: "smooth" });
+  categoryButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      categoryButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeCategory = btn.getAttribute("data-category") || "all";
+      renderFilteredProducts();
     });
-  }
-
-  // Mouse drag support for desktop
-  let isDragging = false;
-  let startX = 0;
-  let scrollLeft = 0;
-
-  container.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    startX = e.pageX - container.offsetLeft;
-    scrollLeft = container.scrollLeft;
-  });
-
-  container.addEventListener("mouseleave", () => {
-    isDragging = false;
-  });
-
-  container.addEventListener("mouseup", () => {
-    isDragging = false;
-  });
-
-  container.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const x = e.pageX - container.offsetLeft;
-    const walk = (x - startX) * 1.5;
-    container.scrollLeft = scrollLeft - walk;
   });
 }
 
-// Bind buttons on product cards
+// Bind product card AR and Quick Order buttons
 function bindProductCardButtons() {
   bindARButtons();
 
@@ -343,7 +439,7 @@ function bindProductCardButtons() {
   });
 }
 
-// Phase 1: Open Product Quick View Modal with Variant Selection & Stock Validation
+// Open Product Quick View Modal
 async function openProductQuickViewModal(productId) {
   const modal = document.getElementById("product-detail-modal");
   if (!modal) return;
@@ -359,7 +455,6 @@ async function openProductQuickViewModal(productId) {
     currentSelectedMaterial = "Fabric";
     currentSelectedQty = 1;
 
-    // Populate modal content
     const displayImg =
       currentModalProduct.thumbnail ||
       (currentModalProduct.images && (currentModalProduct.images.isoImage || currentModalProduct.images.frontBg)) ||
@@ -370,7 +465,6 @@ async function openProductQuickViewModal(productId) {
     document.getElementById("pv-image").src = displayImg;
     document.getElementById("pv-price").textContent = `₱${parseFloat(currentModalProduct.price || 0).toLocaleString()}`;
 
-    // Stocks breakdown
     const fabricStock = typeof currentModalProduct.FabricStocks === "number" ? currentModalProduct.FabricStocks : (currentModalProduct.stock || 0);
     const leatherStock = typeof currentModalProduct.LeatherStocks === "number" ? currentModalProduct.LeatherStocks : (currentModalProduct.stock || 0);
 
@@ -378,8 +472,6 @@ async function openProductQuickViewModal(productId) {
     document.getElementById("pv-leather-stock").textContent = `${leatherStock} left`;
 
     updateVariantStockUI();
-
-    // Show modal
     modal.classList.add("active");
   } catch (err) {
     console.error("Error opening product modal:", err);
@@ -425,7 +517,7 @@ function updateVariantStockUI() {
   if (qtyPlus) qtyPlus.disabled = available > 0 ? currentSelectedQty >= available : currentSelectedQty >= 10;
 }
 
-// Phase 2: Render Cart Drawer
+// Render Cart Drawer
 function renderCartDrawer(items) {
   const container = document.getElementById("cart-items-container");
   const badge = document.getElementById("cart-badge");
@@ -467,9 +559,9 @@ function renderCartDrawer(items) {
     itemCard.className = "cart-item-card";
     const isMTO = item.orderType === "Made-to-Order";
     itemCard.innerHTML = `
-      <img src="${item.url}" alt="${escapeHtml(item.name || '')}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+      <img src="${item.url}" alt="${escapeHtml(item.name)}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
       <div class="cart-item-details">
-        <div class="cart-item-title">${escapeHtml(item.name || '')}</div>
+        <div class="cart-item-title">${escapeHtml(item.name)}</div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
           <span class="cart-item-material">${escapeHtml(item.material || "Fabric")}</span>
           ${
@@ -504,7 +596,6 @@ function renderCartDrawer(items) {
   if (subtotalEl) subtotalEl.textContent = `₱${subtotal.toLocaleString()}`;
   if (checkoutBtn) checkoutBtn.disabled = false;
 
-  // Bind cart item actions
   container.querySelectorAll(".cart-qty-minus").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-id");
@@ -599,7 +690,7 @@ function updateCheckoutTotals() {
         <div style="display: flex; align-items: center; gap: 12px;">
           <img src="${item.url || 'assets/product_sofa.png'}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
           <div>
-            <div style="font-weight: 600; font-size: 0.88rem; color: #111827;">${escapeHtml(item.name || '')}</div>
+            <div style="font-weight: 600; font-size: 0.88rem; color: #111827;">${escapeHtml(item.name)}</div>
             <div style="font-size: 0.78rem; color: #6b7280;">Qty: ${item.quantity} · ${escapeHtml(item.material || "Fabric")}</div>
           </div>
         </div>
@@ -655,7 +746,6 @@ function updateCheckoutTotals() {
   updateSubmitButtonText();
 }
 
-// Phase 3 & 4: Setup Checkout Modal & Addresses
 async function openCheckoutModal() {
   if (!currentUser || currentCartItems.length === 0) return;
 
@@ -664,10 +754,8 @@ async function openCheckoutModal() {
   updateSubmitButtonText();
   updateProofOfPaymentBox();
 
-  // Load saved addresses
   await loadUserAddresses();
 
-  // Close cart drawer & open checkout modal
   document.getElementById("cart-drawer-overlay")?.classList.remove("active");
   checkoutModal?.classList.add("active");
 }
@@ -687,7 +775,6 @@ async function loadUserAddresses() {
       return;
     }
 
-    // Default select first address
     if (!selectedAddressId && savedAddresses.length > 0) {
       selectedAddressId = savedAddresses[0].id;
     }
@@ -697,8 +784,8 @@ async function loadUserAddresses() {
       card.className = `address-card ${addr.id === selectedAddressId ? "selected" : ""}`;
       card.innerHTML = `
         <div class="address-card-info">
-          <h5>${addr.recipientName} (${addr.phoneNumber})</h5>
-          <p>${addr.fullAddress}</p>
+          <h5>${escapeHtml(addr.recipientName)} (${escapeHtml(addr.phoneNumber)})</h5>
+          <p>${escapeHtml(addr.fullAddress)}</p>
         </div>
       `;
       card.addEventListener("click", () => {
@@ -713,9 +800,7 @@ async function loadUserAddresses() {
   }
 }
 
-// Storefront UI Wireup
 function setupStorefrontUI() {
-  // Cart Drawer toggles
   const cartBtn = document.getElementById("cart-toggle-btn");
   const cartOverlay = document.getElementById("cart-drawer-overlay");
   const closeCartBtn = document.getElementById("close-cart-btn");
@@ -731,7 +816,6 @@ function setupStorefrontUI() {
     proceedCheckoutBtn.addEventListener("click", openCheckoutModal);
   }
 
-  // Product Detail Quick View Modal Toggles
   const pvModal = document.getElementById("product-detail-modal");
   const closePvBtn = document.getElementById("close-product-modal-btn");
   const qtyMinus = document.getElementById("pv-qty-minus");
@@ -742,7 +826,6 @@ function setupStorefrontUI() {
     closePvBtn.addEventListener("click", () => pvModal.classList.remove("active"));
   }
 
-  // Material variant buttons
   document.querySelectorAll(".material-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const mat = btn.getAttribute("data-material");
@@ -803,7 +886,6 @@ function setupStorefrontUI() {
     });
   }
 
-  // Payment Term Selection (50% Downpayment vs Full Payment)
   document.querySelectorAll('input[name="checkoutPaymentTerm"]').forEach((radio) => {
     radio.addEventListener("change", (e) => {
       selectedPaymentTerm = e.target.value;
@@ -813,7 +895,6 @@ function setupStorefrontUI() {
     });
   });
 
-  // Unauthenticated Sign-In Prompt Modal Toggles
   const authPromptModal = document.getElementById("auth-prompt-modal");
   const closeAuthPromptBtn = document.getElementById("close-auth-prompt-btn");
   const promptSigninBtn = document.getElementById("prompt-signin-btn");
@@ -832,7 +913,6 @@ function setupStorefrontUI() {
     });
   }
 
-  // Checkout Modal Toggles
   const checkoutModal = document.getElementById("checkout-modal");
   const closeCheckoutBtn = document.getElementById("close-checkout-modal-btn");
   const toggleAddressBtn = document.getElementById("toggle-new-address-btn");
@@ -873,7 +953,6 @@ function setupStorefrontUI() {
     });
   }
 
-  // Payment Method Radio Cards Selection
   document.querySelectorAll(".payment-card").forEach((card) => {
     card.addEventListener("click", () => {
       document.querySelectorAll(".payment-card").forEach((c) => c.classList.remove("selected"));
@@ -886,13 +965,11 @@ function setupStorefrontUI() {
   updateSubmitButtonText();
   updateProofOfPaymentBox();
 
-  // Place Order Submit Handler
   const placeOrderBtn = document.getElementById("place-order-submit-btn");
   if (placeOrderBtn) {
     placeOrderBtn.addEventListener("click", handlePlaceOrderSubmit);
   }
 
-  // Customer Auth Modal Wireup
   const authModalBtn = document.getElementById("auth-modal-btn");
   const authModal = document.getElementById("auth-modal");
   const closeAuthBtn = document.getElementById("close-auth-modal-btn");
@@ -1001,7 +1078,6 @@ function updateAuthUi(user) {
   }
 }
 
-// Phase 4 & Phase 5: Place Order Submit Handler
 async function handlePlaceOrderSubmit() {
   const submitBtn = document.getElementById("place-order-submit-btn");
   if (!submitBtn) return;
@@ -1028,7 +1104,6 @@ async function handlePlaceOrderSubmit() {
     submitBtn.disabled = true;
     submitBtn.textContent = "Processing Order...";
 
-    // 1. Check if customer uploaded proof of payment slip
     let paymentSlipUrl = "";
     const slipInput = document.getElementById("checkout-payment-slip");
     if (slipInput && slipInput.files && slipInput.files[0]) {
@@ -1045,7 +1120,6 @@ async function handlePlaceOrderSubmit() {
 
     const customComments = document.getElementById("checkout-custom-comments")?.value?.trim() || "";
 
-    // 2. Atomic Order Placement with Made-to-Order & Downpayment Support
     submitBtn.textContent = "Finalizing Order...";
     const nearestLandmarkVal = document.getElementById("checkout-nearest-landmark")?.value?.trim() || "";
     const addressWithLandmark = {
@@ -1071,7 +1145,6 @@ async function handlePlaceOrderSubmit() {
       },
     });
 
-    // 3. Post notification to customer's live chat session with the workshop
     try {
       const termLabel = selectedPaymentTerm === "downpayment" ? "30% Downpayment" : "Full Payment";
       await sendChatMessage({
@@ -1102,72 +1175,6 @@ async function handlePlaceOrderSubmit() {
   }
 }
 
-// Handle Return from PayMongo Checkout Redirect
-async function handlePaymentRedirect() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const isSuccess = urlParams.get("payment") === "success";
-
-  if (!isSuccess) return;
-
-  const rawPending = sessionStorage.getItem("pending_order_data");
-  if (!rawPending) return;
-
-  try {
-    const pendingOrder = JSON.parse(rawPending);
-    sessionStorage.removeItem("pending_order_data");
-
-    // Execute Atomic Order Placement upon successful payment authorization
-    const result = await placeOrderAtomic({
-      userId: pendingOrder.userId || currentUser.uid,
-      cartItems: pendingOrder.cartItems,
-      totalAmount: pendingOrder.totalAmount,
-      paymentMethod: pendingOrder.paymentMethod || "GCash",
-      address: pendingOrder.address,
-      paymentDetails: {
-        paymongoSuccess: true,
-        sessionId: urlParams.get("session_id") || "completed",
-      },
-    });
-
-    showToast(`Payment Authorized! Order Placed Successfully (ID: ${result.orderId})`, "success");
-    setTimeout(() => {
-      window.location.href = "orders.html";
-    }, 1500);
-
-    // Clean up query string from address bar
-    window.history.replaceState({}, document.title, window.location.pathname);
-  } catch (err) {
-    console.error("Payment Return Order Error:", err);
-    showToast(`Payment Authorized, but order finalization had an issue: ${err.message}`, "error");
-  }
-}
-
-// Animations helper
-function initAnimations() {
-  const observerOptions = {
-    root: null,
-    rootMargin: "0px",
-    threshold: 0.15,
-  };
-
-  const observer = new IntersectionObserver((entries, obs) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add("active");
-        obs.unobserve(entry.target);
-      }
-    });
-  }, observerOptions);
-
-  document.querySelectorAll(".slide-up, .reveal").forEach((el) => observer.observe(el));
-
-  setTimeout(() => {
-    document.querySelectorAll(".hero .slide-up, .hero .reveal").forEach((el) => el.classList.add("active"));
-  }, 100);
-
-  bindARButtons();
-}
-
 // AR Buttons 3D Viewer binding
 function bindARButtons() {
   const arButtons = document.querySelectorAll(".btn-ar-view");
@@ -1190,7 +1197,7 @@ function bindARButtons() {
   });
 }
 
-// Show 3D Model Viewer Modal with Admin Parity (Progress & Meshy Polling)
+// Show 3D Model Viewer Modal
 async function show3DModelViewer(productName, productImage, productId, button, originalButtonText) {
   let pollTimer = null;
 
@@ -1227,13 +1234,13 @@ async function show3DModelViewer(productName, productImage, productId, button, o
               loading="eager"
               ar
               ar-modes="webxr scene-viewer quick-look"
-              alt="${productName} 3D Model">
+              alt="${escapeHtml(productName)} 3D Model">
             </model-viewer>
           </div>
         </div>
         <div class="model-viewer-info">
           <div class="product-details">
-            <h4>${productName}</h4>
+            <h4>${escapeHtml(productName)}</h4>
             <p id="pv-3d-desc">Experience this furniture piece in 3D. Rotate to view from different angles and zoom to inspect details.</p>
           </div>
         </div>
@@ -1270,9 +1277,9 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     if (wrapperEl) {
       wrapperEl.innerHTML = `
         <div class="model-placeholder">
-          <img src="${productImage}" alt="${productName}" class="model-image" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <img src="${productImage}" alt="${escapeHtml(productName)}" class="model-image" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
           <div class="no-3d-message">
-            <p>${message || "3D model not available"}</p>
+            <p>${escapeHtml(message || "3D model not available")}</p>
             <p class="fallback-text">Showing 2D preview</p>
           </div>
         </div>
@@ -1299,10 +1306,8 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
     modelViewerEl.addEventListener("error", (ev) => {
       console.warn("Model viewer load error:", ev);
-      // Fallback: If proxy endpoint failed on static mobile server, retry directly from raw storage URL
       if (!triedDirectUrl && currentRawModelUrl && (currentRawModelUrl.startsWith("http://") || currentRawModelUrl.startsWith("https://"))) {
         triedDirectUrl = true;
-        console.log("Retrying 3D model directly from raw storage URL:", currentRawModelUrl);
         statusEl.style.visibility = "visible";
         statusEl.textContent = "Retrying direct 3D model stream...";
         modelViewerEl.src = currentRawModelUrl;
@@ -1312,7 +1317,6 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     });
   }
 
-  // Periodic safety check to ensure spinner hides once model is rendered
   const loadCheckInterval = setInterval(() => {
     if (modelViewerEl && modelViewerEl.loaded) {
       hideLoading();
@@ -1336,7 +1340,6 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     button.innerHTML = originalButtonText;
   }, 400);
 
-  // Fetch product and poll Meshy if needed
   if (!productId) {
     showFallback2D("No product specified.");
     return;
@@ -1359,14 +1362,12 @@ async function show3DModelViewer(productName, productImage, productId, button, o
       return;
     }
 
-    // Check if Meshy task is generating 3D model
     const taskId = pData.meshyTaskId;
     if (!taskId) {
       showFallback2D("No 3D model available for this product yet.");
       return;
     }
 
-    // Poll Meshy status
     const pollMeshy = async (attempt = 0) => {
       try {
         const response = await fetch(`/api/meshy-image-to-3d/${encodeURIComponent(taskId)}`);
@@ -1384,7 +1385,6 @@ async function show3DModelViewer(productName, productImage, productId, button, o
             if (modelViewerEl.loaded) hideLoading();
           }, 400);
 
-          // Update product document in background with modelUrl for fast future loads
           try {
             await updateDoc(doc(db, "products", productId), { modelUrl: data.model_urls.glb });
           } catch (e) {
@@ -1416,34 +1416,6 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     console.error("Error opening 3D viewer:", err);
     showFallback2D("Failed to load product details.");
   }
-}
-
-// Hidden Admin Trigger
-function setupAdminLogoTrigger() {
-  const logoArea = document.querySelector(".logo");
-  if (!logoArea) return;
-
-  const clickWindowMs = 1100;
-  let clickTimes = [];
-  let redirecting = false;
-
-  logoArea.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (redirecting) return;
-
-    const now = Date.now();
-    clickTimes.push(now);
-    clickTimes = clickTimes.filter((t) => now - t <= clickWindowMs);
-
-    if (clickTimes.length >= 3) {
-      redirecting = true;
-      clickTimes = [];
-      window.location.href = "/login.html";
-    }
-  });
-
-  logoArea.setAttribute("title", "Lanica Furniture (Triple click for CMS)");
-  logoArea.style.cursor = "pointer";
 }
 
 function setupMobileMenu() {
@@ -1482,7 +1454,6 @@ function setupMobileMenu() {
   });
 }
 
-// Live Workshop & Support Chat Widget
 function setupLiveChatWidget() {
   const launcher = document.getElementById("lanica-chat-launcher");
   const drawer = document.getElementById("lanica-chat-drawer");
@@ -1504,10 +1475,11 @@ function setupLiveChatWidget() {
   const headerStatus = document.getElementById("chat-header-status");
 
   let attachedFile = null;
-  let currentChannel = "support"; // "support" | "order"
+  let currentChannel = "support";
   let activeChatOrderId = null;
   let userOrdersList = [];
   let supportUnreadUnsubscribe = null;
+  let chatUnsubscribe = null;
 
   function showScreen(screen) {
     if (screen === "chat") {
@@ -1754,7 +1726,6 @@ function setupLiveChatWidget() {
       userOrdersList = await getCustomerOrders(user.uid);
       renderChannelBar();
 
-      // Listen in background for unread support messages
       if (supportUnreadUnsubscribe) supportUnreadUnsubscribe();
       supportUnreadUnsubscribe = subscribeToUserSupportMessages(user.uid, (messages) => {
         const hasUnread = messages.some((m) => {
@@ -1771,37 +1742,21 @@ function setupLiveChatWidget() {
     }
   }
 
-  function openOrderChat(orderId) {
-    if (drawer) drawer.classList.add("active");
-    showScreen("chat");
-    switchChannel("order", orderId);
-    setTimeout(() => textInput?.focus(), 150);
-  }
-
-  function openSupportChat() {
-    if (drawer) drawer.classList.add("active");
-    showScreen("chat");
-    switchChannel("support");
-    setTimeout(() => textInput?.focus(), 150);
-  }
-
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const text = textInput?.value || "";
-      if (!text.trim() && !attachedFile) return;
-
       if (!currentUser) {
-        showToast("Please sign in to send a message to our support team.", "error");
         document.getElementById("auth-modal")?.classList.add("active");
         return;
       }
 
+      const text = textInput?.value?.trim() || "";
+      if (!text && !attachedFile) return;
+
       try {
-        let attachmentUrl = "";
+        let attachmentUrl = null;
         if (attachedFile) {
-          const folderTarget = currentChannel === "support" ? currentUser.uid : activeChatOrderId;
-          attachmentUrl = await uploadChatAttachment(attachedFile, folderTarget);
+          attachmentUrl = await uploadChatAttachment(attachedFile, currentUser.uid);
           attachedFile = null;
           if (fileInput) fileInput.value = "";
           if (previewBox) previewBox.style.display = "none";
@@ -1810,40 +1765,33 @@ function setupLiveChatWidget() {
         if (currentChannel === "support") {
           await sendChatMessage({
             userId: currentUser.uid,
-            sessionType: "support",
-            isUserSupport: true,
             senderId: currentUser.uid,
             senderName: currentUser.displayName || currentUser.email || "Customer",
             senderRole: "customer",
-            receiverId: "support_admin",
             text: text,
             attachmentUrl: attachmentUrl,
+            channel: "support",
           });
-        } else {
-          if (!activeChatOrderId) {
-            showToast("Please select an order thread to message the workshop.", "error");
-            return;
-          }
+        } else if (activeChatOrderId) {
           await sendChatMessage({
             orderId: activeChatOrderId,
-            sessionType: "order",
             senderId: currentUser.uid,
             senderName: currentUser.displayName || currentUser.email || "Customer",
             senderRole: "customer",
-            receiverId: "staff",
             text: text,
             attachmentUrl: attachmentUrl,
+            channel: "order",
           });
         }
 
         if (textInput) textInput.value = "";
         scrollChatToBottom();
       } catch (err) {
-        console.error("Chat error:", err);
+        console.error("Error sending chat message:", err);
         showToast(err.message || "Failed to send message.", "error");
       }
     });
   }
 
-  return { initUserChat, openOrderChat, openSupportChat };
+  return { initUserChat };
 }

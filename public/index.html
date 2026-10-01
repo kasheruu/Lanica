@@ -33,7 +33,7 @@
     <header class="navbar">
       <div class="logo">Lanica.</div>
       <nav class="nav-links">
-        <a href="#collections">Collections</a>
+        <a href="products.html">Products</a>
         <a href="#about">About us</a>
         <a href="#ar-feature">AR Experience</a>
         <a href="orders.html">My Orders</a>
@@ -310,78 +310,43 @@
 
       <!-- Catalog / Collections -->
       <section id="collections" class="product-showcase section-padding">
-        <div class="section-heading text-center slide-up">
-          <h2 class="section-title">New Arrivals</h2>
-          <p class="section-desc">Select a piece to imagine it in your home.</p>
+        <div class="section-heading slide-up" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <h2 class="section-title">New Arrivals</h2>
+            <p class="section-desc">Select a piece to imagine it in your room with AR.</p>
+          </div>
+          <a href="products.html" class="btn-secondary view-all-link">
+            <span>Explore All Products</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
         </div>
 
-        <div class="products-grid">
-          <!-- Product 1 -->
-          <div class="product-card reveal" style="--delay: 0.1s">
-            <div class="product-image-container">
-              <img src="assets/product_sofa.png" alt="Aura Cloud Sofa" class="product-img" />
-              <button class="btn-ar-view">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg>
-                <span>3D</span>
-              </button>
-              <button class="btn-quick-order">
-                <span>Order Now</span>
-              </button>
-            </div>
-            <div class="product-info">
-              <h3>Aura Cloud Sofa</h3>
-              <p class="price">₱1,299</p>
+        <!-- Interactive Carousel Slideshow -->
+        <div class="carousel-wrapper">
+          <button id="carousel-prev-btn" class="carousel-nav-btn prev" aria-label="Previous Slide">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+
+          <div id="carousel-track-container" class="carousel-track-container">
+            <div id="carousel-track" class="carousel-track">
+              <!-- Dynamically populated or rendered product cards -->
             </div>
           </div>
 
-          <!-- Product 2 -->
-          <div class="product-card reveal" style="--delay: 0.2s">
-            <div class="product-image-container">
-              <img src="assets/product_chair.png" alt="Nox Lounge Chair" class="product-img" />
-              <button class="btn-ar-view">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg>
-                <span>3D</span>
-              </button>
-              <button class="btn-quick-order">
-                <span>Order Now</span>
-              </button>
-            </div>
-            <div class="product-info">
-              <h3>Nox Lounge Chair</h3>
-              <p class="price">₱599</p>
-            </div>
-          </div>
-
-          <!-- Product 3 -->
-          <div class="product-card reveal" style="--delay: 0.3s">
-            <div class="product-image-container">
-              <img src="assets/product_lamp.png" alt="Eclipse Floor Lamp" class="product-img" />
-              <button class="btn-ar-view">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg>
-                <span>3D</span>
-              </button>
-              <button class="btn-quick-order">
-                <span>Order Now</span>
-              </button>
-            </div>
-            <div class="product-info">
-              <h3>Eclipse Floor Lamp</h3>
-              <p class="price">₱249</p>
-            </div>
-          </div>
+          <button id="carousel-next-btn" class="carousel-nav-btn next" aria-label="Next Slide">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
         </div>
+
+        <!-- Pagination Indicators -->
+        <div id="carousel-pagination" class="carousel-pagination"></div>
       </section>
 
       <!-- CTA / Download Section -->
@@ -616,28 +581,12 @@
               Payment Method
             </div>
             <div class="payment-methods-grid">
-              <div class="payment-card selected" data-method="COD">
-                <div class="payment-card-left">
-                  <div class="payment-card-icon">🚚</div>
-                  <div class="payment-card-text">
-                    <h5>Cash on Delivery</h5>
-                    <p>Pay when your furniture arrives</p>
-                  </div>
-                </div>
-                <div class="payment-card-check">
-                  <svg viewBox="0 0 24 24" width="20" height="20">
-                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
-                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                  </svg>
-                </div>
-              </div>
-
-              <div class="payment-card" data-method="GCash">
+              <div class="payment-card selected" data-method="GCash">
                 <div class="payment-card-left">
                   <div class="payment-card-icon">📱</div>
                   <div class="payment-card-text">
                     <h5>GCash / E-Wallet</h5>
-                    <p>Secure online payment via PayMongo</p>
+                    <p>Pay 30% downpayment or 100% full via PayMongo</p>
                   </div>
                 </div>
                 <div class="payment-card-check">
@@ -653,7 +602,39 @@
                   <div class="payment-card-icon">🏦</div>
                   <div class="payment-card-text">
                     <h5>Bank Transfer</h5>
-                    <p>Direct online banking payment</p>
+                    <p>Direct online banking or QR bank transfer</p>
+                  </div>
+                </div>
+                <div class="payment-card-check">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
+                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
+                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                  </svg>
+                </div>
+              </div>
+
+              <div class="payment-card" data-method="Workshop">
+                <div class="payment-card-left">
+                  <div class="payment-card-icon">🏪</div>
+                  <div class="payment-card-text">
+                    <h5>Walk-in / Workshop Payment</h5>
+                    <p>Pay 30% downpayment or 100% in-person at Lanica Workshop</p>
+                  </div>
+                </div>
+                <div class="payment-card-check">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
+                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
+                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                  </svg>
+                </div>
+              </div>
+
+              <div class="payment-card" data-method="COD">
+                <div class="payment-card-left">
+                  <div class="payment-card-icon">🚚</div>
+                  <div class="payment-card-text">
+                    <h5>Cash on Delivery</h5>
+                    <p>Pay cash upon delivery of ready items</p>
                   </div>
                 </div>
                 <div class="payment-card-check">
@@ -684,50 +665,90 @@
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
               </svg>
-              Select Payment Terms
+              SELECT PAYMENT TERMS
             </div>
             <div class="payment-terms-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
-              <label class="payment-term-card selected" id="term-downpayment-card" style="border: 2px solid var(--clr-yellow, #fcd535); border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
-                <input type="radio" name="checkoutPaymentTerm" value="downpayment" checked style="accent-color: #000; margin-bottom: 6px;">
-                <strong style="font-size: 0.95rem;">30% Downpayment</strong>
-                <small style="color: #6b7280; font-size: 0.8rem; margin-top: 2px;">Pay 30% deposit to commence crafting. Settle 70% balance upon dispatch.</small>
-              </label>
               <label class="payment-term-card" id="term-full-card" style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
                 <input type="radio" name="checkoutPaymentTerm" value="full" style="accent-color: #000; margin-bottom: 6px;">
-                <strong style="font-size: 0.95rem;">Full Payment (100%)</strong>
-                <small style="color: #6b7280; font-size: 0.8rem; margin-top: 2px;">Settle the entire amount upfront for priority workshop scheduling.</small>
+                <strong style="font-size: 0.85rem; text-transform: uppercase;">FULL PAYMENT (100%)</strong>
+                <span id="term-full-amount" style="font-weight: 800; font-size: 1rem; color: #111827; margin-top: 4px;">₱0</span>
               </label>
+              <label class="payment-term-card selected" id="term-downpayment-card" style="border: 2px solid var(--clr-yellow, #fcd535); border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
+                <input type="radio" name="checkoutPaymentTerm" value="downpayment" checked style="accent-color: #000; margin-bottom: 6px;">
+                <strong style="font-size: 0.85rem; text-transform: uppercase;">30% DOWNPAYMENT</strong>
+                <span id="term-down-amount" style="font-weight: 800; font-size: 1rem; color: #059669; margin-top: 4px;">₱0</span>
+              </label>
+            </div>
+            <div style="background: #fffdf0; border: 1px solid #fef08a; border-radius: 10px; padding: 10px 14px; margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.88rem;">
+                <span id="term-summary-due-label" style="font-weight: 600; color: #111827;">Due Today (30% Downpayment):</span>
+                <strong id="checkout-due-today" style="color: #059669; font-size: 0.95rem;">₱0</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-top: 4px;">
+                <span style="color: #4b5563;">Balance Due at Delivery:</span>
+                <strong id="checkout-balance-due" style="color: #d97706;">₱0</strong>
+              </div>
             </div>
           </div>
 
-          <!-- Step 4: Order Summary -->
+          <!-- Step 3.5: Custom Design & Notes -->
           <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              CUSTOM DESIGN & NOTES
+            </div>
+            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #d97706; text-transform: uppercase; margin-bottom: 4px;">
+                  ATTACH AR SCREENSHOTS OR SKETCHES
+                </label>
+                <input type="file" id="checkout-custom-sketch" accept="image/*" style="font-size: 0.85rem; width: 100%; border: 1px dashed #fcd535; border-radius: 8px; padding: 10px; background: #fffbeb;" />
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #d97706; text-transform: uppercase; margin-bottom: 4px;">
+                  DESIGN REQUEST / COMMENTS
+                </label>
+                <textarea id="checkout-custom-comments" rows="3" placeholder="e.g. 'I want the sofa in blue velvet' or 'Please use leather'..." style="width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; font-size: 0.85rem; font-family: inherit; box-sizing: border-box;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Order Items List -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              ORDER ITEMS (<span id="checkout-item-count">0</span>)
+            </div>
+            <div id="checkout-items-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;"></div>
+          </div>
+
+          <!-- Step 5: Order Summary -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">ORDER SUMMARY</div>
             <div class="checkout-summary-box">
               <div class="summary-line">
-                <span>Items Subtotal</span>
+                <span>Total Product Value</span>
                 <span id="checkout-subtotal">₱0</span>
               </div>
               <div class="summary-line">
-                <span>Estimated Shipping</span>
-                <span id="checkout-shipping">₱150</span>
+                <span>Shipping Fee</span>
+                <span id="checkout-shipping">FREE</span>
               </div>
-              <div class="summary-line total">
-                <span>Total Order Value</span>
-                <span id="checkout-total">₱150</span>
+              <div class="summary-line total" id="checkout-downpayment-row" style="color: #059669; font-weight: 700; border-top: 1px dashed #e5e7eb; padding-top: 8px; margin-top: 8px;">
+                <span id="checkout-charge-label">Today's Charge (30% Downpayment)</span>
+                <span id="checkout-charge-amount">₱0</span>
               </div>
-              <div class="summary-line" id="checkout-downpayment-row" style="color: #2563eb; font-weight: 600; border-top: 1px dashed #e5e7eb; padding-top: 6px; margin-top: 6px;">
-                <span>Due Today (30% Downpayment)</span>
-                <span id="checkout-due-today">₱75</span>
-              </div>
-              <div class="summary-line" id="checkout-balance-row" style="color: #4b5563; font-size: 0.85rem;">
-                <span>Remaining Balance Upon Ready</span>
-                <span id="checkout-balance-due">₱75</span>
+              <div class="summary-line" id="checkout-balance-row" style="color: #6b7280; font-size: 0.85rem; margin-top: 4px;">
+                <span>Remaining Balance Due at Delivery</span>
+                <span id="checkout-balance-due-summary">₱0</span>
               </div>
             </div>
           </div>
 
-          <button type="button" id="place-order-submit-btn" class="btn-primary" style="width: 100%; font-size: 1.1rem; padding: 18px; text-transform: uppercase; font-weight: 700;">
-            PLACE ORDER (COD)
+          <button type="button" id="place-order-submit-btn" class="btn-primary" style="width: 100%; font-size: 1rem; padding: 16px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+            PLACE ORDER & PAY ₱0
           </button>
         </div>
       </div>
@@ -887,7 +908,7 @@
             </div>
 
             <!-- 2. Email Us -->
-            <a href="mailto:support@lanica.com" class="support-method-card text-decoration-none">
+            <a href="mailto:pawerlanica@gmail.com" class="support-method-card text-decoration-none">
               <div class="method-icon-box blue">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
@@ -897,7 +918,7 @@
               <div class="method-info">
                 <h4>Email Us</h4>
                 <p>Response within 24 hours</p>
-                <span class="method-link">support@lanica.com</span>
+                <span class="method-link">pawerlanica@gmail.com</span>
               </div>
               <svg class="method-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="9 18 15 12 9 6"></polyline>
@@ -905,7 +926,7 @@
             </a>
 
             <!-- 3. Call Our Hotline -->
-            <a href="tel:+639000000000" class="support-method-card text-decoration-none">
+            <a href="tel:09516946867" class="support-method-card text-decoration-none">
               <div class="method-icon-box green">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
@@ -914,7 +935,7 @@
               <div class="method-info">
                 <h4>Call Our Hotline</h4>
                 <p>Mon - Fri, 9am - 5pm</p>
-                <span class="method-link phone">+63 9XX XXX XXXX</span>
+                <span class="method-link phone">0951 694 6867</span>
               </div>
               <svg class="method-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="9 18 15 12 9 6"></polyline>
@@ -925,23 +946,9 @@
           <div class="support-footer-section">
             <span class="support-footer-label">FOLLOW US</span>
             <div class="support-social-row">
-              <a href="https://facebook.com" target="_blank" rel="noopener" class="social-bubble fb" aria-label="Facebook">
+              <a href="https://www.facebook.com/lanicassofasalaset" target="_blank" rel="noopener" class="social-bubble fb" aria-label="Facebook">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                   <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
-                </svg>
-              </a>
-              <a href="https://instagram.com" target="_blank" rel="noopener" class="social-bubble ig" aria-label="Instagram">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                </svg>
-              </a>
-              <a href="https://lanica.com" target="_blank" rel="noopener" class="social-bubble web" aria-label="Website">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="2" y1="12" x2="22" y2="12"></line>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                 </svg>
               </a>
             </div>

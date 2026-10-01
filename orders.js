@@ -20,7 +20,7 @@ import {
   formatOrderDate,
 } from "./orderService.js";
 
-import { ensureAuth, subscribeToCart } from "./cartService.js";
+import { ensureAuth, subscribeToCart, parsePrice } from "./cartService.js";
 import {
   sendChatMessage,
   subscribeToMessages,
@@ -308,7 +308,7 @@ function renderCartDrawerUI(items) {
           <div style="font-weight: 600; font-size: 0.9rem; color: var(--clr-black);">${item.name}</div>
           <div style="font-size: 0.78rem; color: var(--clr-text-muted);">${item.material || 'Fabric'} x ${item.quantity}</div>
         </div>
-        <div style="font-weight: 700; font-size: 0.95rem; color: var(--clr-black);">₱${(Number(item.price) * Number(item.quantity)).toLocaleString()}</div>
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--clr-black);">₱${(parsePrice(item.price) * Number(item.quantity)).toLocaleString()}</div>
       </div>
     `;
   });

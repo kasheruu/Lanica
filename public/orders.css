@@ -664,22 +664,42 @@ body {
   color: var(--clr-black);
 }
 
-.modal-close-btn {
-  background: transparent;
-  border: none;
-  color: var(--clr-text-muted);
-  cursor: pointer;
-  padding: 6px;
-  display: flex;
+.modal-close-btn,
+.chat-close-btn,
+.close-support-drawer,
+.close-viewer,
+.btn-close,
+#chat-cancel-attachment {
+  background: #f1f5f9;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: all var(--transition-fast);
+  cursor: pointer;
+  color: #475569;
+  font-size: 1.1rem;
+  font-family: inherit;
+  line-height: 1;
+  padding: 0;
+  outline: none;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.modal-close-btn:hover {
-  color: var(--clr-black);
-  background: var(--clr-gray-light);
+.modal-close-btn:hover,
+.chat-close-btn:hover,
+.close-support-drawer:hover,
+.close-viewer:hover,
+.btn-close:hover,
+#chat-cancel-attachment:hover {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+  transform: rotate(90deg) scale(1.08);
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.25);
 }
 
 .cancel-modal-body p {
