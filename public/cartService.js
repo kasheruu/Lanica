@@ -367,6 +367,31 @@ export async function placeOrderAtomic({
     const customerName = address.recipientName || address.fullName || address.name || "";
     const customerEmail = address.email || "";
 
+    const landmarkText = String(address.nearestLandmark || address.landmark || "").trim();
+
+    const shippingAddressObj = {
+      recipientName: customerName,
+      fullName: customerName,
+      phoneNumber: address.phoneNumber || "",
+      phone: address.phoneNumber || "",
+      fullAddress: address.fullAddress || "",
+      address: address.fullAddress || "",
+      nearestLandmark: landmarkText,
+      landmark: landmarkText,
+      latitude: address.latitude || null,
+      longitude: address.longitude || null,
+    };
+
+    const addressObj = {
+      recipientName: customerName,
+      phoneNumber: address.phoneNumber || "",
+      fullAddress: address.fullAddress || "",
+      nearestLandmark: landmarkText,
+      landmark: landmarkText,
+      latitude: address.latitude || null,
+      longitude: address.longitude || null,
+    };
+
     const orderDocData = {
       orderId: orderId,
       userId: userId,
@@ -396,13 +421,9 @@ export async function placeOrderAtomic({
       estimatedLeadTime: hasMadeToOrderItems
         ? "14-21 Business Days (Crafted Upon Order)"
         : "3-5 Business Days (Ready Stock)",
-      address: {
-        recipientName: address.recipientName || "",
-        phoneNumber: address.phoneNumber || "",
-        fullAddress: address.fullAddress || "",
-        latitude: address.latitude || null,
-        longitude: address.longitude || null,
-      },
+      shippingAddress: shippingAddressObj,
+      address: addressObj,
+      nearestLandmark: landmarkText,
       customNotes: String(customNotes || "").trim(),
       paymentDetails: paymentDetails || {},
       createdAt: serverTimestamp(),

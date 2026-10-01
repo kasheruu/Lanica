@@ -2500,8 +2500,13 @@ function renderOrdersList(orders) {
       ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop">🏪 Store Pickup</span>`
       : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}">🚚 Delivery</span>`;
 
+    const nearestLandmark = order.shippingAddress?.nearestLandmark || addressObj.nearestLandmark || order.nearestLandmark || addressObj.landmark || "";
+    const landmarkBadgeHtml = nearestLandmark
+      ? `<div style="font-size:0.73rem; color:#d97706; font-weight:500; margin-top:2px; max-width:170px; line-height:1.2; white-space:normal;" title="Landmark / Instructions: ${escapeHtml(nearestLandmark)}">📌 ${escapeHtml(nearestLandmark)}</div>`
+      : "";
+
     const addressDisplayHtml = !isPickup && fullAddr
-      ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>`
+      ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>${landmarkBadgeHtml}`
       : isPickup
         ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px;">Lanica Workshop</div>`
         : ``;

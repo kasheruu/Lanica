@@ -44,8 +44,8 @@ let currentUser = null;
 let currentCartItems = [];
 let selectedAddressId = null;
 let savedAddresses = [];
-let selectedPaymentMethod = "GCash";
-let selectedPaymentTerm = "downpayment"; // "downpayment" (50%) or "full" (100%)
+let selectedPaymentMethod = "COD";
+let selectedPaymentTerm = "downpayment"; // "downpayment" (30%) or "full" (100%)
 let currentModalProduct = null;
 let currentSelectedMaterial = "Fabric";
 let currentSelectedQty = 1;
@@ -490,12 +490,37 @@ function updateCheckoutTotals() {
   }
 }
 
+function updateSubmitButtonText() {
+  const submitBtn = document.getElementById("place-order-submit-btn");
+  if (!submitBtn) return;
+  const method = (selectedPaymentMethod || "COD").toUpperCase();
+  if (method.includes("GCASH")) {
+    submitBtn.textContent = "PLACE ORDER (GCASH)";
+  } else if (method.includes("BANK")) {
+    submitBtn.textContent = "PLACE ORDER (BANK TRANSFER)";
+  } else {
+    submitBtn.textContent = "PLACE ORDER (COD)";
+  }
+}
+
+function updateProofOfPaymentBox() {
+  const proofBox = document.getElementById("proof-payment-box");
+  if (!proofBox) return;
+  if (selectedPaymentMethod === "COD") {
+    proofBox.style.display = "none";
+  } else {
+    proofBox.style.display = "block";
+  }
+}
+
 // Phase 3 & 4: Setup Checkout Modal & Addresses
 async function openCheckoutModal() {
   if (!currentUser || currentCartItems.length === 0) return;
 
   const checkoutModal = document.getElementById("checkout-modal");
   updateCheckoutTotals();
+  updateSubmitButtonText();
+  updateProofOfPaymentBox();
 
   // Load saved addresses
   await loadUserAddresses();
@@ -712,8 +737,12 @@ function setupStorefrontUI() {
       document.querySelectorAll(".payment-card").forEach((c) => c.classList.remove("selected"));
       card.classList.add("selected");
       selectedPaymentMethod = card.getAttribute("data-method") || "COD";
+      updateSubmitButtonText();
+      updateProofOfPaymentBox();
     });
   });
+  updateSubmitButtonText();
+  updateProofOfPaymentBox();
 
   // Place Order Submit Handler
   const placeOrderBtn = document.getElementById("place-order-submit-btn");
@@ -866,13 +895,19 @@ async function handlePlaceOrderSubmit() {
 
     // 2. Atomic Order Placement with Made-to-Order & Downpayment Support
     submitBtn.textContent = "Finalizing Order...";
+    const nearestLandmarkVal = document.getElementById("checkout-nearest-landmark")?.value?.trim() || "";
+    const addressWithLandmark = {
+      ...targetAddress,
+      nearestLandmark: nearestLandmarkVal,
+    };
+
     const result = await placeOrderAtomic({
       userId: currentUser.uid,
       cartItems: currentCartItems,
       totalAmount: totalAmount,
       paymentMethod: selectedPaymentMethod,
       paymentOption: selectedPaymentTerm,
-      address: targetAddress,
+      address: addressWithLandmark,
       paymentDetails: {
         paymentSlipUrl: paymentSlipUrl || null,
         selectedTerm: selectedPaymentTerm,
@@ -1442,20 +1477,18 @@ function setupLiveChatWidget() {
   function renderMessagesList(messages, channelType, orderNum = "") {
     if (!messagesArea) return;
 
-    let welcomeHtml = "";
-    if (channelType === "support") {
-      welcomeHtml = `
+    const welcomeHtml =
+      channelType === "support"
+        ? `
         <div class="chat-welcome-card">
           <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Live Support. Chat directly with our staff about custom builds, timber stains, finishes, or questions about our AR app!</p>
         </div>
-      `;
-    } else {
-      welcomeHtml = `
+      `
+        : `
         <div class="chat-welcome-card">
           <p>🧵 <strong>Order #${orderNum} Crafting Channel:</strong> Message our workshop team about dimensions, lumber finishes, fabric swatches, or crafting updates!</p>
         </div>
       `;
-    }
 
     let html = welcomeHtml;
 

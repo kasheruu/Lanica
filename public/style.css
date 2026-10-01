@@ -1717,41 +1717,88 @@ footer {
   box-shadow: 0 0 0 3px rgba(252, 213, 53, 0.3);
 }
 
-/* Payment Method Cards */
-.payment-methods-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+/* Nearest Landmark & Checkout Alignment */
+.checkout-landmark-input {
+  width: 100%;
+  border: 1.5px solid #d1d5db;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: #fafafa;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
 }
 
-@media (max-width: 550px) {
-  .payment-methods-grid {
-    grid-template-columns: 1fr;
-  }
+.checkout-landmark-input:focus {
+  border-color: var(--clr-yellow, #fcd535);
+  background: #ffffff;
+}
+
+/* Payment Method Cards (Mobile App Alignment) */
+.payment-methods-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .payment-card {
-  border: 2px solid var(--clr-gray-light);
-  border-radius: var(--border-radius);
-  padding: 16px 12px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #f9fafb;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
+.payment-card:hover {
+  border-color: #cbd5e1;
+}
+
 .payment-card.selected {
-  border-color: var(--clr-yellow);
-  background: rgba(252, 213, 53, 0.08);
+  border-color: var(--clr-yellow, #fcd535);
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--clr-yellow, #fcd535);
+}
+
+.payment-card-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .payment-card-icon {
-  font-size: 1.5rem;
-  margin-bottom: 6px;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.payment-card h5 {
-  font-size: 0.9rem;
+.payment-card-text h5 {
+  font-size: 0.95rem;
   font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.payment-card-text p {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 2px 0 0 0;
+}
+
+.payment-card-check {
+  display: none;
+}
+
+.payment-card.selected .payment-card-check {
+  display: flex;
+  align-items: center;
 }
 
 .checkout-summary-box {

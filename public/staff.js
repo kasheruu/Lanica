@@ -1190,13 +1190,20 @@ function renderOrders() {
     `
         : '<span style="font-size:0.82rem;color:#6b7280;">N/A</span>';
 
+    const addressObj = order.address || order.shippingAddress || order.deliveryAddress || {};
+    const landmark = order.shippingAddress?.nearestLandmark || addressObj.nearestLandmark || order.nearestLandmark || addressObj.landmark || "";
+    const landmarkHtml = landmark ? `<div style="font-size:0.75rem; color:#d97706; font-weight:500; margin-top:2px;" title="Landmark: ${escapeHtml(landmark)}">📌 ${escapeHtml(landmark)}</div>` : "";
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>
         <strong style="font-size:0.9rem;">${escapeHtml(order.id.slice(0, 8))}...</strong>
         <div style="font-size:0.75rem;color:#9ca3af;margin-top:4px;">${escapeHtml(dateStr)}</div>
       </td>
-      <td>${escapeHtml(String(customer))}</td>
+      <td>
+        <strong>${escapeHtml(String(customer))}</strong>
+        ${landmarkHtml}
+      </td>
       <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
       <td>${totalStr}</td>
       <td>

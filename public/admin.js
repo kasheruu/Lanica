@@ -2500,8 +2500,13 @@ function renderOrdersList(orders) {
       ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop">🏪 Store Pickup</span>`
       : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}">🚚 Delivery</span>`;
 
+    const nearestLandmark = order.shippingAddress?.nearestLandmark || addressObj.nearestLandmark || order.nearestLandmark || addressObj.landmark || "";
+    const landmarkBadgeHtml = nearestLandmark
+      ? `<div style="font-size:0.73rem; color:#d97706; font-weight:500; margin-top:2px; max-width:170px; line-height:1.2; white-space:normal;" title="Landmark / Instructions: ${escapeHtml(nearestLandmark)}">📌 ${escapeHtml(nearestLandmark)}</div>`
+      : "";
+
     const addressDisplayHtml = !isPickup && fullAddr
-      ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>`
+      ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>${landmarkBadgeHtml}`
       : isPickup
         ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px;">Lanica Workshop</div>`
         : ``;
@@ -2537,25 +2542,11 @@ function renderOrdersList(orders) {
       refundBadgeHtml = `<div><span class="refund-status-badge rejected">❌ Refund Rejected</span></div>`;
     }
 
-    const isStatusEditable = st !== "delivered" && st !== "cancelled" && st !== "declined" && !isRefundCompleted;
-
     const statusColumnHtml = `
-      <div style="display:flex; flex-direction:column; gap:4px; min-width:130px;">
+      <div>
         <span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(
           st.charAt(0).toUpperCase() + st.slice(1)
         )}</span>
-        ${
-          isStatusEditable
-            ? `<select class="order-status-select" data-order-id="${escapeHtml(order.id)}" aria-label="Change order status" style="font-size:0.75rem; padding:3px 6px; border-radius:6px; border:1px solid #d1d5db; background:#fff; cursor:pointer;">
-                <option value="placed" ${st === "placed" ? "selected" : ""}>Step 0: PLACED</option>
-                <option value="downpayment confirmed" ${st === "downpayment confirmed" ? "selected" : ""}>Step 1: CONFIRMED</option>
-                <option value="in production" ${st === "in production" ? "selected" : ""}>Step 2: CRAFTING</option>
-                <option value="quality checked" ${st === "quality checked" ? "selected" : ""}>Step 3: INSPECTED</option>
-                <option value="shipped" ${st === "shipped" ? "selected" : ""}>Step 4: DISPATCHED</option>
-                <option value="delivered" ${st === "delivered" ? "selected" : ""}>Step 5: DELIVERED</option>
-              </select>`
-            : ""
-        }
         ${refundBadgeHtml}
       </div>
     `;

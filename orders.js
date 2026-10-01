@@ -313,8 +313,8 @@ function renderCartDrawerUI(items) {
     `;
   });
   html += `
-    <a href="index.html" class="btn-primary" style="display: block; text-align: center; text-decoration: none; margin-top: 16px;">
-      Go to Checkout
+    <a href="index.html#collections" class="btn-primary" style="display: block; text-align: center; text-decoration: none; margin-top: 16px;">
+      Browse Furniture Catalog
     </a>
   </div>`;
 
@@ -723,6 +723,12 @@ function createOrderCardElement(order) {
     `;
   }
 
+  const shippingAddrObj = order.shippingAddress || order.address || {};
+  const landmark = shippingAddrObj.nearestLandmark || order.nearestLandmark || shippingAddrObj.landmark || "";
+  const landmarkHTML = landmark
+    ? `<div style="font-size:0.8rem; color:#b45309; background:#fffbeb; border:1px solid #fef3c7; padding:6px 10px; border-radius:6px; margin-top:8px;">📌 <strong>Landmark / Instructions:</strong> ${escapeHtml(landmark)}</div>`
+    : "";
+
   card.innerHTML = `
     <div class="order-card-header">
       <div class="order-meta">
@@ -749,6 +755,7 @@ function createOrderCardElement(order) {
           <strong style="color: var(--clr-black);">${escapeHtml(paymentMethod)}</strong>
         </div>
         ${paymentDetailsHTML}
+        ${landmarkHTML}
       </div>
 
       <div class="order-total-box">
@@ -1031,20 +1038,18 @@ function setupLiveChatWidget() {
   function renderMessagesList(messages, channelType, orderNum = "") {
     if (!messagesArea) return;
 
-    let welcomeHtml = "";
-    if (channelType === "support") {
-      welcomeHtml = `
+    const welcomeHtml =
+      channelType === "support"
+        ? `
         <div class="chat-welcome-card">
           <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Live Support. Chat directly with our staff about custom builds, timber stains, finishes, or questions about our AR app!</p>
         </div>
-      `;
-    } else {
-      welcomeHtml = `
+      `
+        : `
         <div class="chat-welcome-card">
           <p>🧵 <strong>Order #${orderNum} Crafting Channel:</strong> Message our workshop team about dimensions, lumber finishes, fabric swatches, or crafting updates!</p>
         </div>
       `;
-    }
 
     let html = welcomeHtml;
 
