@@ -2583,6 +2583,8 @@ const analyticsCategoryLegendEl = document.getElementById("analytics-category-le
 let allOrders = [];
 staffMembers = [];
 let ordersFilterValue = "all";
+let adminOrdersSearchQuery = "";
+let adminChatSearchQuery = "";
 const selectedDeclinedOrderIds = new Set();
 let isBatchDeleteMode = false;
 let allUsers = [];
@@ -3554,6 +3556,40 @@ function applyOrdersFilter() {
       rows = activeOrders.filter((o) => normalizeOrderStatus(o.status) === ordersFilterValue);
     }
   }
+
+  // Real-time debounced search filtering for orders
+  if (adminOrdersSearchQuery) {
+    const q = adminOrdersSearchQuery.toLowerCase().trim();
+    rows = rows.filter((o) => {
+      // 1. Order ID
+      if (o.id && o.id.toLowerCase().includes(q)) return true;
+      // 2. Customer Name, Email, or Recipient Name
+      const cust = (
+        customerNameByUid.get(o.customerId) ||
+        customerNameByEmail.get(o.customerEmail) ||
+        o.customerName ||
+        o.shippingAddress?.recipientName ||
+        o.recipientName ||
+        o.customerEmail ||
+        ""
+      ).toLowerCase();
+      if (cust.includes(q)) return true;
+      // 3. Product Title or Items
+      if (Array.isArray(o.items)) {
+        const itemMatch = o.items.some((it) => {
+          const t = (it.name || it.title || it.productTitle || "").toLowerCase();
+          const mat = (it.material || "").toLowerCase();
+          return t.includes(q) || mat.includes(q);
+        });
+        if (itemMatch) return true;
+      }
+      // 4. Status
+      const statusText = (o.status || "").toLowerCase();
+      if (statusText.includes(q)) return true;
+      return false;
+    });
+  }
+
   renderOrdersList(rows);
   renderCompletedOrdersHistory(allOrders.filter((o) => isOrderCompleted(o)));
   renderWorkshopQueue(allOrders);
@@ -3773,6 +3809,33 @@ async function handleBatchDeleteDeclined() {
 if (ordersStatusFilter) {
   ordersStatusFilter.addEventListener("change", () => {
     ordersFilterValue = ordersStatusFilter.value;
+    applyOrdersFilter();
+  });
+}
+
+const adminOrdersSearchInput = document.getElementById("admin-orders-search-input");
+const adminOrdersSearchClear = document.getElementById("admin-orders-search-clear");
+if (adminOrdersSearchInput) {
+  let ordersSearchDebounce = null;
+  adminOrdersSearchInput.addEventListener("input", (e) => {
+    clearTimeout(ordersSearchDebounce);
+    const val = e.target.value;
+    if (adminOrdersSearchClear) {
+      adminOrdersSearchClear.style.display = val.trim().length > 0 ? "flex" : "none";
+    }
+    ordersSearchDebounce = setTimeout(() => {
+      adminOrdersSearchQuery = val;
+      applyOrdersFilter();
+    }, 250);
+  });
+}
+
+if (adminOrdersSearchClear) {
+  adminOrdersSearchClear.addEventListener("click", () => {
+    if (adminOrdersSearchInput) adminOrdersSearchInput.value = "";
+    adminOrdersSearchClear.style.display = "none";
+    adminOrdersSearchQuery = "";
+    if (adminOrdersSearchInput) adminOrdersSearchInput.focus();
     applyOrdersFilter();
   });
 }
@@ -4910,24 +4973,68 @@ function setupAdminLiveChat() {
     });
   }
 
+  const chatSearchInput = document.getElementById("admin-chat-search-input");
+  const chatSearchClear = document.getElementById("admin-chat-search-clear");
+  let chatSearchDebounce = null;
+
+  if (chatSearchInput) {
+    chatSearchInput.addEventListener("input", (e) => {
+      clearTimeout(chatSearchDebounce);
+      const val = e.target.value;
+      if (chatSearchClear) {
+        chatSearchClear.style.display = val.trim().length > 0 ? "flex" : "none";
+      }
+      chatSearchDebounce = setTimeout(() => {
+        adminChatSearchQuery = val;
+        renderChatSessionsList(allChatSessions);
+      }, 200);
+    });
+  }
+
+  if (chatSearchClear) {
+    chatSearchClear.addEventListener("click", () => {
+      if (chatSearchInput) chatSearchInput.value = "";
+      chatSearchClear.style.display = "none";
+      adminChatSearchQuery = "";
+      if (chatSearchInput) chatSearchInput.focus();
+      renderChatSessionsList(allChatSessions);
+    });
+  }
+
   function renderChatSessionsList(sessions) {
     if (!sessionsListEl) return;
 
     // Filter by active category tab
-    const filteredSessions = sessions.filter((s) => {
+    let filteredSessions = sessions.filter((s) => {
       if (currentChatFilter === "support") return s.sessionType === "support";
       if (currentChatFilter === "orders") return s.sessionType === "order";
       return true;
     });
 
+    // Real-time search query filtering by customer name, email, order ID, and message preview
+    if (adminChatSearchQuery) {
+      const q = adminChatSearchQuery.toLowerCase().trim();
+      filteredSessions = filteredSessions.filter((s) => {
+        const name = (s.customerName || "").toLowerCase();
+        const email = (s.customerEmail || "").toLowerCase();
+        const id = String(s.id || s.actualId || "").toLowerCase();
+        const preview = (sessionLatestMessages.get(s.id)?.text || "").toLowerCase();
+        return name.includes(q) || email.includes(q) || id.includes(q) || preview.includes(q);
+      });
+    }
+
     if (filteredSessions.length === 0) {
-      sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
-        currentChatFilter === "support"
-          ? "general live support"
-          : currentChatFilter === "orders"
-          ? "order crafting"
-          : "active"
-      } conversations found.</div>`;
+      if (adminChatSearchQuery) {
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No conversations found matching "${escapeHtml(adminChatSearchQuery)}".</div>`;
+      } else {
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
+          currentChatFilter === "support"
+            ? "general live support"
+            : currentChatFilter === "orders"
+            ? "order crafting"
+            : "active"
+        } conversations found.</div>`;
+      }
       return;
     }
 

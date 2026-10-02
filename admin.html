@@ -410,7 +410,12 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2 id="modal-title">Add New Product</h2>
-          <button id="close-modal" class="btn-close">&times;</button>
+          <button id="close-modal" class="btn-close modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <!-- Form Autosave / Draft Indicator Banner -->
@@ -725,7 +730,12 @@
       <div class="modal-content" style="max-width: 800px; height: 80vh; display: flex; flex-direction: column">
         <div class="modal-header">
           <h2 id="viewer-title">3D Model Viewer</h2>
-          <button id="close-viewer-btn" class="btn-close">&times;</button>
+          <button id="close-viewer-btn" class="btn-close modal-close-btn" aria-label="Close 3D Viewer">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div id="viewer-status" class="viewer-status"></div>
         <div id="viewer-loading" class="viewer-loading" aria-live="polite">
@@ -748,7 +758,12 @@
       <div class="modal-content" style="max-width: 620px;">
         <div class="modal-header" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 16px;">
           <h2 style="margin:0; font-size:1.2rem; color:#111827;">💸 Review & Approve Refund Request</h2>
-          <button id="close-refund-modal-btn" class="btn-close" type="button">&times;</button>
+          <button id="close-refund-modal-btn" class="btn-close modal-close-btn" type="button" aria-label="Close Refund Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
         <div class="refund-modal-body">
           <div class="refund-summary-card" style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:16px;">
@@ -923,6 +938,29 @@
             <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Active Conversations</h3>
             <span style="font-size: 0.78rem; color: #6b7280;">Real-time customer inquiries & workshop chats</span>
           </div>
+          <!-- Dedicated Search Bar for Live Chat Conversations -->
+          <div style="padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e7eb;">
+            <div style="position: relative; display: flex; align-items: center;">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 10px; pointer-events: none;">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="text"
+                id="admin-chat-search-input"
+                placeholder="Search customers or messages..."
+                style="width: 100%; padding: 8px 30px 8px 32px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
+                autocomplete="off"
+                aria-label="Search conversations"
+              />
+              <button
+                type="button"
+                id="admin-chat-search-clear"
+                style="display: none; position: absolute; right: 8px; background: #e2e8f0; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 0.75rem; color: #475569; cursor: pointer; align-items: center; justify-content: center; padding: 0;"
+                aria-label="Clear chat search"
+              >✕</button>
+            </div>
+          </div>
           <div style="display: flex; gap: 6px; padding: 8px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
             <button type="button" id="admin-chat-filter-all" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #111827; color: #fff;">All</button>
             <button type="button" id="admin-chat-filter-support" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer; background: #fff; color: #374151;">💬 Support</button>
@@ -1006,7 +1044,28 @@
       </div>
 
       <div class="table-container orders-toolbar users-toolbar">
-        <div class="orders-toolbar-inner users-toolbar-inner">
+        <div class="orders-toolbar-inner users-toolbar-inner" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+          <!-- Dedicated Real-time Search Input Bar for Admin Orders -->
+          <div class="admin-orders-search-box" style="position: relative; flex: 1; min-width: 260px; max-width: 360px; display: flex; align-items: center;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 12px; pointer-events: none;">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="admin-orders-search-input"
+              placeholder="Search Order ID, customer, item, or status..."
+              style="width: 100%; padding: 9px 32px 9px 36px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
+              autocomplete="off"
+              aria-label="Search Orders"
+            />
+            <button
+              type="button"
+              id="admin-orders-search-clear"
+              style="display: none; position: absolute; right: 10px; background: #e2e8f0; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 0.75rem; color: #475569; cursor: pointer; align-items: center; justify-content: center; padding: 0;"
+              aria-label="Clear order search"
+            >✕</button>
+          </div>
           <label for="orders-status-filter" class="orders-filter-label">Filter</label>
           <select id="orders-status-filter" class="orders-filter-select">
             <option value="all">All statuses</option>

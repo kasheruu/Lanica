@@ -226,36 +226,107 @@ ul {
 }
 
 .btn-primary,
-.btn-secondary {
-  padding: 16px 32px;
-  border-radius: 100px;
+.btn-secondary,
+.btn-danger,
+.btn-destructive {
+  padding: 14px 28px;
+  border-radius: 10px;
+  font-family: "Outfit", sans-serif;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.25;
   transition: all var(--transition-fast);
   cursor: pointer;
-  border: none;
+  border: 1.5px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 .btn-primary {
   background-color: var(--clr-yellow);
   color: var(--clr-black);
-  box-shadow: 0 10px 25px rgba(252, 213, 53, 0.3);
+  box-shadow: 0 4px 14px rgba(252, 213, 53, 0.35);
 }
 
 .btn-primary:hover {
   background-color: var(--clr-yellow-hover);
   transform: translateY(-2px);
-  box-shadow: 0 15px 30px rgba(252, 213, 53, 0.4);
+  box-shadow: 0 8px 22px rgba(252, 213, 53, 0.45);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(252, 213, 53, 0.25);
+}
+
+.btn-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(252, 213, 53, 0.5);
 }
 
 .btn-secondary {
-  background-color: transparent;
-  color: var(--clr-black);
-  border: 2px solid var(--clr-gray-light);
+  background-color: #ffffff;
+  color: #1f2937;
+  border: 1.5px solid #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .btn-secondary:hover {
-  border-color: var(--clr-black);
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+  color: #111827;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.btn-secondary:active {
+  background-color: #f3f4f6;
+  transform: translateY(0);
+}
+
+.btn-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.35);
+}
+
+.btn-danger,
+.btn-destructive {
+  background-color: #ef4444;
+  color: #ffffff;
+  border: 1.5px solid transparent;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger:hover,
+.btn-destructive:hover {
+  background-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(220, 38, 38, 0.35);
+}
+
+.btn-danger:active,
+.btn-destructive:active {
+  transform: translateY(0);
+}
+
+.btn-danger:focus-visible,
+.btn-destructive:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.4);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled,
+.btn-destructive:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
 .hero-image-wrapper {
@@ -1609,7 +1680,7 @@ footer {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 17, 21, 0.7);
+  background: rgba(15, 17, 21, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 10000;
@@ -1619,7 +1690,9 @@ footer {
   padding: 20px;
   opacity: 0;
   visibility: hidden;
-  transition: all var(--transition-medium);
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-overlay.active {
@@ -1633,41 +1706,59 @@ footer {
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-glass);
-  transform: translateY(20px) scale(0.96);
-  transition: all var(--transition-medium);
+  transform: translateY(20px) scale(0.97);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
   position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-overlay.active .modal-card {
   transform: translateY(0) scale(1);
 }
 
+/* Modal Header: Sticky at Top with Title and Standardized Close Button */
 .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--clr-white);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 30px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--clr-gray-light);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+.modal-header h2,
 .modal-header h3 {
-  font-size: 1.4rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--clr-black);
+  letter-spacing: -0.01em;
 }
 
-/* Elegant Modern Close Buttons */
+/* Standardized Elegant Close (X) Buttons Across All Modals & Drawers */
 .modal-close-btn,
 .chat-close-btn,
 .close-support-drawer,
 .close-viewer,
 .btn-close,
-#chat-cancel-attachment {
+#chat-cancel-attachment,
+#close-cart-btn {
   background: #f1f5f9;
   border: 1px solid rgba(0, 0, 0, 0.08);
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -1679,8 +1770,25 @@ footer {
   line-height: 1;
   padding: 0;
   outline: none;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.modal-close-btn svg,
+.chat-close-btn svg,
+.close-support-drawer svg,
+.close-viewer svg,
+.btn-close svg,
+#close-cart-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
 }
 
 .modal-close-btn:hover,
@@ -1688,12 +1796,13 @@ footer {
 .close-support-drawer:hover,
 .close-viewer:hover,
 .btn-close:hover,
-#chat-cancel-attachment:hover {
+#chat-cancel-attachment:hover,
+#close-cart-btn:hover {
   background: #111827;
   color: #ffffff;
   border-color: #111827;
-  transform: rotate(90deg) scale(1.08);
-  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.25);
+  transform: rotate(90deg) scale(1.06);
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.22);
 }
 
 .modal-close-btn:active,
@@ -1701,12 +1810,150 @@ footer {
 .close-support-drawer:active,
 .close-viewer:active,
 .btn-close:active,
-#chat-cancel-attachment:active {
+#chat-cancel-attachment:active,
+#close-cart-btn:active {
   transform: scale(0.92);
 }
 
+.modal-close-btn:focus-visible,
+.btn-close:focus-visible,
+.chat-close-btn:focus-visible,
+.close-support-drawer:focus-visible,
+.close-viewer:focus-visible {
+  outline: 2px solid var(--clr-yellow, #fcd535);
+  outline-offset: 2px;
+}
+
+/* Modal Body: Scoped Strictly to Scrollable Content */
 .modal-body {
-  padding: 30px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px;
+  max-height: calc(90vh - 72px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Modal Shake Animation for Locked Backdrop Interaction */
+@keyframes modalShakeAnim {
+  0%, 100% { transform: scale(1) translateX(0); }
+  20%, 60% { transform: scale(1) translateX(-6px); }
+  40%, 80% { transform: scale(1) translateX(6px); }
+}
+
+.modal-card.modal-shake {
+  animation: modalShakeAnim 0.38s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Small-Screen Mobile & iPhone SE (375px Viewport Width) Optimization */
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+
+  .modal-card,
+  .checkout-modal-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 94vh !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 20px !important;
+    border-top-right-radius: 20px !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .modal-header {
+    padding: 14px 16px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 25 !important;
+  }
+
+  .modal-header h2,
+  .modal-header h3 {
+    font-size: 1.1rem !important;
+  }
+
+  .modal-body {
+    padding: 16px !important;
+    max-height: calc(94vh - 62px) !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* 44x44px Minimum Touch Targets on Mobile for Close Buttons */
+  .modal-close-btn,
+  .chat-close-btn,
+  .close-support-drawer,
+  .close-viewer,
+  .btn-close,
+  #close-cart-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  .checkout-section {
+    margin-bottom: 18px !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .checkout-section-title {
+    font-size: 0.95rem !important;
+    margin-bottom: 10px !important;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .payment-terms-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .payment-card {
+    padding: 12px 14px !important;
+    border-radius: 10px !important;
+  }
+
+  .payment-card-left {
+    gap: 10px !important;
+  }
+
+  .payment-card-icon {
+    font-size: 1.25rem !important;
+  }
+
+  .payment-card-text h5 {
+    font-size: 0.88rem !important;
+  }
+
+  .payment-card-text p {
+    font-size: 0.76rem !important;
+  }
+
+  .address-card {
+    padding: 12px 14px !important;
+  }
+
+  .address-form-box {
+    padding: 14px !important;
+  }
+
+  #place-order-submit-btn {
+    padding: 14px 16px !important;
+    font-size: 0.92rem !important;
+  }
 }
 
 /* Product Variant Quick View Modal */

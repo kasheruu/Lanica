@@ -200,6 +200,29 @@
               <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Customer Inquiries</h3>
               <span style="font-size: 0.78rem; color: #6b7280;">Real-time support & workshop consultations</span>
             </div>
+            <!-- Dedicated Search Bar for Staff Live Chat Conversations -->
+            <div style="padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e7eb;">
+              <div style="position: relative; display: flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 10px; pointer-events: none;">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="text"
+                  id="staff-chat-search-input"
+                  placeholder="Search customers or messages..."
+                  style="width: 100%; padding: 8px 30px 8px 32px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
+                  autocomplete="off"
+                  aria-label="Search conversations"
+                />
+                <button
+                  type="button"
+                  id="staff-chat-search-clear"
+                  style="display: none; position: absolute; right: 8px; background: #e2e8f0; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 0.75rem; color: #475569; cursor: pointer; align-items: center; justify-content: center; padding: 0;"
+                  aria-label="Clear chat search"
+                >✕</button>
+              </div>
+            </div>
             <div style="display: flex; gap: 6px; padding: 8px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
               <button type="button" id="staff-chat-filter-all" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #111827; color: #fff;">All</button>
               <button type="button" id="staff-chat-filter-support" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer; background: #fff; color: #374151;">💬 Support</button>

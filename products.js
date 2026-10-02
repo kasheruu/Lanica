@@ -1150,13 +1150,36 @@ function setupStorefrontUI() {
     });
   }
 
+  // Checkout Modal Toggles & Backdrop Click Lock
   const checkoutModal = document.getElementById("checkout-modal");
   const closeCheckoutBtn = document.getElementById("close-checkout-modal-btn");
+  const cancelCheckoutBtn = document.getElementById("cancel-checkout-modal-btn");
   const toggleAddressBtn = document.getElementById("toggle-new-address-btn");
   const addressForm = document.getElementById("address-form");
 
-  if (closeCheckoutBtn && checkoutModal) {
-    closeCheckoutBtn.addEventListener("click", () => checkoutModal.classList.remove("active"));
+  const closeCheckoutModal = () => {
+    if (checkoutModal) checkoutModal.classList.remove("active");
+  };
+
+  if (closeCheckoutBtn) {
+    closeCheckoutBtn.addEventListener("click", closeCheckoutModal);
+  }
+  if (cancelCheckoutBtn) {
+    cancelCheckoutBtn.addEventListener("click", closeCheckoutModal);
+  }
+
+  // Backdrop Click Lock: Prevent dismissing modal on backdrop click to protect data
+  if (checkoutModal) {
+    checkoutModal.addEventListener("click", (e) => {
+      if (e.target === checkoutModal) {
+        const card = checkoutModal.querySelector(".modal-card");
+        if (card) {
+          card.classList.remove("modal-shake");
+          void card.offsetWidth;
+          card.classList.add("modal-shake");
+        }
+      }
+    });
   }
 
   if (toggleAddressBtn && addressForm) {

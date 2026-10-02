@@ -3298,23 +3298,67 @@ function setupStaffLiveChat() {
     });
   }
 
+  let staffChatSearchQuery = "";
+  const staffChatSearchInput = document.getElementById("staff-chat-search-input");
+  const staffChatSearchClear = document.getElementById("staff-chat-search-clear");
+  let staffChatSearchDebounce = null;
+
+  if (staffChatSearchInput) {
+    staffChatSearchInput.addEventListener("input", (e) => {
+      clearTimeout(staffChatSearchDebounce);
+      const val = e.target.value;
+      if (staffChatSearchClear) {
+        staffChatSearchClear.style.display = val.trim().length > 0 ? "flex" : "none";
+      }
+      staffChatSearchDebounce = setTimeout(() => {
+        staffChatSearchQuery = val;
+        renderStaffChatSessionsList(allStaffChatSessions);
+      }, 200);
+    });
+  }
+
+  if (staffChatSearchClear) {
+    staffChatSearchClear.addEventListener("click", () => {
+      if (staffChatSearchInput) staffChatSearchInput.value = "";
+      staffChatSearchClear.style.display = "none";
+      staffChatSearchQuery = "";
+      if (staffChatSearchInput) staffChatSearchInput.focus();
+      renderStaffChatSessionsList(allStaffChatSessions);
+    });
+  }
+
   function renderStaffChatSessionsList(sessions) {
     if (!sessionsListEl) return;
 
-    const filteredSessions = sessions.filter((s) => {
+    let filteredSessions = sessions.filter((s) => {
       if (currentStaffChatFilter === "support") return s.sessionType === "support";
       if (currentStaffChatFilter === "orders") return s.sessionType === "order";
       return true;
     });
 
+    if (staffChatSearchQuery) {
+      const q = staffChatSearchQuery.toLowerCase().trim();
+      filteredSessions = filteredSessions.filter((s) => {
+        const name = (s.customerName || "").toLowerCase();
+        const email = (s.customerEmail || "").toLowerCase();
+        const id = String(s.id || s.actualId || "").toLowerCase();
+        const preview = (staffSessionLatestMessages.get(s.id)?.text || "").toLowerCase();
+        return name.includes(q) || email.includes(q) || id.includes(q) || preview.includes(q);
+      });
+    }
+
     if (filteredSessions.length === 0) {
-      sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
-        currentStaffChatFilter === "support"
-          ? "general live support"
-          : currentStaffChatFilter === "orders"
-          ? "order crafting"
-          : "active"
-      } conversations found.</div>`;
+      if (staffChatSearchQuery) {
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No conversations found matching "${escapeHtml(staffChatSearchQuery)}".</div>`;
+      } else {
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
+          currentStaffChatFilter === "support"
+            ? "general live support"
+            : currentStaffChatFilter === "orders"
+            ? "order crafting"
+            : "active"
+        } conversations found.</div>`;
+      }
       return;
     }
 

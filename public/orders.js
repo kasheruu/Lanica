@@ -33,6 +33,7 @@ import {
 let currentUser = null;
 let allOrders = [];
 let activeTabStatus = "all";
+let orderSearchQuery = "";
 let pendingCancelOrderId = null;
 let ordersUnsubscribe = null;
 let cartUnsubscribe = null;
@@ -101,6 +102,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 4. Setup Tab Listeners
   setupTabListeners();
+
+  // 4b. Setup Search Listener
+  setupOrderSearchListener();
 
   // 5. Setup Order Cancellation Modal Listeners
   setupModalListeners();
@@ -383,6 +387,72 @@ function setupTabListeners() {
   });
 }
 
+function matchesOrderSearch(order, query) {
+  if (!query) return true;
+  const q = query.toLowerCase().trim();
+  if (!q) return true;
+
+  // 1. Order ID
+  if (order.id && order.id.toLowerCase().includes(q)) return true;
+
+  // 2. Customer / Recipient Name & Contact
+  const recipient = (
+    order.shippingAddress?.recipientName ||
+    order.recipientName ||
+    order.customerName ||
+    order.userName ||
+    order.userEmail ||
+    ""
+  ).toLowerCase();
+  if (recipient.includes(q)) return true;
+
+  // 3. Product Title / Item Names & Materials
+  if (Array.isArray(order.items)) {
+    const hasItem = order.items.some((item) => {
+      const title = (item.name || item.title || item.productTitle || "").toLowerCase();
+      const material = (item.material || "").toLowerCase();
+      return title.includes(q) || material.includes(q);
+    });
+    if (hasItem) return true;
+  }
+
+  // 4. Order Status (raw and canonical display)
+  const rawStatus = (order.status || "").toLowerCase();
+  const canonicalStatus = (getOrderCanonicalStatus(order) || "").toLowerCase();
+  if (rawStatus.includes(q) || canonicalStatus.includes(q)) return true;
+
+  return false;
+}
+
+function setupOrderSearchListener() {
+  const searchInput = document.getElementById("orders-search-input");
+  const clearBtn = document.getElementById("orders-search-clear");
+  if (!searchInput) return;
+
+  let debounceTimer = null;
+  searchInput.addEventListener("input", (e) => {
+    clearTimeout(debounceTimer);
+    const val = e.target.value;
+    if (clearBtn) {
+      clearBtn.style.display = val.trim().length > 0 ? "flex" : "none";
+    }
+    debounceTimer = setTimeout(() => {
+      orderSearchQuery = val;
+      renderOrdersList();
+    }, 250);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      clearBtn.style.display = "none";
+      orderSearchQuery = "";
+      searchInput.focus();
+      renderOrdersList();
+    });
+  }
+}
+
 function filterOrdersByTab(orders, tabStatus) {
   if (tabStatus === "all") return orders;
 
@@ -401,9 +471,11 @@ function renderOrdersList() {
   const container = document.getElementById("orders-list-container");
   if (!container) return;
 
-  const filteredOrders = filterOrdersByTab(allOrders, activeTabStatus);
+  const tabFiltered = filterOrdersByTab(allOrders, activeTabStatus);
+  const filteredOrders = tabFiltered.filter((o) => matchesOrderSearch(o, orderSearchQuery));
 
   if (filteredOrders.length === 0) {
+    const isSearching = !!orderSearchQuery.trim();
     container.innerHTML = `
       <div class="orders-empty-state">
         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -411,13 +483,31 @@ function renderOrdersList() {
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <path d="M16 10a4 4 0 0 1-8 0"></path>
         </svg>
-        <h3 class="empty-title">No orders found</h3>
-        <p class="empty-desc">You don't have any orders matching the "${getTabDisplayName(activeTabStatus)}" filter.</p>
-        <a href="index.html#collections" class="btn-secondary" style="display: inline-block;">
-          Browse Furniture Catalog
-        </a>
+        <h3 class="empty-title">${isSearching ? "No matching orders found" : "No orders found"}</h3>
+        <p class="empty-desc">${
+          isSearching
+            ? `No orders match your search "${escapeHtml(orderSearchQuery)}" in the ${getTabDisplayName(activeTabStatus)} filter.`
+            : `You don't have any orders matching the "${getTabDisplayName(activeTabStatus)}" filter.`
+        }</p>
+        ${
+          isSearching
+            ? `<button type="button" id="btn-reset-order-search" class="btn-secondary" style="display: inline-block; cursor: pointer; padding: 10px 20px;">Clear Search</button>`
+            : `<a href="index.html#collections" class="btn-secondary" style="display: inline-block;">Browse Furniture Catalog</a>`
+        }
       </div>
     `;
+
+    const resetBtn = container.querySelector("#btn-reset-order-search");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        const input = document.getElementById("orders-search-input");
+        const clearBtn = document.getElementById("orders-search-clear");
+        if (input) input.value = "";
+        if (clearBtn) clearBtn.style.display = "none";
+        orderSearchQuery = "";
+        renderOrdersList();
+      });
+    }
     return;
   }
 
