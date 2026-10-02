@@ -412,6 +412,19 @@
           <h2 id="modal-title">Add New Product</h2>
           <button id="close-modal" class="btn-close">&times;</button>
         </div>
+
+        <!-- Form Autosave / Draft Indicator Banner -->
+        <div id="product-draft-banner" class="product-draft-banner" style="display: none;">
+          <div class="draft-banner-left">
+            <span class="draft-indicator-dot"></span>
+            <span id="product-draft-status-text">Draft saved automatically</span>
+          </div>
+          <div class="draft-banner-actions">
+            <button type="button" id="btn-discard-draft" class="btn-draft-discard" title="Discard current draft and reset form">
+              Discard Draft
+            </button>
+          </div>
+        </div>
         <form id="product-form">
           <input type="hidden" id="product-id" />
           <div class="form-group">
@@ -434,23 +447,110 @@
                 "></textarea>
           </div>
           <div class="form-grid">
-            <div class="form-group">
-              <label for="product-category">Category</label>
-              <select id="product-category" required>
-                <option value="Sofa">Sofa</option>
-                <option value="Bed">Bed</option>
-                <option value="Living Room">Living Room</option>
-                <option value="Bedroom">Bedroom</option>
-              </select>
+            <div class="form-group category-select-group">
+              <div class="form-field-header">
+                <label for="custom-cat-trigger">Category</label>
+                <button type="button" id="btn-toggle-category-mgr" class="btn-category-mgr-toggle" title="Manage and add categories">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align: -1px; margin-right: 4px;">
+                    <path d="M12 5v14M5 12h14"></path>
+                  </svg>
+                  Manage Categories
+                </button>
+              </div>
+
+              <!-- Custom Category Dropdown Component -->
+              <div class="custom-category-dropdown" id="custom-category-dropdown">
+                <!-- Hidden native select for form validity, submission, and programmatic access -->
+                <select id="product-category" required style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px;">
+                  <option value="Sofa">Sofa</option>
+                  <option value="Bed">Bed</option>
+                  <option value="Living Room">Living Room</option>
+                  <option value="Bedroom">Bedroom</option>
+                </select>
+
+                <!-- Custom Trigger displaying Category Name + Pill Badge -->
+                <button type="button" class="custom-cat-trigger" id="custom-cat-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <div class="custom-cat-trigger-content">
+                    <span class="custom-cat-selected-name" id="custom-cat-selected-name">Sofa</span>
+                    <span class="custom-cat-count-badge" id="custom-cat-selected-badge">1 product</span>
+                  </div>
+                  <svg class="custom-cat-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+
+                <!-- Custom Dropdown Menu with Pill Badges -->
+                <div class="custom-cat-menu" id="custom-cat-menu" role="listbox" style="display: none;">
+                  <div class="custom-cat-items-list" id="custom-cat-items-list">
+                    <!-- Populated dynamically with category name and pill count badge -->
+                  </div>
+                  <div class="custom-cat-menu-footer">
+                    <button type="button" id="btn-dropdown-manage-cat" class="btn-dropdown-manage-cat">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"></path>
+                      </svg>
+                      Manage & Add Categories
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Collapsible Modern Category Management Panel (Inline below Category) -->
+              <div id="category-manager-inline-panel" class="category-manager-inline-panel" style="display: none;">
+                <div class="cat-inline-header">
+                  <div class="cat-inline-title">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color: #6366f1;">
+                      <path d="M4 6h16M4 12h16M4 18h7"></path>
+                    </svg>
+                    <span>Categories Management</span>
+                  </div>
+                  <button type="button" id="btn-close-inline-category-mgr" class="btn-cat-inline-close" title="Close Category Manager">&times;</button>
+                </div>
+
+                <div class="cat-inline-add-row">
+                  <div class="cat-inline-input-wrap">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" class="cat-inline-input-icon">
+                      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                    </svg>
+                    <input type="text" id="inline-new-category-input" placeholder="New category name..." maxlength="40" autocomplete="off" />
+                  </div>
+                  <button type="button" id="btn-inline-submit-new-category" class="btn-cat-inline-submit">
+                    Add
+                  </button>
+                </div>
+                <div id="inline-category-feedback-msg" class="cat-feedback-msg" style="display: none;"></div>
+
+                <div class="cat-inline-list-wrap">
+                  <div class="cat-inline-list-header">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;">All Categories</span>
+                    <span id="inline-category-total-badge" class="cat-total-badge">0 Categories</span>
+                  </div>
+                  <div id="category-manager-list" class="cat-inline-list">
+                    <!-- Populated dynamically: Category Name + Pill Badge + Delete X button -->
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="product-price">Price (₱)</label>
-              <input type="number" id="product-price" required min="0" max="99999999" step="0.01" />
+            <div class="form-group price-field-group">
+              <div class="form-field-header">
+                <label for="product-price">Price (₱)</label>
+                <span class="label-currency-tag">PHP (₱)</span>
+              </div>
+              <input
+                type="text"
+                id="product-price"
+                inputmode="decimal"
+                placeholder="0.00"
+                required
+                autocomplete="off"
+              />
             </div>
-            <div class="form-group">
-              <label for="product-stock">Showroom Stock</label>
+            <div class="form-group stock-field-group">
+              <div class="form-field-header">
+                <label for="product-stock">Showroom Stock</label>
+                <span class="label-stock-badge">0 = Made-to-Order</span>
+              </div>
               <input type="number" id="product-stock" required min="0" max="99999" value="0" />
-              <span style="font-size: 0.72rem; color: #6b7280; display: block; margin-top: 2px;">0 = Made-to-Order</span>
             </div>
           </div>
 
@@ -496,6 +596,10 @@
                 <input type="number" id="product-width" required min="0.01" step="any" placeholder="Width" value="72" />
               </div>
               <div class="dimension-field">
+                <label for="product-length">Length</label>
+                <input type="number" id="product-length" required min="0.01" step="any" placeholder="Length" value="72" />
+              </div>
+              <div class="dimension-field">
                 <label for="product-unit">Unit</label>
                 <select id="product-unit">
                   <option value="in">inches (in)</option>
@@ -506,7 +610,7 @@
               </div>
             </div>
             <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
-              Switching units converts values in real-time (e.g. 7 ft ➔ 213.36 cm).
+              Switching units converts all values (Height, Width, Length) in real-time (e.g. 7 ft ➔ 213.36 cm).
             </div>
           </div>
 
@@ -591,6 +695,20 @@
                 <input type="file" id="img-bg-back" accept="image/*" style="font-size: 0.8rem; width: 100%;" />
                 <span style="font-size: 0.75rem; color: #9ca3af; display: block; margin-top: 4px;">Back face texture & upholstery detail</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Live Product Saving Progress Bar -->
+          <div id="product-save-progress-container" class="product-save-progress-box" style="display: none;">
+            <div class="save-progress-header">
+              <div class="save-progress-label-wrap">
+                <span class="save-progress-spinner-dot"></span>
+                <span id="product-save-status-text" class="save-progress-status">Uploading media...</span>
+              </div>
+              <span id="product-save-percent-text" class="save-progress-percent">0%</span>
+            </div>
+            <div class="save-progress-track">
+              <div id="product-save-progress-bar" class="save-progress-fill" style="width: 0%;"></div>
             </div>
           </div>
 

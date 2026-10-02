@@ -622,7 +622,9 @@ async function openProductQuickViewModal(productId) {
     if (dimsEl) {
       let dimsText = "";
       if (currentModalProduct.dimensions && typeof currentModalProduct.dimensions.height === "number") {
-        dimsText = `${currentModalProduct.dimensions.width} × ${currentModalProduct.dimensions.height} ${currentModalProduct.dimensions.unit || "in"}`;
+        dimsText = currentModalProduct.dimensions.length
+          ? `${currentModalProduct.dimensions.length} × ${currentModalProduct.dimensions.width} × ${currentModalProduct.dimensions.height} ${currentModalProduct.dimensions.unit || "in"}`
+          : `${currentModalProduct.dimensions.width} × ${currentModalProduct.dimensions.height} ${currentModalProduct.dimensions.unit || "in"}`;
       } else if (currentModalProduct.size) {
         dimsText = currentModalProduct.size;
       }

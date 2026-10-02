@@ -114,6 +114,10 @@ onAuthStateChanged(auth, async (user) => {
 
 const productsCollection = collection(db, "products");
 
+// Global Shared State
+let allProducts = [];
+let staffMembers = [];
+
 // DOM Elements
 const addProductBtn = document.getElementById("add-product-btn");
 const modalOverlay = document.getElementById("product-modal");
@@ -370,6 +374,7 @@ function convertDimension(val, fromUnit, toUnit) {
 
 const heightInput = document.getElementById("product-height");
 const widthInput = document.getElementById("product-width");
+const lengthInput = document.getElementById("product-length");
 const unitSelect = document.getElementById("product-unit");
 let currentDimensionUnit = unitSelect ? unitSelect.value : "in";
 
@@ -380,13 +385,20 @@ if (unitSelect) {
     if (newUnit !== oldUnit) {
       const h = parseFloat(heightInput.value);
       const w = parseFloat(widthInput.value);
+      const l = parseFloat(lengthInput ? lengthInput.value : 0);
       if (!isNaN(h) && h > 0) {
         heightInput.value = convertDimension(h, oldUnit, newUnit);
       }
       if (!isNaN(w) && w > 0) {
         widthInput.value = convertDimension(w, oldUnit, newUnit);
       }
+      if (!isNaN(l) && l > 0 && lengthInput) {
+        lengthInput.value = convertDimension(l, oldUnit, newUnit);
+      }
       currentDimensionUnit = newUnit;
+      if (typeof triggerDraftAutosave === "function") {
+        triggerDraftAutosave();
+      }
     }
   });
 }
@@ -432,13 +444,18 @@ function renderThumbnailPreviews() {
 function addThumbnailFiles(files) {
   if (!files || !files.length) return;
   Array.from(files).forEach((file) => {
-    thumbnailItems.push({
-      id: `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      file,
-      url: URL.createObjectURL(file),
-    });
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      thumbnailItems.push({
+        id: `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        file,
+        url: e.target.result,
+      });
+      renderThumbnailPreviews();
+      if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+    };
+    reader.readAsDataURL(file);
   });
-  renderThumbnailPreviews();
   if (thumbnailFileInput) thumbnailFileInput.value = "";
 }
 
@@ -489,6 +506,7 @@ if (thumbnailPreviewsList) {
         thumbnailItems[idx] = thumbnailItems[idx - 1];
         thumbnailItems[idx - 1] = temp;
         renderThumbnailPreviews();
+        if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
       }
     } else if (rightBtn && !rightBtn.disabled) {
       e.preventDefault();
@@ -498,12 +516,94 @@ if (thumbnailPreviewsList) {
         thumbnailItems[idx] = thumbnailItems[idx + 1];
         thumbnailItems[idx + 1] = temp;
         renderThumbnailPreviews();
+        if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
       }
     } else if (deleteBtn) {
       e.preventDefault();
       const idx = parseInt(deleteBtn.dataset.index, 10);
       thumbnailItems.splice(idx, 1);
       renderThumbnailPreviews();
+      if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+    }
+  });
+}
+
+// ==========================================================================
+// Auto-Formatting Price with Thousands Separator (Commas)
+// ==========================================================================
+function formatPriceWithCommas(rawVal) {
+  if (rawVal === null || rawVal === undefined || rawVal === "") return "";
+  const str = String(rawVal).trim();
+  // Strip any characters that are not digits or dot
+  const clean = str.replace(/[^0-9.]/g, "");
+  if (!clean) return "";
+
+  const parts = clean.split(".");
+  let intPart = parts[0];
+  const hasDecimal = parts.length > 1;
+  const decPart = hasDecimal ? parts.slice(1).join("") : null;
+
+  // Cap integer part at 8 digits (99,999,999) to match max validation
+  if (intPart.length > 8) {
+    intPart = intPart.slice(0, 8);
+  }
+
+  // Remove leading zeros unless it's just "0"
+  if (intPart.length > 1 && intPart.startsWith("0")) {
+    intPart = intPart.replace(/^0+/, "") || "0";
+  }
+
+  // Format integer with commas
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  if (hasDecimal) {
+    // Keep max 2 decimal places for cents
+    return `${formattedInt}.${decPart.slice(0, 2)}`;
+  }
+  return formattedInt;
+}
+
+function handlePriceInput(input) {
+  if (!input) return;
+  const originalVal = input.value;
+  const cursorPos = input.selectionStart || originalVal.length;
+
+  // Count non-comma characters before the cursor
+  const rawBefore = originalVal.slice(0, cursorPos).replace(/,/g, "");
+  const charsBeforeCount = rawBefore.length;
+
+  const formatted = formatPriceWithCommas(originalVal);
+  input.value = formatted;
+
+  // Reposition cursor after the same number of raw characters
+  let newCursorPos = 0;
+  let charsCounted = 0;
+  while (newCursorPos < formatted.length && charsCounted < charsBeforeCount) {
+    if (formatted[newCursorPos] !== ",") {
+      charsCounted++;
+    }
+    newCursorPos++;
+  }
+  input.setSelectionRange(newCursorPos, newCursorPos);
+}
+
+// Attach auto-comma formatter and backspace handler to product-price
+const priceFieldInput = document.getElementById("product-price");
+if (priceFieldInput) {
+  priceFieldInput.addEventListener("input", () => {
+    handlePriceInput(priceFieldInput);
+  });
+  priceFieldInput.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace") {
+      const start = priceFieldInput.selectionStart;
+      const end = priceFieldInput.selectionEnd;
+      // If cursor is right after a comma, delete the digit preceding the comma
+      if (start === end && start > 0 && priceFieldInput.value[start - 1] === ",") {
+        e.preventDefault();
+        const val = priceFieldInput.value;
+        priceFieldInput.value = val.slice(0, start - 2) + val.slice(start);
+        handlePriceInput(priceFieldInput);
+      }
     }
   });
 }
@@ -516,6 +616,7 @@ const validationRules = [
   { id: "product-stock", max: 99999, msg: "Stock cannot exceed 99,999 units" },
   { id: "product-height", max: 99999, msg: "Height cannot exceed 99,999" },
   { id: "product-width", max: 99999, msg: "Width cannot exceed 99,999" },
+  { id: "product-length", max: 99999, msg: "Length cannot exceed 99,999" },
 ];
 
 function showWarning(input, message) {
@@ -560,9 +661,13 @@ validationRules.forEach((rule) => {
       }
     } else {
       // Number max validation
-      if (value && parseFloat(value) > rule.max) {
+      const numVal =
+        rule.id === "product-price"
+          ? parseFloat(String(value).replace(/,/g, "")) || 0
+          : parseFloat(value) || 0;
+      if (value && numVal > rule.max) {
         showWarning(input, rule.msg);
-        input.value = rule.max; // Cap at max
+        input.value = rule.id === "product-price" ? formatPriceWithCommas(rule.max) : rule.max; // Cap at max
       } else {
         clearWarning(input);
       }
@@ -578,6 +683,673 @@ validationRules.forEach((rule) => {
 let isEditing = false;
 let currentEditId = null;
 
+// ==========================================================================
+// Dynamic Category Management
+// ==========================================================================
+const CATEGORIES_STORAGE_KEY = "lanica_custom_categories";
+const DEFAULT_CATEGORIES = ["Sofa", "Bed", "Living Room", "Bedroom"];
+
+function getStoredCategories() {
+  let cats = [];
+  try {
+    const raw = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    cats = raw ? JSON.parse(raw) : [...DEFAULT_CATEGORIES];
+  } catch (e) {
+    cats = [...DEFAULT_CATEGORIES];
+  }
+
+  if (Array.isArray(allProducts)) {
+    allProducts.forEach((p) => {
+      if (p.category && !cats.some((c) => c.toLowerCase() === p.category.toLowerCase())) {
+        cats.push(p.category);
+      }
+    });
+  }
+
+  const unique = [];
+  cats.forEach((c) => {
+    const trimmed = (c || "").trim();
+    if (trimmed && !unique.some((u) => u.toLowerCase() === trimmed.toLowerCase())) {
+      unique.push(trimmed);
+    }
+  });
+  return unique;
+}
+
+function saveStoredCategories(cats) {
+  try {
+    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(cats));
+  } catch (e) {
+    console.error("Error saving categories:", e);
+  }
+}
+
+function ensureCategoryOption(categoryName) {
+  const trimmed = (categoryName || "").trim();
+  if (!trimmed) return;
+  const cats = getStoredCategories();
+  if (!cats.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+    cats.push(trimmed);
+    saveStoredCategories(cats);
+    renderCategoryDropdowns(trimmed);
+  }
+}
+
+function renderCategoryDropdowns(selectedCategory = null) {
+  const cats = getStoredCategories();
+  const productCatSelect = document.getElementById("product-category");
+  const filterCatSelect = document.getElementById("category-filter");
+  const customTriggerName = document.getElementById("custom-cat-selected-name");
+  const customTriggerBadge = document.getElementById("custom-cat-selected-badge");
+  const customItemsList = document.getElementById("custom-cat-items-list");
+
+  let currentVal = selectedCategory;
+  if (!currentVal && productCatSelect) {
+    currentVal = productCatSelect.value;
+  }
+  if (!currentVal && cats.length > 0) {
+    currentVal = cats[0];
+  }
+
+  // 1. Sync native select options
+  if (productCatSelect) {
+    productCatSelect.innerHTML = cats
+      .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
+      .join("");
+    if (currentVal && cats.some((c) => c.toLowerCase() === currentVal.toLowerCase())) {
+      const match = cats.find((c) => c.toLowerCase() === currentVal.toLowerCase());
+      productCatSelect.value = match;
+      currentVal = match;
+    } else if (cats.length > 0) {
+      productCatSelect.value = cats[0];
+      currentVal = cats[0];
+    }
+  }
+
+  // 2. Sync Custom Dropdown Trigger (showing Category Name + Pill Badge)
+  if (customTriggerName && currentVal) {
+    const count = Array.isArray(allProducts)
+      ? allProducts.filter((p) => (p.category || "").toLowerCase() === currentVal.toLowerCase()).length
+      : 0;
+    customTriggerName.textContent = currentVal;
+    if (customTriggerBadge) {
+      customTriggerBadge.textContent = `${count} ${count === 1 ? "product" : "products"}`;
+      customTriggerBadge.className = `custom-cat-count-badge ${count > 0 ? "has-products" : "zero-products"}`;
+    }
+  }
+
+  // 3. Render Custom Dropdown Menu Items
+  if (customItemsList) {
+    customItemsList.innerHTML = cats
+      .map((cat) => {
+        const count = Array.isArray(allProducts)
+          ? allProducts.filter((p) => (p.category || "").toLowerCase() === cat.toLowerCase()).length
+          : 0;
+        const isSelected = currentVal && cat.toLowerCase() === currentVal.toLowerCase();
+        return `
+          <div class="custom-cat-item ${isSelected ? "selected" : ""}" data-val="${escapeHtml(cat)}">
+            <div class="custom-cat-item-left">
+              <span class="custom-cat-item-name">${escapeHtml(cat)}</span>
+            </div>
+            <div class="custom-cat-item-right">
+              <span class="custom-cat-count-badge ${count > 0 ? "has-products" : "zero-products"}">
+                ${count} ${count === 1 ? "product" : "products"}
+              </span>
+              ${isSelected ? `<span class="custom-cat-check">✓</span>` : ""}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  // 4. Render Inventory Filter Select Options
+  if (filterCatSelect) {
+    const currentFilter = filterCatSelect.value || "All";
+    filterCatSelect.innerHTML =
+      `<option value="All">All Categories (${Array.isArray(allProducts) ? allProducts.length : 0})</option>` +
+      cats
+        .map((c) => {
+          const count = Array.isArray(allProducts)
+            ? allProducts.filter((p) => (p.category || "").toLowerCase() === c.toLowerCase()).length
+            : 0;
+          return `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${count})</option>`;
+        })
+        .join("");
+    if (currentFilter && (currentFilter === "All" || cats.some((c) => c.toLowerCase() === currentFilter.toLowerCase()))) {
+      filterCatSelect.value = currentFilter;
+    }
+  }
+}
+
+function renderCategoryManagerList() {
+  const listEl = document.getElementById("category-manager-list");
+  const badgeEl = document.getElementById("inline-category-total-badge");
+  if (!listEl) return;
+  const cats = getStoredCategories();
+
+  if (badgeEl) {
+    badgeEl.textContent = `${cats.length} ${cats.length === 1 ? "Category" : "Categories"}`;
+  }
+
+  if (cats.length === 0) {
+    listEl.innerHTML = `
+      <div class="cat-empty-state">
+        <p>No categories configured.</p>
+        <span>Add a new category above.</span>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = cats
+    .map((cat) => {
+      const count = Array.isArray(allProducts)
+        ? allProducts.filter((p) => (p.category || "").toLowerCase() === cat.toLowerCase()).length
+        : 0;
+      return `
+        <div class="category-item-card" data-cat="${escapeHtml(cat)}">
+          <div class="cat-item-left">
+            <span class="cat-item-name">${escapeHtml(cat)}</span>
+            <span class="cat-item-count ${count > 0 ? "has-products" : "zero-products"}">
+              ${count} ${count === 1 ? "product" : "products"}
+            </span>
+          </div>
+          <button type="button" class="btn-category-delete" data-cat="${escapeHtml(cat)}" title="Delete category">&times;</button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+// Custom Category Dropdown Elements
+const customCatDropdown = document.getElementById("custom-category-dropdown");
+const customCatTrigger = document.getElementById("custom-cat-trigger");
+const customCatMenu = document.getElementById("custom-cat-menu");
+const customCatItemsList = document.getElementById("custom-cat-items-list");
+const btnDropdownManageCat = document.getElementById("btn-dropdown-manage-cat");
+
+// Inline Category Manager Elements
+const categoryMgrPanel = document.getElementById("category-manager-inline-panel");
+const btnToggleCategoryMgr = document.getElementById("btn-toggle-category-mgr");
+const btnCloseInlineCategoryMgr = document.getElementById("btn-close-inline-category-mgr");
+const btnInlineSubmitNewCategory = document.getElementById("btn-inline-submit-new-category");
+const inlineNewCategoryInput = document.getElementById("inline-new-category-input");
+const inlineCategoryFeedback = document.getElementById("inline-category-feedback-msg");
+
+function showInlineCategoryFeedback(msg, isSuccess = true) {
+  if (!inlineCategoryFeedback) return;
+  inlineCategoryFeedback.textContent = msg;
+  inlineCategoryFeedback.className = `cat-feedback-msg ${isSuccess ? "success" : "error"}`;
+  inlineCategoryFeedback.style.display = "block";
+  setTimeout(() => {
+    if (inlineCategoryFeedback) inlineCategoryFeedback.style.display = "none";
+  }, 3500);
+}
+
+function openInlineCategoryManager() {
+  if (!categoryMgrPanel) return;
+  categoryMgrPanel.style.display = "block";
+  renderCategoryManagerList();
+  if (inlineCategoryFeedback) inlineCategoryFeedback.style.display = "none";
+  if (inlineNewCategoryInput) {
+    inlineNewCategoryInput.value = "";
+    setTimeout(() => inlineNewCategoryInput.focus(), 100);
+  }
+}
+
+function closeInlineCategoryManager() {
+  if (!categoryMgrPanel) return;
+  categoryMgrPanel.style.display = "none";
+  if (inlineNewCategoryInput) inlineNewCategoryInput.value = "";
+  if (inlineCategoryFeedback) inlineCategoryFeedback.style.display = "none";
+}
+
+if (btnToggleCategoryMgr) {
+  btnToggleCategoryMgr.addEventListener("click", () => {
+    const isClosed = !categoryMgrPanel || categoryMgrPanel.style.display === "none";
+    if (isClosed) {
+      openInlineCategoryManager();
+    } else {
+      closeInlineCategoryManager();
+    }
+  });
+}
+
+if (btnCloseInlineCategoryMgr) {
+  btnCloseInlineCategoryMgr.addEventListener("click", closeInlineCategoryManager);
+}
+
+if (btnDropdownManageCat) {
+  btnDropdownManageCat.addEventListener("click", () => {
+    closeCustomCategoryDropdown();
+    openInlineCategoryManager();
+  });
+}
+
+// Custom Dropdown Open/Close
+function toggleCustomCategoryDropdown() {
+  if (!customCatMenu || !customCatTrigger) return;
+  const isOpen = customCatMenu.style.display === "block";
+  if (isOpen) {
+    closeCustomCategoryDropdown();
+  } else {
+    customCatMenu.style.display = "block";
+    customCatTrigger.classList.add("active");
+    customCatTrigger.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeCustomCategoryDropdown() {
+  if (!customCatMenu || !customCatTrigger) return;
+  customCatMenu.style.display = "none";
+  customCatTrigger.classList.remove("active");
+  customCatTrigger.setAttribute("aria-expanded", "false");
+}
+
+if (customCatTrigger) {
+  customCatTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleCustomCategoryDropdown();
+  });
+}
+
+if (customCatItemsList) {
+  customCatItemsList.addEventListener("click", (e) => {
+    const item = e.target.closest(".custom-cat-item");
+    if (!item) return;
+    const selectedVal = item.dataset.val;
+    if (!selectedVal) return;
+
+    const productCatSelect = document.getElementById("product-category");
+    if (productCatSelect) {
+      productCatSelect.value = selectedVal;
+      productCatSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    renderCategoryDropdowns(selectedVal);
+    closeCustomCategoryDropdown();
+    triggerDraftAutosave();
+  });
+}
+
+// Click outside to close dropdown
+document.addEventListener("click", (e) => {
+  if (customCatDropdown && !customCatDropdown.contains(e.target)) {
+    closeCustomCategoryDropdown();
+  }
+});
+
+// Adding new category
+function handleAddNewCategory(name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) {
+    showInlineCategoryFeedback("Please enter a category name.", false);
+    if (inlineNewCategoryInput) inlineNewCategoryInput.focus();
+    return;
+  }
+  const cats = getStoredCategories();
+  const existing = cats.find((c) => c.toLowerCase() === trimmed.toLowerCase());
+  if (existing) {
+    renderCategoryDropdowns(existing);
+    renderCategoryManagerList();
+    showInlineCategoryFeedback(`Category "${existing}" already exists. Selected!`, true);
+    if (inlineNewCategoryInput) inlineNewCategoryInput.value = "";
+    triggerDraftAutosave();
+    return;
+  }
+
+  cats.push(trimmed);
+  saveStoredCategories(cats);
+  renderCategoryDropdowns(trimmed);
+  renderCategoryManagerList();
+  showInlineCategoryFeedback(`✓ Category "${trimmed}" added and selected!`, true);
+  if (inlineNewCategoryInput) {
+    inlineNewCategoryInput.value = "";
+    inlineNewCategoryInput.focus();
+  }
+  triggerDraftAutosave();
+}
+
+if (btnInlineSubmitNewCategory && inlineNewCategoryInput) {
+  btnInlineSubmitNewCategory.addEventListener("click", () => {
+    handleAddNewCategory(inlineNewCategoryInput.value);
+  });
+  inlineNewCategoryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddNewCategory(inlineNewCategoryInput.value);
+    }
+  });
+}
+
+// Deleting category
+const categoryManagerList = document.getElementById("category-manager-list");
+if (categoryManagerList) {
+  categoryManagerList.addEventListener("click", (e) => {
+    const delBtn = e.target.closest(".btn-category-delete");
+    if (!delBtn) return;
+    const catToDelete = delBtn.dataset.cat;
+    if (!catToDelete) return;
+
+    const count = Array.isArray(allProducts)
+      ? allProducts.filter((p) => (p.category || "").toLowerCase() === catToDelete.toLowerCase()).length
+      : 0;
+
+    if (count > 0) {
+      const confirmDelete = confirm(
+        `Category "${catToDelete}" currently has ${count} product(s) assigned to it.\n\nAre you sure you want to remove this category option? (Existing products will keep their category value until edited.)`
+      );
+      if (!confirmDelete) return;
+    } else {
+      if (!confirm(`Are you sure you want to remove category "${catToDelete}"?`)) return;
+    }
+
+    let cats = getStoredCategories().filter((c) => c.toLowerCase() !== catToDelete.toLowerCase());
+    saveStoredCategories(cats);
+    renderCategoryDropdowns();
+    renderCategoryManagerList();
+    showInlineCategoryFeedback(`Category "${catToDelete}" removed.`, true);
+    triggerDraftAutosave();
+  });
+}
+
+// Initial category dropdown render
+renderCategoryDropdowns();
+
+// ==========================================================================
+// Form Autosave & Draft Recovery
+// ==========================================================================
+const PRODUCT_DRAFT_KEY = "lanica_product_form_draft";
+const productDraftBanner = document.getElementById("product-draft-banner");
+const productDraftStatusText = document.getElementById("product-draft-status-text");
+const btnDiscardDraft = document.getElementById("btn-discard-draft");
+let draftAutosaveTimeout = null;
+
+function hideDraftBanner() {
+  if (productDraftBanner) productDraftBanner.style.display = "none";
+}
+
+function showDraftBanner(message, isSaved = true) {
+  if (!productDraftBanner) return;
+  productDraftBanner.style.display = "flex";
+  if (productDraftStatusText) productDraftStatusText.textContent = message;
+  const dot = productDraftBanner.querySelector(".draft-indicator-dot");
+  if (dot) {
+    dot.className = isSaved ? "draft-indicator-dot" : "draft-indicator-dot saving";
+  }
+}
+
+function saveFormDraft() {
+  if (isEditing) return;
+  const name = document.getElementById("product-name")?.value || "";
+  const description = document.getElementById("product-description")?.value || "";
+  const category = document.getElementById("product-category")?.value || "";
+  const price = document.getElementById("product-price")?.value || "";
+  const stock = document.getElementById("product-stock")?.value || "0";
+  const height = document.getElementById("product-height")?.value || "72";
+  const width = document.getElementById("product-width")?.value || "72";
+  const length = document.getElementById("product-length")?.value || "72";
+  const unit = document.getElementById("product-unit")?.value || "in";
+
+  const hasContent =
+    name.trim() ||
+    description.trim() ||
+    (price && price !== "0") ||
+    currentMaterialTags.length > 0 ||
+    thumbnailItems.length > 0;
+  if (!hasContent) return;
+
+  const thumbnailData = thumbnailItems.map((item) => ({
+    url: item.url,
+  }));
+
+  const draft = {
+    name,
+    description,
+    category,
+    price,
+    stock,
+    height,
+    width,
+    length,
+    unit,
+    materials: currentMaterialTags,
+    thumbnailData,
+    savedAt: Date.now(),
+  };
+
+  try {
+    localStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(draft));
+    const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    showDraftBanner(`Draft saved automatically (${timeStr})`, true);
+  } catch (err) {
+    console.warn("Storage quota exceeded, saving text-only draft", err);
+    try {
+      draft.thumbnailData = [];
+      localStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(draft));
+      showDraftBanner("Draft text saved automatically", true);
+    } catch (e) {
+      console.error("Failed to save draft:", e);
+    }
+  }
+}
+
+function triggerDraftAutosave() {
+  if (isEditing) return;
+  showDraftBanner("Saving draft...", false);
+  if (draftAutosaveTimeout) clearTimeout(draftAutosaveTimeout);
+  draftAutosaveTimeout = setTimeout(() => {
+    saveFormDraft();
+  }, 400);
+}
+
+function restoreFormDraft() {
+  if (isEditing) return false;
+  try {
+    const raw = localStorage.getItem(PRODUCT_DRAFT_KEY);
+    if (!raw) return false;
+    const draft = JSON.parse(raw);
+    if (!draft) return false;
+
+    if (draft.name !== undefined) document.getElementById("product-name").value = draft.name;
+    if (draft.description !== undefined) {
+      document.getElementById("product-description").value = draft.description;
+      if (productDescriptionTextarea) {
+        setTimeout(() => {
+          productDescriptionTextarea.style.height = "auto";
+          productDescriptionTextarea.style.height = productDescriptionTextarea.scrollHeight + "px";
+        }, 0);
+      }
+    }
+    if (draft.category) {
+      ensureCategoryOption(draft.category);
+      const catSelect = document.getElementById("product-category");
+      if (catSelect) catSelect.value = draft.category;
+      renderCategoryDropdowns(draft.category);
+    }
+    if (draft.price !== undefined) document.getElementById("product-price").value = formatPriceWithCommas(draft.price);
+    if (draft.stock !== undefined) document.getElementById("product-stock").value = draft.stock;
+    if (draft.height !== undefined && heightInput) heightInput.value = draft.height;
+    if (draft.width !== undefined && widthInput) widthInput.value = draft.width;
+    if (draft.length !== undefined && lengthInput) lengthInput.value = draft.length;
+    if (draft.unit !== undefined && unitSelect) {
+      unitSelect.value = draft.unit;
+      currentDimensionUnit = draft.unit;
+    }
+
+    clearMaterialTags();
+    if (Array.isArray(draft.materials) && draft.materials.length > 0) {
+      draft.materials.forEach((m) => addMaterialTag(m));
+    }
+
+    clearThumbnailItems();
+    if (Array.isArray(draft.thumbnailData) && draft.thumbnailData.length > 0) {
+      draft.thumbnailData.forEach((it, idx) => {
+        if (it && it.url) {
+          thumbnailItems.push({
+            id: `draft_${Date.now()}_${idx}`,
+            file: null,
+            url: it.url,
+          });
+        }
+      });
+      renderThumbnailPreviews();
+    }
+
+    const timeFormatted = draft.savedAt
+      ? new Date(draft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "";
+    showDraftBanner(`Draft restored • Saved ${timeFormatted || "previously"}`, true);
+    return true;
+  } catch (err) {
+    console.error("Error restoring product form draft:", err);
+    return false;
+  }
+}
+
+function clearFormDraft() {
+  try {
+    localStorage.removeItem(PRODUCT_DRAFT_KEY);
+  } catch (err) {
+    console.error("Error clearing draft:", err);
+  }
+  hideDraftBanner();
+}
+
+if (btnDiscardDraft) {
+  btnDiscardDraft.addEventListener("click", () => {
+    if (confirm("Discard this saved draft and clear the form?")) {
+      clearFormDraft();
+      window.closeModal();
+      window.openModal();
+    }
+  });
+}
+
+// Bind input listeners for autosave
+[
+  "product-name",
+  "product-description",
+  "product-category",
+  "product-price",
+  "product-stock",
+  "product-height",
+  "product-width",
+  "product-length",
+  "product-unit",
+].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener("input", triggerDraftAutosave);
+    el.addEventListener("change", triggerDraftAutosave);
+  }
+});
+
+// ==========================================================================
+// Live Progress Bar for Product Saving
+// ==========================================================================
+let isSavingProduct = false;
+
+function updateSaveProgress(pct, statusText) {
+  const container = document.getElementById("product-save-progress-container");
+  const bar = document.getElementById("product-save-progress-bar");
+  const status = document.getElementById("product-save-status-text");
+  const percent = document.getElementById("product-save-percent-text");
+  if (container) container.style.display = "block";
+  if (bar) bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  if (status) status.textContent = statusText;
+  if (percent) percent.textContent = `${Math.round(pct)}%`;
+}
+
+function hideSaveProgress() {
+  const container = document.getElementById("product-save-progress-container");
+  const bar = document.getElementById("product-save-progress-bar");
+  if (container) container.style.display = "none";
+  if (bar) bar.style.width = "0%";
+}
+
+// ==========================================================================
+// Modal Dismissal Prevention (Backdrop Protection)
+// ==========================================================================
+function triggerModalShake() {
+  const modalContent = productModal ? productModal.querySelector(".modal-content") : null;
+  if (modalContent) {
+    modalContent.classList.remove("modal-content-shake");
+    void modalContent.offsetWidth; // trigger reflow
+    modalContent.classList.add("modal-content-shake");
+  }
+}
+
+function hasUnsavedFormChanges() {
+  if (isEditing) {
+    const orig = productForm.dataset.origFormData ? JSON.parse(productForm.dataset.origFormData) : null;
+    if (!orig) return false;
+    const currentName = document.getElementById("product-name")?.value || "";
+    const currentDesc = document.getElementById("product-description")?.value || "";
+    const currentCat = document.getElementById("product-category")?.value || "";
+    const currentPrice = document.getElementById("product-price")?.value || "";
+    const currentStock = document.getElementById("product-stock")?.value || "0";
+    const currentH = document.getElementById("product-height")?.value || "";
+    const currentW = document.getElementById("product-width")?.value || "";
+    const currentL = document.getElementById("product-length")?.value || "";
+    const currentU = document.getElementById("product-unit")?.value || "in";
+    const bgChanged = !!(
+      document.getElementById("img-bg")?.files?.length ||
+      document.getElementById("img-bg-left")?.files?.length ||
+      document.getElementById("img-bg-right")?.files?.length ||
+      document.getElementById("img-bg-back")?.files?.length
+    );
+    const newThumbs = thumbnailItems.some((it) => it.file);
+    const thumbsCountChanged = thumbnailItems.length !== (orig.thumbnailsCount || 0);
+
+    return (
+      bgChanged ||
+      newThumbs ||
+      thumbsCountChanged ||
+      currentName !== orig.name ||
+      currentDesc !== orig.description ||
+      currentCat !== orig.category ||
+      String(currentPrice).replace(/,/g, "") !== String(orig.price).replace(/,/g, "") ||
+      String(currentStock) !== String(orig.stock) ||
+      String(currentH) !== String(orig.height) ||
+      String(currentW) !== String(orig.width) ||
+      String(currentL) !== String(orig.length) ||
+      currentU !== orig.unit ||
+      JSON.stringify(currentMaterialTags) !== JSON.stringify(orig.materials || [])
+    );
+  } else {
+    const name = document.getElementById("product-name")?.value.trim() || "";
+    const desc = document.getElementById("product-description")?.value.trim() || "";
+    const price = (document.getElementById("product-price")?.value.trim() || "").replace(/,/g, "");
+    const stock = document.getElementById("product-stock")?.value.trim() || "0";
+    const hasFiles = !!(
+      document.getElementById("img-bg")?.files?.length ||
+      document.getElementById("img-bg-left")?.files?.length ||
+      document.getElementById("img-bg-right")?.files?.length ||
+      document.getElementById("img-bg-back")?.files?.length
+    );
+    const hasThumbnails = thumbnailItems.length > 0;
+    const hasMaterials = currentMaterialTags.length > 0;
+    return (
+      name !== "" ||
+      desc !== "" ||
+      (price !== "" && price !== "0") ||
+      stock !== "0" ||
+      hasFiles ||
+      hasThumbnails ||
+      hasMaterials
+    );
+  }
+}
+
+function handleModalCloseAttempt() {
+  if (isSavingProduct) return;
+  if (hasUnsavedFormChanges()) {
+    const confirmDiscard = confirm("You have unsaved changes. Are you sure you want to discard them and exit?");
+    if (!confirmDiscard) return;
+  }
+  window.closeModal();
+}
+
 // --- Modal Functions ---
 window.openModal = () => {
   productModal.classList.add("active");
@@ -585,6 +1357,8 @@ window.openModal = () => {
     document.getElementById("modal-title").textContent = "Add New Product";
     // When adding new, front bg is required as minimum
     document.getElementById("img-bg").required = true;
+    restoreFormDraft();
+    renderCategoryDropdowns();
   }
 };
 
@@ -596,12 +1370,17 @@ window.closeModal = () => {
   delete productForm.dataset.existingImages;
   delete productForm.dataset.existingThumbnails;
   delete productForm.dataset.meshyTaskId;
+  delete productForm.dataset.origFormData;
 
   // Reset custom components
   clearMaterialTags();
+  closeCustomCategoryDropdown();
+  closeInlineCategoryManager();
+  renderCategoryDropdowns();
   clearThumbnailItems();
   if (heightInput) heightInput.value = "72";
   if (widthInput) widthInput.value = "72";
+  if (lengthInput) lengthInput.value = "72";
   if (unitSelect) unitSelect.value = "in";
   currentDimensionUnit = "in";
 
@@ -612,14 +1391,29 @@ window.closeModal = () => {
   if (productDescriptionTextarea) {
     productDescriptionTextarea.style.height = "auto";
   }
+
+  hideDraftBanner();
+  hideSaveProgress();
+  if (categoryMgrPanel) categoryMgrPanel.style.display = "none";
 };
 
 addProductBtn.addEventListener("click", window.openModal);
-closeModalBtn.addEventListener("click", window.closeModal);
-cancelBtn.addEventListener("click", window.closeModal);
+closeModalBtn.addEventListener("click", handleModalCloseAttempt);
+cancelBtn.addEventListener("click", handleModalCloseAttempt);
 
+// Backdrop Protection (Disable closing on background click)
 modalOverlay.addEventListener("click", (e) => {
-  if (e.target === modalOverlay) window.closeModal();
+  if (e.target === modalOverlay) {
+    triggerModalShake();
+  }
+});
+
+// Escape Key Protection (Disable closing on accidental Escape)
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && modalOverlay.classList.contains("active")) {
+    e.preventDefault();
+    triggerModalShake();
+  }
 });
 
 // Logout Feature
@@ -640,7 +1434,7 @@ if (logoutBtn) {
 // --- Firestore Functions ---
 
 // Listen to Realtime Updates
-let allProducts = [];
+allProducts = [];
 
 let inventoryLoaded = false;
 let inventoryLoadTimer = setTimeout(() => {
@@ -661,6 +1455,8 @@ onSnapshot(
     snapshot.forEach((doc) => {
       allProducts.push({ id: doc.id, ...doc.data() });
     });
+    renderCategoryDropdowns();
+    renderCategoryManagerList();
     applyCategoryFilter();
     updateStats(allProducts); // Stats always reflect full inventory
   },
@@ -820,8 +1616,11 @@ async function uploadGlbFromUrl(url, folderPath = "products/productsmodel", file
 // Add / Update Product
 productForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  submitBtn.textContent = "Saving...";
+  isSavingProduct = true;
   submitBtn.disabled = true;
+  cancelBtn.disabled = true;
+  closeModalBtn.disabled = true;
+  updateSaveProgress(5, "Preparing media and form data...");
 
   try {
     // Validate thumbnails
@@ -829,6 +1628,10 @@ productForm.addEventListener("submit", async (e) => {
       if (thumbnailErrorMsg) thumbnailErrorMsg.style.display = "block";
       submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
       submitBtn.disabled = false;
+      cancelBtn.disabled = false;
+      closeModalBtn.disabled = false;
+      isSavingProduct = false;
+      hideSaveProgress();
       alert("Please add at least one product thumbnail image.");
       return;
     }
@@ -840,19 +1643,6 @@ productForm.addEventListener("submit", async (e) => {
     const materials = currentMaterialTags.length > 0 ? [...currentMaterialTags] : ["Standard"];
     const material = materials.join(", ");
 
-    // Dimensions
-    const height = parseFloat(document.getElementById("product-height").value) || 0;
-    const width = parseFloat(document.getElementById("product-width").value) || 0;
-    const unit = document.getElementById("product-unit").value || "in";
-    const dimensions = {
-      height,
-      width,
-      unit,
-      heightCm: convertDimension(height, unit, "cm"),
-      widthCm: convertDimension(width, unit, "cm"),
-    };
-    const size = `${width} × ${height} ${unit}`;
-
     const transparentFrontFile = document.getElementById("img-bg").files[0];
     const leftBgFile = document.getElementById("img-bg-left")?.files[0] || null;
     const rightBgFile = document.getElementById("img-bg-right")?.files[0] || null;
@@ -860,13 +1650,42 @@ productForm.addEventListener("submit", async (e) => {
 
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
 
-    submitBtn.textContent = "Uploading images...";
+    // Calculate total media uploads to track 0% - 70% progress
+    let totalMediaFiles = 0;
+    thumbnailItems.forEach((item) => {
+      if (item.file || (item.url && item.url.startsWith("data:"))) totalMediaFiles += 1;
+    });
+    if (transparentFrontFile) totalMediaFiles += 1;
+    if (leftBgFile) totalMediaFiles += 1;
+    if (rightBgFile) totalMediaFiles += 1;
+    if (backBgFile) totalMediaFiles += 1;
+
+    let completedMediaFiles = 0;
+    const reportMediaProgress = () => {
+      completedMediaFiles += 1;
+      const targetPct = Math.round(10 + (completedMediaFiles / Math.max(1, totalMediaFiles)) * 60);
+      updateSaveProgress(targetPct, `Uploading media (${completedMediaFiles}/${totalMediaFiles})...`);
+    };
+
+    if (totalMediaFiles === 0) {
+      updateSaveProgress(65, "Verifying media references...");
+    } else {
+      updateSaveProgress(10, `Uploading media (0/${totalMediaFiles})...`);
+    }
 
     // Upload thumbnails concurrently
     const thumbnailUrls = await Promise.all(
-      thumbnailItems.map(async (item) => {
+      thumbnailItems.map(async (item, idx) => {
         if (item.file) {
-          return await uploadImage(item.file, "products/thumbnails");
+          const url = await uploadImage(item.file, "products/thumbnails");
+          reportMediaProgress();
+          return url;
+        } else if (item.url && item.url.startsWith("data:")) {
+          const blob = await (await fetch(item.url)).blob();
+          const fileFromBlob = new File([blob], `thumb_${Date.now()}_${idx}.png`, { type: blob.type || "image/png" });
+          const url = await uploadImage(fileFromBlob, "products/thumbnails");
+          reportMediaProgress();
+          return url;
         }
         return item.url;
       })
@@ -875,10 +1694,30 @@ productForm.addEventListener("submit", async (e) => {
 
     // Upload transparent background files concurrently into specified Firebase Storage folders
     const [bgImage, leftBgImage, rightBgImage, backBgImage] = await Promise.all([
-      transparentFrontFile ? uploadImage(transparentFrontFile, "products/productsnobg") : existingImages.bgImage || existingImages.frontBg || "",
-      leftBgFile ? uploadImage(leftBgFile, "products/productsnobg") : existingImages.leftBgImage || "",
-      rightBgFile ? uploadImage(rightBgFile, "products/productsnobg") : existingImages.rightBgImage || "",
-      backBgFile ? uploadImage(backBgFile, "products/productsnobg") : existingImages.backBgImage || "",
+      transparentFrontFile
+        ? uploadImage(transparentFrontFile, "products/productsnobg").then((url) => {
+            reportMediaProgress();
+            return url;
+          })
+        : existingImages.bgImage || existingImages.frontBg || "",
+      leftBgFile
+        ? uploadImage(leftBgFile, "products/productsnobg").then((url) => {
+            reportMediaProgress();
+            return url;
+          })
+        : existingImages.leftBgImage || "",
+      rightBgFile
+        ? uploadImage(rightBgFile, "products/productsnobg").then((url) => {
+            reportMediaProgress();
+            return url;
+          })
+        : existingImages.rightBgImage || "",
+      backBgFile
+        ? uploadImage(backBgFile, "products/productsnobg").then((url) => {
+            reportMediaProgress();
+            return url;
+          })
+        : existingImages.backBgImage || "",
     ]);
 
     // Keep previous Meshy artifacts only when we are NOT regenerating from a new transparent image.
@@ -888,7 +1727,6 @@ productForm.addEventListener("submit", async (e) => {
     const shouldRegenerateMeshy = !!(transparentFrontFile || leftBgFile || rightBgFile || backBgFile);
 
     if (shouldRegenerateMeshy) {
-      // Explicitly clear old task ids and URLs when new transparent image(s) are uploaded.
       meshyTaskId = null;
       modelUrl = null;
       meshyStatus = "PENDING";
@@ -906,29 +1744,19 @@ productForm.addEventListener("submit", async (e) => {
       if (!meshyPayload.frontUrl) {
         throw new Error("Front transparent background image is required for Meshy generation.");
       }
-      submitBtn.textContent = isEditing
-        ? "Regenerating 3D Model..."
-        : "Starting 3D Generation...";
+      updateSaveProgress(68, isEditing ? "Regenerating 3D Model..." : "Generating 3D model with Meshy AI...");
       try {
-        // Always try to create task (single or multi-view)
         const originalTask = await createMeshyTask(meshyPayload);
         meshyTaskId = originalTask.result;
-
         meshyStatus = "PENDING";
-        console.log("Meshy 3D Generation started!", {
-          original: meshyTaskId,
-          isMultiView: !!(leftBgImage || rightBgImage || backBgImage),
-        });
 
-        submitBtn.textContent = "Waiting for 3D model URL...";
-
-        // Wait for original (required)
+        updateSaveProgress(70, "Waiting for 3D model calibration...");
         const originalResult = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         const rawModelUrl = originalResult.modelUrl || null;
         meshyStatus = originalResult.status || meshyStatus;
 
         if (rawModelUrl) {
-          submitBtn.textContent = "Saving 3D model to Firebase Storage...";
+          updateSaveProgress(72, "Saving 3D model to storage...");
           const productName = document.getElementById("product-name").value || "product";
           const safeName = productName.toLowerCase().replace(/[^a-z0-9]/g, "_");
           modelUrl = await uploadGlbFromUrl(rawModelUrl, "products/productsmodel", `${safeName}.glb`);
@@ -940,17 +1768,38 @@ productForm.addEventListener("submit", async (e) => {
         alert("Failed to generate 3D model: " + err.message);
         submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
         submitBtn.disabled = false;
+        cancelBtn.disabled = false;
+        closeModalBtn.disabled = false;
+        isSavingProduct = false;
+        hideSaveProgress();
         return; // ABORT SAVE
       }
     }
 
+    // 70% - 90%: Payload validation and database save
+    updateSaveProgress(75, "Validating product details...");
+
     const stock = parseInt(document.getElementById("product-stock").value, 10) || 0;
+    const height = parseFloat(document.getElementById("product-height").value) || 0;
+    const width = parseFloat(document.getElementById("product-width").value) || 0;
+    const length = parseFloat(document.getElementById("product-length").value) || 0;
+    const unit = document.getElementById("product-unit").value || "in";
+    const dimensions = {
+      height,
+      width,
+      length,
+      unit,
+      heightCm: convertDimension(height, unit, "cm"),
+      widthCm: convertDimension(width, unit, "cm"),
+      lengthCm: convertDimension(length, unit, "cm"),
+    };
+    const size = length > 0 ? `${length} × ${width} × ${height} ${unit}` : `${width} × ${height} ${unit}`;
 
     const productData = {
       name: document.getElementById("product-name").value,
       description: document.getElementById("product-description").value,
       category: document.getElementById("product-category").value,
-      price: parseFloat(document.getElementById("product-price").value),
+      price: parseFloat(String(document.getElementById("product-price").value).replace(/,/g, "").trim()) || 0,
       stock,
       materials,
       material,
@@ -972,6 +1821,8 @@ productForm.addEventListener("submit", async (e) => {
       meshyRegeneratedAt: shouldRegenerateMeshy ? Timestamp.now() : null,
     };
 
+    updateSaveProgress(85, "Saving product details to database...");
+
     let savedProductRef = null;
     if (isEditing) {
       savedProductRef = doc(db, "products", currentEditId);
@@ -984,7 +1835,7 @@ productForm.addEventListener("submit", async (e) => {
     if (shouldRegenerateMeshy && savedProductRef) {
       const updates = {};
       if (meshyTaskId && !modelUrl) {
-        submitBtn.textContent = "Finalizing 3D model URL...";
+        updateSaveProgress(92, "Finalizing 3D model URL...");
         const finalMeshy = await waitForMeshyModelUrl(meshyTaskId, 40, 3000);
         updates.meshyStatus = finalMeshy.status;
         if (finalMeshy.modelUrl) {
@@ -1001,13 +1852,24 @@ productForm.addEventListener("submit", async (e) => {
       }
     }
 
+    // 100%: Finalizing and success state
+    updateSaveProgress(100, "Done! Product saved successfully.");
+    clearFormDraft();
+
+    // Short visual pause so user sees progress bar at 100%
+    await new Promise((r) => setTimeout(r, 450));
     window.closeModal();
   } catch (e) {
     console.error("Error saving product: ", e);
+    updateSaveProgress(0, "Error: " + e.message);
     alert("Failed to save product. See console for details.");
   } finally {
-    submitBtn.textContent = "Save Product";
+    isSavingProduct = false;
+    submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
     submitBtn.disabled = false;
+    cancelBtn.disabled = false;
+    closeModalBtn.disabled = false;
+    hideSaveProgress();
   }
 });
 
@@ -1218,8 +2080,10 @@ window.editProduct = (id, productJsonBase64) => {
     const product = JSON.parse(decodeURIComponent(atob(productJsonBase64)));
     document.getElementById("product-name").value = product.name;
     document.getElementById("product-description").value = product.description || "";
+    ensureCategoryOption(product.category);
     document.getElementById("product-category").value = product.category;
-    document.getElementById("product-price").value = product.price;
+    renderCategoryDropdowns(product.category);
+    document.getElementById("product-price").value = formatPriceWithCommas(product.price);
     document.getElementById("product-stock").value = product.stock || 0;
 
     // Materials tags
@@ -1233,24 +2097,32 @@ window.editProduct = (id, productJsonBase64) => {
     // Dimensions
     let height = 72;
     let width = 72;
+    let length = 72;
     let unit = "in";
     if (product.dimensions && typeof product.dimensions.height === "number") {
       height = product.dimensions.height;
       width = product.dimensions.width;
+      length = typeof product.dimensions.length === "number" ? product.dimensions.length : 72;
       unit = product.dimensions.unit || "in";
     } else if (product.size) {
       const sizeParts = (product.size || "").split(" × ");
-      if (sizeParts.length >= 2) {
+      if (sizeParts.length >= 3) {
+        length = parseFloat(sizeParts[0]) || 72;
+        width = parseFloat(sizeParts[1]) || 72;
+        height = parseFloat(sizeParts[2]) || 72;
+      } else if (sizeParts.length === 2) {
         width = parseFloat(sizeParts[0]) || 72;
         height = parseFloat(sizeParts[1]) || 72;
-        if (product.size.includes("cm")) unit = "cm";
-        else if (product.size.includes("ft")) unit = "ft";
-        else if (product.size.includes("m")) unit = "m";
-        else unit = "in";
+        length = 72;
       }
+      if (product.size.includes("cm")) unit = "cm";
+      else if (product.size.includes("ft")) unit = "ft";
+      else if (product.size.includes("m")) unit = "m";
+      else unit = "in";
     }
     if (heightInput) heightInput.value = height;
     if (widthInput) widthInput.value = width;
+    if (lengthInput) lengthInput.value = length;
     if (unitSelect) unitSelect.value = unit;
     currentDimensionUnit = unit;
 
@@ -1291,9 +2163,25 @@ window.editProduct = (id, productJsonBase64) => {
     productForm.dataset.productName = product.name || "";
     productForm.dataset.productDescription = product.description || "";
 
+    // Snapshot original form data for unsaved changes detection
+    productForm.dataset.origFormData = JSON.stringify({
+      name: product.name || "",
+      description: product.description || "",
+      category: product.category || "",
+      price: product.price || "",
+      stock: product.stock || 0,
+      height,
+      width,
+      length,
+      unit,
+      materials: [...currentMaterialTags],
+      thumbnailsCount: existingThumbs.length,
+    });
+
     isEditing = true;
     currentEditId = id;
     document.getElementById("modal-title").textContent = "Edit Product";
+    hideDraftBanner();
     window.openModal();
   } catch (e) {
     console.error("Failed to parse product for editing", e);
@@ -1693,7 +2581,7 @@ const analyticsCategoryDonutEl = document.getElementById("analytics-category-don
 const analyticsCategoryLegendEl = document.getElementById("analytics-category-legend");
 
 let allOrders = [];
-let staffMembers = [];
+staffMembers = [];
 let ordersFilterValue = "all";
 const selectedDeclinedOrderIds = new Set();
 let isBatchDeleteMode = false;
@@ -2213,7 +3101,9 @@ function exportInventoryCsv() {
   allProducts.forEach((p) => {
     let dimsStr = "";
     if (p.dimensions && typeof p.dimensions.height === "number") {
-      dimsStr = `${p.dimensions.width} × ${p.dimensions.height} ${p.dimensions.unit || "in"}`;
+      dimsStr = p.dimensions.length
+        ? `${p.dimensions.length} × ${p.dimensions.width} × ${p.dimensions.height} ${p.dimensions.unit || "in"}`
+        : `${p.dimensions.width} × ${p.dimensions.height} ${p.dimensions.unit || "in"}`;
     } else if (p.size) {
       dimsStr = typeof p.size === "string" ? p.size : `${p.size.w || 0} × ${p.size.h || 0} in`;
     }
