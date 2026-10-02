@@ -335,6 +335,11 @@
   color: #c5221f;
 }
 
+.status-mto {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
 /* Table Actions */
 .action-btns {
   display: flex;
@@ -1265,7 +1270,65 @@
   }
 }
 
-/* Material Chip Preset Buttons */
+/* Material Chip Preset Buttons & Quick Add Chips with (x) Remove */
+.quick-add-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.quick-add-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #f3f4f6;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.quick-add-chip:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.quick-add-chip-btn {
+  background: none;
+  border: none;
+  color: #374151;
+  padding: 4px 8px 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.quick-add-chip-btn:hover {
+  color: #111827;
+}
+
+.quick-add-chip-remove {
+  background: none;
+  border: none;
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  color: #9ca3af;
+  padding: 4px 8px 4px 6px;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.quick-add-chip-remove:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
 .material-chip-btn {
   background: #f3f4f6;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -1282,6 +1345,96 @@
   background: #fcd535;
   color: #0f1115;
   border-color: #fcd535;
+}
+
+/* Made-to-Order Production Watchlist */
+.analytics-mto-watchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mto-watchlist-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.mto-watchlist-item:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.mto-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mto-item-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #111827;
+}
+
+.mto-item-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mto-item-meta strong {
+  color: #374151;
+}
+
+.mto-item-status-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.mto-status-pill {
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  text-transform: capitalize;
+}
+
+.mto-status-pill.production {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mto-status-pill.downpayment {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.mto-status-pill.quality {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+}
+
+.mto-status-pill.shipped {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.mto-item-leadtime {
+  font-size: 0.72rem;
+  color: #6b7280;
 }
 
 /* Multi-View Upload Grid */
@@ -1577,5 +1730,308 @@
 .kanban-btn-next:hover {
   background: #334155;
 }
+
+/* ==========================================================================
+   Dimension & Size Inputs
+   ========================================================================== */
+.dimension-inputs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: 12px;
+}
+
+.dimension-field label {
+  font-size: 0.8rem;
+  color: #4b5563;
+  margin-bottom: 4px;
+  display: block;
+  font-weight: 500;
+}
+
+.dimension-field input,
+.dimension-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.dimension-field input:focus,
+.dimension-field select:focus {
+  border-color: #fcd535;
+  box-shadow: 0 0 0 3px rgba(252, 213, 53, 0.2);
+  outline: none;
+}
+
+@media (max-width: 600px) {
+  .dimension-inputs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   Material Tags Field
+   ========================================================================== */
+.material-tags-container {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.material-tags-container:focus-within {
+  border-color: #fcd535;
+  box-shadow: 0 0 0 3px rgba(252, 213, 53, 0.2);
+}
+
+.material-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.material-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #1f2937;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: tagFadeIn 0.2s ease;
+}
+
+@keyframes tagFadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.material-tag-remove {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.material-tag-remove:hover {
+  color: #ef4444;
+}
+
+.material-tags-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.material-tags-input-row input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 6px 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: #111827;
+  background: transparent;
+}
+
+.btn-tag-add {
+  background: #111827;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-tag-add:hover {
+  background: #374151;
+}
+
+/* ==========================================================================
+   Multi-Thumbnail Gallery & Upload Zone
+   ========================================================================== */
+.thumbnail-gallery-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1.5px dashed rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  min-height: 110px;
+  transition: all 0.2s ease;
+}
+
+.thumbnail-gallery-zone.dragover {
+  background: #fefce8;
+  border-color: #eab308;
+  box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.15);
+}
+
+.thumbnail-previews-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.thumbnail-preview-card {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.thumbnail-preview-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.thumbnail-preview-card.is-primary {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+.thumbnail-preview-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  z-index: 3;
+}
+
+.thumb-badge.primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.thumb-badge.num {
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+}
+
+.thumb-actions {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  padding: 4px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 4;
+}
+
+.thumbnail-preview-card:hover .thumb-actions {
+  opacity: 1;
+}
+
+.btn-thumb-action {
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #374151;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.btn-thumb-action:hover:not(:disabled) {
+  background: #ffffff;
+  color: #111827;
+  transform: scale(1.1);
+}
+
+.btn-thumb-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-thumb-action.delete-thumb:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.btn-add-thumbnail-card {
+  width: 100px;
+  height: 100px;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6b7280;
+  padding: 0;
+}
+
+.btn-add-thumbnail-card:hover {
+  border-color: #fcd535;
+  background: #fefce8;
+  color: #854d0e;
+  transform: translateY(-2px);
+}
+
+.add-thumb-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-thumb-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 
 

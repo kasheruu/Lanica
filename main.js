@@ -167,7 +167,125 @@ function setupCartSubscription(userId) {
   }
 }
 
-// Load Products Catalog & Render Cards with Variant & AR buttons
+// Helper to get all thumbnails for a product with fallback
+function getProductThumbnails(product) {
+  if (Array.isArray(product.thumbnails) && product.thumbnails.length > 0) {
+    return product.thumbnails;
+  }
+  if (Array.isArray(product.images?.thumbnails) && product.images.thumbnails.length > 0) {
+    return product.images.thumbnails;
+  }
+  const fallback =
+    product.thumbnail ||
+    (product.images && (product.images.isoImage || product.images.frontBg)) ||
+    product.image ||
+    "assets/product_sofa.png";
+  return [fallback];
+}
+
+// Interactive multi-thumbnail slideshow for product cards
+function initCardSlideshows(root = document) {
+  const slideshows = root.querySelectorAll(".card-slideshow");
+  slideshows.forEach((container) => {
+    if (container.dataset.slideshowInitialized === "true") return;
+    container.dataset.slideshowInitialized = "true";
+
+    const slides = container.querySelectorAll(".card-slideshow-slide");
+    const dots = container.querySelectorAll(".card-slideshow-dot");
+    const prevBtn = container.querySelector(".card-slideshow-btn.prev");
+    const nextBtn = container.querySelector(".card-slideshow-btn.next");
+
+    if (slides.length <= 1) return;
+
+    let currentIndex = 0;
+    let autoSlideInterval = null;
+
+    function goToSlide(index) {
+      slides[currentIndex]?.classList.remove("active");
+      dots[currentIndex]?.classList.remove("active");
+
+      currentIndex = (index + slides.length) % slides.length;
+
+      slides[currentIndex]?.classList.add("active");
+      dots[currentIndex]?.classList.add("active");
+    }
+
+    function startAutoSlide() {
+      stopAutoSlide();
+      autoSlideInterval = setInterval(() => {
+        goToSlide(currentIndex + 1);
+      }, 3500);
+    }
+
+    function stopAutoSlide() {
+      if (autoSlideInterval) {
+        clearInterval(autoSlideInterval);
+        autoSlideInterval = null;
+      }
+    }
+
+    if (prevBtn) {
+      prevBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        goToSlide(currentIndex - 1);
+        startAutoSlide();
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        goToSlide(currentIndex + 1);
+        startAutoSlide();
+      });
+    }
+
+    dots.forEach((dot, idx) => {
+      dot.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        goToSlide(idx);
+        startAutoSlide();
+      });
+    });
+
+    // Touch swipe support
+    let touchStartX = 0;
+    container.addEventListener(
+      "touchstart",
+      (e) => {
+        stopAutoSlide();
+        touchStartX = e.touches[0].clientX;
+      },
+      { passive: true }
+    );
+
+    container.addEventListener(
+      "touchend",
+      (e) => {
+        const touchEndX = e.changedTouches[0].clientX;
+        const diff = touchEndX - touchStartX;
+        if (Math.abs(diff) > 30) {
+          if (diff < 0) {
+            goToSlide(currentIndex + 1);
+          } else {
+            goToSlide(currentIndex - 1);
+          }
+        }
+        startAutoSlide();
+      },
+      { passive: true }
+    );
+
+    container.addEventListener("mouseenter", stopAutoSlide);
+    container.addEventListener("mouseleave", startAutoSlide);
+
+    startAutoSlide();
+  });
+}
+
 // Load Products Catalog & Render Cards in Interactive Carousel
 async function loadProductsCatalog() {
   const carouselTrack = document.getElementById("carousel-track") || document.querySelector(".products-grid");
@@ -182,28 +300,65 @@ async function loadProductsCatalog() {
       let delay = 0.1;
       querySnapshot.forEach((docSnap) => {
         const product = docSnap.data();
-
-        const displayImage =
-          product.thumbnail ||
-          (product.images && (product.images.isoImage || product.images.frontBg)) ||
-          product.image ||
-          "assets/product_sofa.png";
-
+        const thumbnails = getProductThumbnails(product);
+        const hasMultipleThumbs = thumbnails.length >= 2;
         const priceFormatted = parseFloat(product.price || 0).toLocaleString();
+
+        const imageSectionHTML = hasMultipleThumbs
+          ? `
+            <div class="product-image-container card-slideshow" data-product-id="${docSnap.id}">
+              <div class="card-slideshow-track">
+                ${thumbnails
+                  .map(
+                    (src, i) => `
+                  <div class="card-slideshow-slide ${i === 0 ? "active" : ""}">
+                    <img src="${src}" alt="${escapeHtml(product.name)} - View ${i + 1}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+                  </div>
+                `
+                  )
+                  .join("")}
+              </div>
+              <button type="button" class="card-slideshow-btn prev" aria-label="Previous view">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button type="button" class="card-slideshow-btn next" aria-label="Next view">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+              <div class="card-slideshow-dots">
+                ${thumbnails
+                  .map(
+                    (_, i) => `
+                  <span class="card-slideshow-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>
+                `
+                  )
+                  .join("")}
+              </div>
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <span>3D</span>
+              </button>
+              <button class="btn-quick-order" data-product-id="${docSnap.id}">
+                Order Now
+              </button>
+            </div>
+          `
+          : `
+            <div class="product-image-container">
+              <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <span>3D</span>
+              </button>
+              <button class="btn-quick-order" data-product-id="${docSnap.id}">
+                Order Now
+              </button>
+            </div>
+          `;
 
         const productHTML = `
           <div class="product-card-slide">
             <div class="product-card reveal" style="--delay: ${delay}s">
-              <div class="product-image-container">
-                <img src="${displayImage}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-                <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                  <span>3D</span>
-                </button>
-                <button class="btn-quick-order" data-product-id="${docSnap.id}">
-                  Order Now
-                </button>
-              </div>
+              ${imageSectionHTML}
               <div class="product-info">
                 <h3>${escapeHtml(product.name)}</h3>
                 <p class="price">₱${priceFormatted}</p>
@@ -217,6 +372,7 @@ async function loadProductsCatalog() {
 
       // Bind AR & Quick Order buttons
       bindProductCardButtons();
+      initCardSlideshows(carouselTrack);
       setupCarouselControls();
     } else {
       carouselTrack.innerHTML = `
@@ -356,26 +512,88 @@ async function openProductQuickViewModal(productId) {
     }
 
     currentModalProduct = { id: productDoc.id, ...productDoc.data() };
-    currentSelectedMaterial = "Fabric";
     currentSelectedQty = 1;
 
-    // Populate modal content
-    const displayImg =
-      currentModalProduct.thumbnail ||
-      (currentModalProduct.images && (currentModalProduct.images.isoImage || currentModalProduct.images.frontBg)) ||
-      currentModalProduct.image ||
-      "assets/product_sofa.png";
-
+    const modalThumbs = getProductThumbnails(currentModalProduct);
     document.getElementById("pv-name").textContent = currentModalProduct.name;
-    document.getElementById("pv-image").src = displayImg;
+    document.getElementById("pv-image").src = modalThumbs[0];
     document.getElementById("pv-price").textContent = `₱${parseFloat(currentModalProduct.price || 0).toLocaleString()}`;
 
-    // Stocks breakdown
-    const fabricStock = typeof currentModalProduct.FabricStocks === "number" ? currentModalProduct.FabricStocks : (currentModalProduct.stock || 0);
-    const leatherStock = typeof currentModalProduct.LeatherStocks === "number" ? currentModalProduct.LeatherStocks : (currentModalProduct.stock || 0);
+    // Dimensions display
+    const dimsEl = document.getElementById("pv-dimensions-info");
+    if (dimsEl) {
+      let dimsText = "";
+      if (currentModalProduct.dimensions && typeof currentModalProduct.dimensions.height === "number") {
+        dimsText = `${currentModalProduct.dimensions.width} × ${currentModalProduct.dimensions.height} ${currentModalProduct.dimensions.unit || "in"}`;
+      } else if (currentModalProduct.size) {
+        dimsText = currentModalProduct.size;
+      }
+      if (dimsText) {
+        dimsEl.textContent = `📐 Dimensions: ${dimsText}`;
+        dimsEl.style.display = "block";
+      } else {
+        dimsEl.style.display = "none";
+      }
+    }
 
-    document.getElementById("pv-fabric-stock").textContent = `${fabricStock} left`;
-    document.getElementById("pv-leather-stock").textContent = `${leatherStock} left`;
+    // Modal multi-thumbnail selector strip
+    const thumbStrip = document.getElementById("pv-thumbnails");
+    if (thumbStrip) {
+      if (modalThumbs.length >= 2) {
+        thumbStrip.innerHTML = modalThumbs
+          .map(
+            (url, i) => `
+          <button type="button" class="modal-thumb-btn ${i === 0 ? "active" : ""}" data-index="${i}" title="View image ${i + 1}">
+            <img src="${url}" alt="Thumbnail ${i + 1}" onerror="this.src='assets/product_sofa.png'" />
+          </button>
+        `
+          )
+          .join("");
+        thumbStrip.style.display = "flex";
+        thumbStrip.querySelectorAll(".modal-thumb-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            thumbStrip.querySelectorAll(".modal-thumb-btn").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const idx = parseInt(btn.dataset.index, 10);
+            document.getElementById("pv-image").src = modalThumbs[idx];
+          });
+        });
+      } else {
+        thumbStrip.style.display = "none";
+        thumbStrip.innerHTML = "";
+      }
+    }
+
+    // Dynamic materials input / options
+    const prodMaterials = Array.isArray(currentModalProduct.materials) && currentModalProduct.materials.length > 0
+      ? currentModalProduct.materials
+      : currentModalProduct.material
+        ? currentModalProduct.material.split(",").map((s) => s.trim()).filter(Boolean)
+        : ["Standard"];
+
+    currentSelectedMaterial = prodMaterials[0] || "Standard";
+
+    const matOptionsContainer = document.getElementById("pv-material-options") || modal.querySelector(".material-options");
+    if (matOptionsContainer) {
+      matOptionsContainer.innerHTML = prodMaterials
+        .map((mat) => {
+          const matStock = getAvailableStock(currentModalProduct, mat);
+          return `
+            <button type="button" class="material-btn ${mat === currentSelectedMaterial ? "selected" : ""}" data-material="${escapeHtml(mat)}">
+              <span class="mat-title">${escapeHtml(mat)}</span>
+              <span class="mat-stock">${matStock} left</span>
+            </button>
+          `;
+        })
+        .join("");
+
+      matOptionsContainer.querySelectorAll(".material-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentSelectedMaterial = btn.getAttribute("data-material");
+          updateVariantStockUI();
+        });
+      });
+    }
 
     updateVariantStockUI();
 

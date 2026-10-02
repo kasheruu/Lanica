@@ -158,17 +158,15 @@
         </div>
 
         <div class="stat-card kpi-card">
-          <div class="kpi-icon-wrapper low-stock-icon">
+          <div class="kpi-icon-wrapper workshop-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb;">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-              <line x1="12" y1="9" x2="12" y2="13"></line>
-              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Low Stock Warning</h3>
+            <h3>Workshop Queue</h3>
             <p class="stat-value" id="dash-low-stock">0</p>
-            <span class="kpi-subtitle">Items with stock &le; 5</span>
+            <span class="kpi-subtitle">Active Made-to-Order</span>
           </div>
         </div>
 
@@ -287,8 +285,8 @@
     <div id="analytics-section" class="admin-section is-hidden">
       <header class="admin-header">
         <div>
-          <h1>Furniture Analytics</h1>
-          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time inventory distribution, stock health, and sales performance.</p>
+          <h1>Furniture & Production Analytics</h1>
+          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time Made-to-Order production pipeline, sales performance, cash collections, and material demand.</p>
         </div>
         <button id="export-analytics-pdf-btn" class="btn-primary" type="button">Export PDF</button>
       </header>
@@ -296,38 +294,46 @@
       <div id="analytics-export-area">
         <div class="stats-grid stats-grid-modern">
           <div class="stat-card">
-            <h3>Total Products</h3>
+            <h3>Catalog Listings</h3>
             <p class="stat-value" id="total-products">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Active furniture models</span>
           </div>
           <div class="stat-card">
-            <h3>Low Stock Items</h3>
-            <p class="stat-value" id="low-stock">0</p>
+            <h3>Made-to-Order Queue</h3>
+            <p class="stat-value" id="low-stock" style="color: #2563eb;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;" id="analytics-mto-sub">Crafting in workshop</span>
           </div>
           <div class="stat-card">
-            <h3>Total Inventory Value</h3>
-            <p class="stat-value" id="total-value">₱0</p>
+            <h3>Total Order Bookings</h3>
+            <p class="stat-value" id="total-value" style="color: #0f1115;">₱0.00</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Cumulative gross volume</span>
+          </div>
+          <div class="stat-card">
+            <h3>Cashflow Collected</h3>
+            <p class="stat-value" id="analytics-cash-collected" style="color: #059669;">₱0.00</p>
+            <span style="font-size: 0.78rem; color: #6b7280;" id="analytics-balance-due">₱0.00 balance due</span>
           </div>
         </div>
 
         <div class="analytics-grid analytics-grid-modern">
           <div class="analytics-card">
-            <h3>Inventory Health</h3>
+            <h3>Production & Order Health</h3>
             <div class="analytics-kpis">
               <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Total Units</span>
+                <span class="analytics-kpi-label">Total Orders</span>
                 <strong id="analytics-total-units">0</strong>
               </div>
               <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Out of Stock</span>
-                <strong id="analytics-out-of-stock">0</strong>
+                <span class="analytics-kpi-label">In Workshop</span>
+                <strong id="analytics-out-of-stock" style="color: #2563eb;">0</strong>
               </div>
               <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Avg Price</span>
+                <span class="analytics-kpi-label">Avg Order Value</span>
                 <strong id="analytics-avg-price">₱0.00</strong>
               </div>
               <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Avg Stock / Product</span>
-                <strong id="analytics-avg-stock">0</strong>
+                <span class="analytics-kpi-label">Completed / Shipped</span>
+                <strong id="analytics-avg-stock" style="color: #059669;">0</strong>
               </div>
             </div>
           </div>
@@ -341,25 +347,33 @@
             </div>
           </div>
 
-          <!-- Popular Materials & Styles -->
+          <!-- Popular Materials & Demand -->
           <div class="analytics-card analytics-card-wide">
-            <h3>Stock & Sales by Material</h3>
+            <h3>Customer Material Preferences</h3>
             <div id="analytics-material-bars" class="analytics-bars"></div>
           </div>
 
-          <!-- Stock Level Alert List / Bar Chart -->
+          <!-- Made-to-Order Production Watchlist (Replaces Critical Stock Level Alerts) -->
           <div class="analytics-card analytics-card-wide">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <h3 style="margin: 0;">Critical Stock Level Alerts</h3>
-              <span style="font-size: 0.8rem; color: #6b7280;">Target: 10 units per listing</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h3 style="margin: 0;">Active Made-to-Order Production Watchlist</h3>
+                <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Real-time queue of custom furniture orders crafting in workshop (14–21 days lead time)</p>
+              </div>
+              <span id="analytics-mto-count-badge" style="font-size: 0.8rem; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
+                0 Orders in Queue
+              </span>
             </div>
-            <div id="analytics-low-stock-list" class="analytics-watchlist"></div>
+            <div id="analytics-low-stock-list" class="analytics-mto-watchlist"></div>
           </div>
         </div>
 
         <div class="analytics-card revenue-analytics-card" style="margin-bottom: 16px">
           <div class="orders-analytics-header">
-            <h3 style="margin: 0">Revenue vs Profit</h3>
+            <div>
+              <h3 style="margin: 0">Revenue & Payment Collections</h3>
+              <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #6b7280;">Order booking value vs cash collected (downpayments & full payments)</p>
+            </div>
             <div class="orders-date-range">
               <label for="orders-date-start">From</label>
               <input type="date" id="orders-date-start" />
@@ -369,17 +383,21 @@
           </div>
           <div id="orders-date-validation" class="orders-date-validation" aria-live="polite"></div>
           <div class="orders-analytics-legend">
-            <span class="orders-legend-item"><i class="orders-legend-dot revenue"></i>Revenue</span>
-            <span class="orders-legend-item"><i class="orders-legend-dot profit"></i>Profit</span>
+            <span class="orders-legend-item"><i class="orders-legend-dot revenue"></i>Gross Revenue (Bookings)</span>
+            <span class="orders-legend-item"><i class="orders-legend-dot profit"></i>Cash Collected</span>
           </div>
           <div class="orders-analytics-kpis">
             <div class="orders-analytics-kpi">
-              <span>Total Revenue</span>
+              <span>Total Bookings</span>
               <strong id="orders-total-revenue">₱0.00</strong>
             </div>
             <div class="orders-analytics-kpi">
-              <span>Total Profit</span>
+              <span>Cash Collected</span>
               <strong id="orders-total-profit">₱0.00</strong>
+            </div>
+            <div class="orders-analytics-kpi">
+              <span>Balance Pending Delivery</span>
+              <strong id="orders-balance-due" style="color: #d97706;">₱0.00</strong>
             </div>
           </div>
           <div id="orders-revenue-graph" class="orders-revenue-graph"></div>
@@ -430,91 +448,98 @@
               <input type="number" id="product-price" required min="0" max="99999999" step="0.01" />
             </div>
             <div class="form-group">
-              <label for="product-cost">Cost (₱)</label>
-              <input type="number" id="product-cost" required min="0" max="99999999" step="0.01" />
-            </div>
-            <div class="form-group">
-              <label for="product-stock">Stock</label>
+              <label for="product-stock">Showroom Stock</label>
               <input type="number" id="product-stock" required min="0" max="99999" value="0" />
-            </div>
-            <div class="form-group">
-              <label for="product-material">Material</label>
-              <input type="text" id="product-material" list="material-presets" required placeholder="e.g. Italian Leather, Solid Oak" style="
-                width: 100%;
-                padding: 10px 14px;
-                border-radius: 8px;
-                border: 1px solid rgba(0, 0, 0, 0.15);
-                font-family: inherit;
-                font-size: 0.95rem;
-                outline: none;
-              " />
-              <datalist id="material-presets">
-                <option value="Fabric"></option>
-                <option value="Leather"></option>
-                <option value="Italian Genuine Leather"></option>
-                <option value="Velvet"></option>
-                <option value="Solid Oak Wood"></option>
-                <option value="Mahogany"></option>
-                <option value="Stainless Steel"></option>
-                <option value="Linen"></option>
-                <option value="Bouclé"></option>
-                <option value="Marble"></option>
-                <option value="Tempered Glass"></option>
-                <option value="Brass"></option>
-                <option value="Teak Wood"></option>
-              </datalist>
+              <span style="font-size: 0.72rem; color: #6b7280; display: block; margin-top: 2px;">0 = Made-to-Order</span>
             </div>
           </div>
 
-          <div class="material-chips-container" style="margin-top: -8px; margin-bottom: 16px;">
-            <span style="font-size: 0.8rem; font-weight: 600; color: #6b7280; margin-right: 6px;">Presets:</span>
-            <div class="material-chips-list" style="display: inline-flex; flex-wrap: wrap; gap: 6px;">
-              <button type="button" class="material-chip-btn" data-val="Italian Genuine Leather">Leather</button>
-              <button type="button" class="material-chip-btn" data-val="Velvet">Velvet</button>
-              <button type="button" class="material-chip-btn" data-val="Solid Oak Wood">Solid Oak</button>
-              <button type="button" class="material-chip-btn" data-val="Mahogany">Mahogany</button>
-              <button type="button" class="material-chip-btn" data-val="Stainless Steel">Steel</button>
-              <button type="button" class="material-chip-btn" data-val="Linen">Linen</button>
-              <button type="button" class="material-chip-btn" data-val="Bouclé">Bouclé</button>
-              <button type="button" class="material-chip-btn" data-val="Marble">Marble</button>
-            </div>
-          </div>
-
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Size / Dimensions (in)</label>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="number" id="product-size-w" required min="1" max="120" placeholder="W" value="72"
-                  style="width: 70px; text-align: center;" />
-                <span>×</span>
-                <input type="number" id="product-size-h" required min="1" max="120" placeholder="H" value="72"
-                  style="width: 70px; text-align: center;" />
-                <span>×</span>
-                <input type="number" id="product-size-d" required min="1" max="120" placeholder="D" value="12"
-                  style="width: 70px; text-align: center;" />
-                <span>in</span>
+          <!-- Custom Materials Input / Tags Field -->
+          <div class="form-group" style="margin-top: 14px;">
+            <label for="product-material-input" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 600;">Materials (Tags / Custom Input)</span>
+              <span style="font-size: 0.75rem; color: #6b7280; font-weight: normal;">Type material & press Enter or click Add</span>
+            </label>
+            <div class="material-tags-container" id="material-tags-container">
+              <div class="material-tags-list" id="material-tags-list"></div>
+              <div class="material-tags-input-row">
+                <input type="text" id="product-material-input" placeholder="e.g. Solid Oak, Tempered Glass, Linen blend..." />
+                <button type="button" id="btn-add-material-tag" class="btn-tag-add">Add</button>
               </div>
             </div>
-            <div class="form-group">
-              <label for="product-color">Hex Color</label>
-              <div style="display: flex; gap: 8px; align-items: center">
-                <input type="color" id="product-color-picker" value="#ffffff" style="
-                      width: 44px;
-                      height: 44px;
-                      padding: 0;
-                      border: 1px solid rgba(0, 0, 0, 0.1);
-                      border-radius: 8px;
-                      cursor: pointer;
-                      background: none;
-                    " />
-                <input type="text" id="product-color" required placeholder="e.g. #FFFFFF or White" style="flex: 1" />
+            <input type="hidden" id="product-material" />
+            <div class="material-suggestions" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.75rem; color: #4b5563; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
+                  Recent Quick Add (Max 8):
+                </span>
+                <button type="button" id="btn-reset-quick-add" style="background: none; border: none; color: #6b7280; font-size: 0.72rem; cursor: pointer; text-decoration: underline;" title="Reset default material suggestions">
+                  Reset defaults
+                </button>
+              </div>
+              <div id="quick-add-materials-list" class="quick-add-chips-container" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <!-- Populated dynamically with remove (x) buttons -->
               </div>
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="img-iso">Thumbnail (White / Storefront Background)</label>
-            <input type="file" id="img-iso" accept="image/*" required />
+          <!-- Dimensions & Size with Dynamic Unit Conversion -->
+          <div class="form-group" style="margin-top: 14px;">
+            <label style="font-weight: 600; margin-bottom: 6px; display: block;">Dimensions & Size</label>
+            <div class="dimension-inputs-grid">
+              <div class="dimension-field">
+                <label for="product-height">Height</label>
+                <input type="number" id="product-height" required min="0.01" step="any" placeholder="Height" value="72" />
+              </div>
+              <div class="dimension-field">
+                <label for="product-width">Width</label>
+                <input type="number" id="product-width" required min="0.01" step="any" placeholder="Width" value="72" />
+              </div>
+              <div class="dimension-field">
+                <label for="product-unit">Unit</label>
+                <select id="product-unit">
+                  <option value="in">inches (in)</option>
+                  <option value="ft">feet (ft)</option>
+                  <option value="cm">centimeters (cm)</option>
+                  <option value="m">meters (m)</option>
+                </select>
+              </div>
+            </div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
+              Switching units converts values in real-time (e.g. 7 ft ➔ 213.36 cm).
+            </div>
+          </div>
+
+          <!-- Multi-Thumbnail Upload & Preview Gallery -->
+          <div class="form-group" style="margin-top: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="margin: 0; font-weight: 600;">Product Thumbnails / Storefront Images</label>
+              <span class="multiview-badge-hint" style="font-size: 0.75rem; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-weight: 600;">
+                Multi-image slideshow enabled
+              </span>
+            </div>
+            <p style="font-size: 0.8rem; color: #6b7280; margin: 0 0 10px 0;">
+              Upload one or more thumbnails. The first is primary. Products with 2+ thumbnails display as an interactive slideshow.
+            </p>
+
+            <input type="file" id="thumbnail-upload-input" accept="image/*" multiple style="display: none;" />
+
+            <div id="thumbnail-gallery-container" class="thumbnail-gallery-zone">
+              <div id="thumbnail-previews-list" class="thumbnail-previews-list"></div>
+              
+              <button type="button" id="btn-add-thumbnail" class="btn-add-thumbnail-card" title="Add thumbnail image">
+                <div class="add-thumb-icon">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </div>
+                <span class="add-thumb-text">Add (+)</span>
+              </button>
+            </div>
+            <div id="thumbnail-validation-error" style="display: none; color: #dc2626; font-size: 0.78rem; margin-top: 6px; font-weight: 500;">
+              Please add at least one product thumbnail image.
+            </div>
           </div>
 
           <!-- Multi-View Transparent Images for 3D Generation -->

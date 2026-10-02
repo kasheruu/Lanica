@@ -128,6 +128,11 @@ const productModal = document.getElementById("product-modal"); // Assuming modal
 const totalProductsStat = document.getElementById("total-products");
 const lowStockStat = document.getElementById("low-stock");
 const totalValueStat = document.getElementById("total-value");
+const analyticsCashCollectedEl = document.getElementById("analytics-cash-collected");
+const analyticsBalanceDueEl = document.getElementById("analytics-balance-due");
+const ordersBalanceDueEl = document.getElementById("orders-balance-due");
+const analyticsMtoCountBadgeEl = document.getElementById("analytics-mto-count-badge");
+const analyticsMtoSubEl = document.getElementById("analytics-mto-sub");
 const analyticsTotalUnitsEl = document.getElementById("analytics-total-units");
 const analyticsOutOfStockEl = document.getElementById("analytics-out-of-stock");
 const analyticsAvgPriceEl = document.getElementById("analytics-avg-price");
@@ -144,10 +149,6 @@ const ordersDateValidationEl = document.getElementById("orders-date-validation")
 const exportAnalyticsPdfBtn = document.getElementById("export-analytics-pdf-btn");
 const analyticsExportArea = document.getElementById("analytics-export-area");
 
-// Color picker logic
-const colorPicker = document.getElementById("product-color-picker");
-const colorInput = document.getElementById("product-color");
-
 // Auto-resize description text area
 const productDescriptionTextarea = document.getElementById("product-description");
 if (productDescriptionTextarea) {
@@ -157,41 +158,364 @@ if (productDescriptionTextarea) {
   });
 }
 
-colorPicker.addEventListener("input", (e) => {
-  colorInput.value = e.target.value.toUpperCase();
-});
+// ==========================================================================
+// Custom Materials Input / Tags Field & Dynamic Quick Add (with Limit & Remove)
+// ==========================================================================
+const QUICK_ADD_LIMIT = 8;
+const DEFAULT_QUICK_ADD_MATERIALS = [
+  "Solid Oak",
+  "Tempered Glass",
+  "Linen blend",
+  "Velvet",
+  "Italian Leather",
+  "Mahogany",
+  "Bouclé",
+  "Stainless Steel"
+];
 
-colorInput.addEventListener("input", (e) => {
-  const val = e.target.value;
-  if (/^#[0-9A-F]{6}$/i.test(val)) {
-    colorPicker.value = val;
-  }
-});
-
-// Quick Material Preset Chip Clicks
-document.addEventListener("click", (e) => {
-  const chipBtn = e.target.closest(".material-chip-btn");
-  if (chipBtn) {
-    e.preventDefault();
-    const val = chipBtn.dataset.val || chipBtn.textContent;
-    const matInput = document.getElementById("product-material");
-    if (matInput) {
-      matInput.value = val;
-      matInput.focus();
+function loadQuickAddMaterials() {
+  try {
+    const raw = localStorage.getItem("lanica_quick_add_materials");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, QUICK_ADD_LIMIT);
+      }
     }
+  } catch (err) {
+    console.warn("Could not load quick add materials from localStorage:", err);
   }
-});
+  return [...DEFAULT_QUICK_ADD_MATERIALS];
+}
+
+function saveQuickAddMaterials(list) {
+  try {
+    const capped = list.slice(0, QUICK_ADD_LIMIT);
+    localStorage.setItem("lanica_quick_add_materials", JSON.stringify(capped));
+  } catch (err) {
+    console.warn("Could not save quick add materials to localStorage:", err);
+  }
+}
+
+let quickAddMaterials = loadQuickAddMaterials();
+let currentMaterialTags = [];
+const materialTagsList = document.getElementById("material-tags-list");
+const materialInput = document.getElementById("product-material-input");
+const materialHiddenInput = document.getElementById("product-material");
+const addMaterialTagBtn = document.getElementById("btn-add-material-tag");
+const quickAddMaterialsListEl = document.getElementById("quick-add-materials-list");
+const btnResetQuickAdd = document.getElementById("btn-reset-quick-add");
+
+function renderMaterialTags() {
+  if (!materialTagsList) return;
+  materialTagsList.innerHTML = currentMaterialTags
+    .map(
+      (tag, idx) => `
+      <span class="material-tag-pill">
+        ${escapeHtml(tag)}
+        <button type="button" class="material-tag-remove" data-index="${idx}" title="Remove material">&times;</button>
+      </span>
+    `
+    )
+    .join("");
+  if (materialHiddenInput) {
+    materialHiddenInput.value = currentMaterialTags.join(", ");
+  }
+}
+
+function renderQuickAddMaterials() {
+  if (!quickAddMaterialsListEl) return;
+  if (!quickAddMaterials || quickAddMaterials.length === 0) {
+    quickAddMaterialsListEl.innerHTML = `<span style="font-size: 0.75rem; color: #9ca3af; font-style: italic;">No recent suggestions. Click "Reset defaults" to restore.</span>`;
+    return;
+  }
+  quickAddMaterialsListEl.innerHTML = quickAddMaterials
+    .map(
+      (mat) => `
+      <div class="quick-add-chip" data-val="${escapeHtml(mat)}">
+        <button type="button" class="quick-add-chip-btn" data-val="${escapeHtml(mat)}" title="Add ${escapeHtml(mat)}">${escapeHtml(mat)}</button>
+        <button type="button" class="quick-add-chip-remove" data-val="${escapeHtml(mat)}" title="Remove ${escapeHtml(mat)} from quick add">&times;</button>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function addRecentQuickAddMaterial(val) {
+  if (!val) return;
+  const clean = val.trim();
+  if (!clean) return;
+  const existingIdx = quickAddMaterials.findIndex((m) => m.toLowerCase() === clean.toLowerCase());
+  if (existingIdx !== -1) {
+    quickAddMaterials.splice(existingIdx, 1);
+  }
+  quickAddMaterials.unshift(clean);
+  if (quickAddMaterials.length > QUICK_ADD_LIMIT) {
+    quickAddMaterials = quickAddMaterials.slice(0, QUICK_ADD_LIMIT);
+  }
+  saveQuickAddMaterials(quickAddMaterials);
+  renderQuickAddMaterials();
+}
+
+function removeQuickAddMaterial(val) {
+  if (!val) return;
+  quickAddMaterials = quickAddMaterials.filter((m) => m.toLowerCase() !== val.toLowerCase());
+  saveQuickAddMaterials(quickAddMaterials);
+  renderQuickAddMaterials();
+}
+
+function addMaterialTag(val) {
+  if (!val) return;
+  const clean = val.trim();
+  if (!clean) return;
+  const parts = clean
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  parts.forEach((p) => {
+    if (!currentMaterialTags.some((t) => t.toLowerCase() === p.toLowerCase())) {
+      currentMaterialTags.push(p);
+      addRecentQuickAddMaterial(p);
+    }
+  });
+  renderMaterialTags();
+  if (materialInput) materialInput.value = "";
+}
+
+function removeMaterialTag(idx) {
+  currentMaterialTags.splice(idx, 1);
+  renderMaterialTags();
+}
+
+function clearMaterialTags() {
+  currentMaterialTags = [];
+  renderMaterialTags();
+  if (materialInput) materialInput.value = "";
+}
+
+if (addMaterialTagBtn) {
+  addMaterialTagBtn.addEventListener("click", () => {
+    if (materialInput) addMaterialTag(materialInput.value);
+  });
+}
+
+if (materialInput) {
+  materialInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addMaterialTag(materialInput.value);
+    }
+  });
+}
+
+if (materialTagsList) {
+  materialTagsList.addEventListener("click", (e) => {
+    const btn = e.target.closest(".material-tag-remove");
+    if (btn) {
+      e.preventDefault();
+      const idx = parseInt(btn.dataset.index, 10);
+      if (!isNaN(idx)) removeMaterialTag(idx);
+    }
+  });
+}
+
+// Event delegations for quick add chips (Add or Remove)
+if (quickAddMaterialsListEl) {
+  quickAddMaterialsListEl.addEventListener("click", (e) => {
+    const removeBtn = e.target.closest(".quick-add-chip-remove");
+    if (removeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const val = removeBtn.dataset.val;
+      removeQuickAddMaterial(val);
+      return;
+    }
+    const addBtn = e.target.closest(".quick-add-chip-btn");
+    if (addBtn) {
+      e.preventDefault();
+      const val = addBtn.dataset.val;
+      addMaterialTag(val);
+    }
+  });
+}
+
+if (btnResetQuickAdd) {
+  btnResetQuickAdd.addEventListener("click", (e) => {
+    e.preventDefault();
+    quickAddMaterials = [...DEFAULT_QUICK_ADD_MATERIALS];
+    saveQuickAddMaterials(quickAddMaterials);
+    renderQuickAddMaterials();
+  });
+}
+
+// Initial render of quick add chips
+renderQuickAddMaterials();
+
+// ==========================================================================
+// Dimensions & Size: Real-Time Unit Conversion Logic
+// ==========================================================================
+const UNIT_TO_CM = {
+  cm: 1,
+  m: 100,
+  in: 2.54,
+  ft: 30.48, // 12 * 2.54
+};
+
+function convertDimension(val, fromUnit, toUnit) {
+  if (fromUnit === toUnit || !UNIT_TO_CM[fromUnit] || !UNIT_TO_CM[toUnit]) return val;
+  const cmVal = val * UNIT_TO_CM[fromUnit];
+  const targetVal = cmVal / UNIT_TO_CM[toUnit];
+  return Math.round(targetVal * 100) / 100;
+}
+
+const heightInput = document.getElementById("product-height");
+const widthInput = document.getElementById("product-width");
+const unitSelect = document.getElementById("product-unit");
+let currentDimensionUnit = unitSelect ? unitSelect.value : "in";
+
+if (unitSelect) {
+  unitSelect.addEventListener("change", () => {
+    const newUnit = unitSelect.value;
+    const oldUnit = currentDimensionUnit;
+    if (newUnit !== oldUnit) {
+      const h = parseFloat(heightInput.value);
+      const w = parseFloat(widthInput.value);
+      if (!isNaN(h) && h > 0) {
+        heightInput.value = convertDimension(h, oldUnit, newUnit);
+      }
+      if (!isNaN(w) && w > 0) {
+        widthInput.value = convertDimension(w, oldUnit, newUnit);
+      }
+      currentDimensionUnit = newUnit;
+    }
+  });
+}
+
+// ==========================================================================
+// Multi-Thumbnail Upload & Gallery State Management
+// ==========================================================================
+let thumbnailItems = []; // Array of { id, file: File|null, url: string }
+const thumbnailFileInput = document.getElementById("thumbnail-upload-input");
+const addThumbnailBtn = document.getElementById("btn-add-thumbnail");
+const thumbnailPreviewsList = document.getElementById("thumbnail-previews-list");
+const thumbnailGalleryContainer = document.getElementById("thumbnail-gallery-container");
+const thumbnailErrorMsg = document.getElementById("thumbnail-validation-error");
+
+function renderThumbnailPreviews() {
+  if (!thumbnailPreviewsList) return;
+  if (thumbnailErrorMsg && thumbnailItems.length > 0) {
+    thumbnailErrorMsg.style.display = "none";
+  }
+  thumbnailPreviewsList.innerHTML = thumbnailItems
+    .map(
+      (item, idx) => `
+      <div class="thumbnail-preview-card ${idx === 0 ? "is-primary" : ""}" data-index="${idx}">
+        <img src="${item.url}" alt="Thumbnail ${idx + 1}" onerror="this.src='assets/product_sofa.png'" />
+        ${idx === 0 ? '<span class="thumb-badge primary">Primary</span>' : `<span class="thumb-badge num">#${idx + 1}</span>`}
+        <div class="thumb-actions">
+          <button type="button" class="btn-thumb-action move-left" data-index="${idx}" title="Move left" ${idx === 0 ? "disabled" : ""}>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button type="button" class="btn-thumb-action move-right" data-index="${idx}" title="Move right" ${idx === thumbnailItems.length - 1 ? "disabled" : ""}>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+          <button type="button" class="btn-thumb-action delete-thumb" data-index="${idx}" title="Remove thumbnail">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function addThumbnailFiles(files) {
+  if (!files || !files.length) return;
+  Array.from(files).forEach((file) => {
+    thumbnailItems.push({
+      id: `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      file,
+      url: URL.createObjectURL(file),
+    });
+  });
+  renderThumbnailPreviews();
+  if (thumbnailFileInput) thumbnailFileInput.value = "";
+}
+
+function clearThumbnailItems() {
+  thumbnailItems = [];
+  renderThumbnailPreviews();
+  if (thumbnailFileInput) thumbnailFileInput.value = "";
+  if (thumbnailErrorMsg) thumbnailErrorMsg.style.display = "none";
+}
+
+if (addThumbnailBtn && thumbnailFileInput) {
+  addThumbnailBtn.addEventListener("click", () => {
+    thumbnailFileInput.click();
+  });
+  thumbnailFileInput.addEventListener("change", (e) => {
+    addThumbnailFiles(e.target.files);
+  });
+}
+
+if (thumbnailGalleryContainer) {
+  thumbnailGalleryContainer.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    thumbnailGalleryContainer.classList.add("dragover");
+  });
+  thumbnailGalleryContainer.addEventListener("dragleave", () => {
+    thumbnailGalleryContainer.classList.remove("dragover");
+  });
+  thumbnailGalleryContainer.addEventListener("drop", (e) => {
+    e.preventDefault();
+    thumbnailGalleryContainer.classList.remove("dragover");
+    if (e.dataTransfer && e.dataTransfer.files) {
+      addThumbnailFiles(e.dataTransfer.files);
+    }
+  });
+}
+
+if (thumbnailPreviewsList) {
+  thumbnailPreviewsList.addEventListener("click", (e) => {
+    const leftBtn = e.target.closest(".btn-thumb-action.move-left");
+    const rightBtn = e.target.closest(".btn-thumb-action.move-right");
+    const deleteBtn = e.target.closest(".btn-thumb-action.delete-thumb");
+
+    if (leftBtn && !leftBtn.disabled) {
+      e.preventDefault();
+      const idx = parseInt(leftBtn.dataset.index, 10);
+      if (idx > 0) {
+        const temp = thumbnailItems[idx];
+        thumbnailItems[idx] = thumbnailItems[idx - 1];
+        thumbnailItems[idx - 1] = temp;
+        renderThumbnailPreviews();
+      }
+    } else if (rightBtn && !rightBtn.disabled) {
+      e.preventDefault();
+      const idx = parseInt(rightBtn.dataset.index, 10);
+      if (idx < thumbnailItems.length - 1) {
+        const temp = thumbnailItems[idx];
+        thumbnailItems[idx] = thumbnailItems[idx + 1];
+        thumbnailItems[idx + 1] = temp;
+        renderThumbnailPreviews();
+      }
+    } else if (deleteBtn) {
+      e.preventDefault();
+      const idx = parseInt(deleteBtn.dataset.index, 10);
+      thumbnailItems.splice(idx, 1);
+      renderThumbnailPreviews();
+    }
+  });
+}
 
 // --- Input Validation with Warnings ---
 const validationRules = [
   { id: "product-name", max: 100, msg: "Product name cannot exceed 100 characters" },
   { id: "product-description", max: 500, msg: "Description cannot exceed 500 characters" },
   { id: "product-price", max: 99999999, msg: "Price cannot exceed ₱99,999,999" },
-  { id: "product-cost", max: 99999999, msg: "Cost cannot exceed ₱99,999,999" },
   { id: "product-stock", max: 99999, msg: "Stock cannot exceed 99,999 units" },
-  { id: "product-size-w", max: 120, msg: "Width cannot exceed 120 inches" },
-  { id: "product-size-h", max: 120, msg: "Height cannot exceed 120 inches" },
-  { id: "product-size-d", max: 120, msg: "Depth cannot exceed 120 inches" },
+  { id: "product-height", max: 99999, msg: "Height cannot exceed 99,999" },
+  { id: "product-width", max: 99999, msg: "Width cannot exceed 99,999" },
 ];
 
 function showWarning(input, message) {
@@ -246,10 +570,6 @@ validationRules.forEach((rule) => {
   });
 
   input.addEventListener("blur", () => {
-    // Clear warning on blur but keep value capped
-    if (input.id.startsWith("product-size")) {
-      if (parseFloat(input.value) > rule.max) input.value = rule.max;
-    }
     clearWarning(input);
   });
 });
@@ -265,7 +585,6 @@ window.openModal = () => {
     document.getElementById("modal-title").textContent = "Add New Product";
     // When adding new, front bg is required as minimum
     document.getElementById("img-bg").required = true;
-    document.getElementById("img-iso").required = true;
   }
 };
 
@@ -275,10 +594,18 @@ window.closeModal = () => {
   isEditing = false;
   currentEditId = null;
   delete productForm.dataset.existingImages;
+  delete productForm.dataset.existingThumbnails;
   delete productForm.dataset.meshyTaskId;
 
+  // Reset custom components
+  clearMaterialTags();
+  clearThumbnailItems();
+  if (heightInput) heightInput.value = "72";
+  if (widthInput) widthInput.value = "72";
+  if (unitSelect) unitSelect.value = "in";
+  currentDimensionUnit = "in";
+
   // Reset required states
-  document.getElementById("img-iso").required = true;
   document.getElementById("img-bg").required = true;
 
   // Reset textarea height
@@ -497,36 +824,61 @@ productForm.addEventListener("submit", async (e) => {
   submitBtn.disabled = true;
 
   try {
+    // Validate thumbnails
+    if (!thumbnailItems || thumbnailItems.length === 0) {
+      if (thumbnailErrorMsg) thumbnailErrorMsg.style.display = "block";
+      submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
+      submitBtn.disabled = false;
+      alert("Please add at least one product thumbnail image.");
+      return;
+    }
+
+    // Auto-commit any material typed in the input
+    if (materialInput && materialInput.value.trim()) {
+      addMaterialTag(materialInput.value);
+    }
+    const materials = currentMaterialTags.length > 0 ? [...currentMaterialTags] : ["Standard"];
+    const material = materials.join(", ");
+
+    // Dimensions
+    const height = parseFloat(document.getElementById("product-height").value) || 0;
+    const width = parseFloat(document.getElementById("product-width").value) || 0;
+    const unit = document.getElementById("product-unit").value || "in";
+    const dimensions = {
+      height,
+      width,
+      unit,
+      heightCm: convertDimension(height, unit, "cm"),
+      widthCm: convertDimension(width, unit, "cm"),
+    };
+    const size = `${width} × ${height} ${unit}`;
+
     const transparentFrontFile = document.getElementById("img-bg").files[0];
     const leftBgFile = document.getElementById("img-bg-left")?.files[0] || null;
     const rightBgFile = document.getElementById("img-bg-right")?.files[0] || null;
     const backBgFile = document.getElementById("img-bg-back")?.files[0] || null;
 
-    const imageFiles = {
-      isoImage: document.getElementById("img-iso").files[0],
-      bgImage: transparentFrontFile,
-      leftBgImage: leftBgFile,
-      rightBgImage: rightBgFile,
-      backBgImage: backBgFile,
-    };
-
     const existingImages = isEditing ? JSON.parse(productForm.dataset.existingImages || "{}") : {};
 
-    // Helper to get URL: Check if new file uploaded, else keep existing
-    const getImageUrl = async (key, folderPath) => {
-      if (imageFiles[key]) {
-        return await uploadImage(imageFiles[key], folderPath);
-      }
-      return existingImages[key] || "";
-    };
+    submitBtn.textContent = "Uploading images...";
 
-    // Upload selected files concurrently into specified Firebase Storage folders
-    const [isoImage, bgImage, leftBgImage, rightBgImage, backBgImage] = await Promise.all([
-      getImageUrl("isoImage", "products/thumbnails"),
-      getImageUrl("bgImage", "products/productsnobg"),
-      getImageUrl("leftBgImage", "products/productsnobg"),
-      getImageUrl("rightBgImage", "products/productsnobg"),
-      getImageUrl("backBgImage", "products/productsnobg"),
+    // Upload thumbnails concurrently
+    const thumbnailUrls = await Promise.all(
+      thumbnailItems.map(async (item) => {
+        if (item.file) {
+          return await uploadImage(item.file, "products/thumbnails");
+        }
+        return item.url;
+      })
+    );
+    const primaryThumbnail = thumbnailUrls[0] || "";
+
+    // Upload transparent background files concurrently into specified Firebase Storage folders
+    const [bgImage, leftBgImage, rightBgImage, backBgImage] = await Promise.all([
+      transparentFrontFile ? uploadImage(transparentFrontFile, "products/productsnobg") : existingImages.bgImage || existingImages.frontBg || "",
+      leftBgFile ? uploadImage(leftBgFile, "products/productsnobg") : existingImages.leftBgImage || "",
+      rightBgFile ? uploadImage(rightBgFile, "products/productsnobg") : existingImages.rightBgImage || "",
+      backBgFile ? uploadImage(backBgFile, "products/productsnobg") : existingImages.backBgImage || "",
     ]);
 
     // Keep previous Meshy artifacts only when we are NOT regenerating from a new transparent image.
@@ -586,27 +938,29 @@ productForm.addEventListener("submit", async (e) => {
       } catch (err) {
         console.error("Failed to generate 3D model", err);
         alert("Failed to generate 3D model: " + err.message);
-        submitBtn.textContent = "Save Product";
+        submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
         submitBtn.disabled = false;
         return; // ABORT SAVE
       }
     }
 
     const stock = parseInt(document.getElementById("product-stock").value, 10) || 0;
-    const material = document.getElementById("product-material").value;
 
     const productData = {
       name: document.getElementById("product-name").value,
       description: document.getElementById("product-description").value,
       category: document.getElementById("product-category").value,
       price: parseFloat(document.getElementById("product-price").value),
-      cost: parseFloat(document.getElementById("product-cost").value),
       stock,
+      materials,
       material,
-      size: `${document.getElementById("product-size-w").value} × ${document.getElementById("product-size-h").value} × ${document.getElementById("product-size-d").value} in`,
-      color: document.getElementById("product-color").value,
+      dimensions,
+      size,
+      thumbnails: thumbnailUrls,
+      thumbnail: primaryThumbnail,
       images: {
-        isoImage,
+        isoImage: primaryThumbnail,
+        thumbnails: thumbnailUrls,
         bgImage,
         leftBgImage: leftBgImage || "",
         rightBgImage: rightBgImage || "",
@@ -866,19 +1220,58 @@ window.editProduct = (id, productJsonBase64) => {
     document.getElementById("product-description").value = product.description || "";
     document.getElementById("product-category").value = product.category;
     document.getElementById("product-price").value = product.price;
-    document.getElementById("product-cost").value =
-      product.cost != null && product.cost !== "" ? product.cost : 0;
-
     document.getElementById("product-stock").value = product.stock || 0;
-    document.getElementById("product-material").value = product.material || "Fabric";
-    const sizeParts = (product.size || "").split(" × ");
-    document.getElementById("product-size-w").value = sizeParts[0] || "72";
-    document.getElementById("product-size-h").value = sizeParts[1] || "72";
-    document.getElementById("product-size-d").value = sizeParts[2]?.replace(" in", "") || "12";
-    document.getElementById("product-color").value = product.color || "";
 
-    // When editing, files are not required
-    document.getElementById("img-iso").required = false;
+    // Materials tags
+    clearMaterialTags();
+    if (Array.isArray(product.materials) && product.materials.length > 0) {
+      product.materials.forEach((m) => addMaterialTag(m));
+    } else if (product.material) {
+      addMaterialTag(product.material);
+    }
+
+    // Dimensions
+    let height = 72;
+    let width = 72;
+    let unit = "in";
+    if (product.dimensions && typeof product.dimensions.height === "number") {
+      height = product.dimensions.height;
+      width = product.dimensions.width;
+      unit = product.dimensions.unit || "in";
+    } else if (product.size) {
+      const sizeParts = (product.size || "").split(" × ");
+      if (sizeParts.length >= 2) {
+        width = parseFloat(sizeParts[0]) || 72;
+        height = parseFloat(sizeParts[1]) || 72;
+        if (product.size.includes("cm")) unit = "cm";
+        else if (product.size.includes("ft")) unit = "ft";
+        else if (product.size.includes("m")) unit = "m";
+        else unit = "in";
+      }
+    }
+    if (heightInput) heightInput.value = height;
+    if (widthInput) widthInput.value = width;
+    if (unitSelect) unitSelect.value = unit;
+    currentDimensionUnit = unit;
+
+    // Multi-Thumbnails
+    clearThumbnailItems();
+    const existingThumbs = Array.isArray(product.thumbnails) && product.thumbnails.length > 0
+      ? product.thumbnails
+      : (Array.isArray(product.images?.thumbnails) && product.images.thumbnails.length > 0)
+        ? product.images.thumbnails
+        : [product.thumbnail || (product.images && (product.images.isoImage || product.images.frontBg))].filter(Boolean);
+
+    existingThumbs.forEach((url, i) => {
+      thumbnailItems.push({
+        id: `existing_${i}`,
+        file: null,
+        url: url,
+      });
+    });
+    renderThumbnailPreviews();
+
+    // When editing, front bg is not required unless replacing
     document.getElementById("img-bg").required = false;
 
     // Trigger auto-resize for the description if it has content
@@ -891,6 +1284,7 @@ window.editProduct = (id, productJsonBase64) => {
 
     // Store existing images so we don't overwrite with blank if no new file is selected
     productForm.dataset.existingImages = JSON.stringify(product.images || {});
+    productForm.dataset.existingThumbnails = JSON.stringify(product.thumbnails || []);
     productForm.dataset.meshyTaskId = product.meshyTaskId || "";
     productForm.dataset.modelUrl = product.modelUrl || "";
     productForm.dataset.meshyStatus = product.meshyStatus || "";
@@ -920,17 +1314,21 @@ const renderInventory = (products) => {
     let statusText = "In Stock";
 
     if (product.stock === 0) {
-      statusClass = "status-out-stock";
-      statusText = "Out of Stock";
-    } else if (product.stock < 10) {
+      statusClass = "status-mto";
+      statusText = "Made-to-Order";
+    } else if (product.stock <= 2) {
       statusClass = "status-low-stock";
-      statusText = "Low Stock";
+      statusText = `Showroom (${product.stock})`;
+    } else {
+      statusClass = "status-in-stock";
+      statusText = `In Stock (${product.stock})`;
     }
 
     const thumbImage =
-      product.images && (product.images.isoImage || product.images.frontBg)
-        ? product.images.isoImage || product.images.frontBg
-        : "https://via.placeholder.com/48";
+      (product.thumbnails && product.thumbnails[0]) ||
+      (product.images && (product.images.isoImage || product.images.frontBg)) ||
+      product.thumbnail ||
+      "https://via.placeholder.com/48";
     const productPayload = btoa(encodeURIComponent(JSON.stringify(product)));
 
     const tr = document.createElement("tr");
@@ -1065,77 +1463,186 @@ function renderCategoryDonutChart(products) {
     .join("");
 }
 
-function renderLowStockWatchlist(products) {
+function renderMtoProductionWatchlist(orders) {
   if (!analyticsLowStockListEl) return;
-  const lowItems = products
-    .filter((p) => Number(p.stock) <= 5)
-    .sort((a, b) => Number(a.stock) - Number(b.stock));
+  const activeOrders = Array.isArray(orders)
+    ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete")
+    : [];
 
-  if (!lowItems.length) {
-    analyticsLowStockListEl.innerHTML = `<div class="analytics-empty" style="color: #059669; font-weight: 500;">All products have healthy stock levels (&gt; 5 units).</div>`;
+  // Filter for orders in the Made-to-Order lifecycle
+  const mtoOrders = activeOrders
+    .filter((o) => {
+      const st = normalizeOrderStatus(o.status);
+      return st === "placed" || st === "downpayment confirmed" || st === "in production" || st === "quality checked";
+    })
+    .sort((a, b) => {
+      const tA = orderTimestampMs(a);
+      const tB = orderTimestampMs(b);
+      return tA - tB;
+    });
+
+  if (analyticsMtoCountBadgeEl) {
+    analyticsMtoCountBadgeEl.textContent = `${mtoOrders.length} In Workshop Queue`;
+  }
+
+  if (!mtoOrders.length) {
+    analyticsLowStockListEl.innerHTML = `
+      <div class="analytics-empty" style="color: #059669; font-weight: 500; padding: 24px; text-align: center;">
+        ✨ All Made-to-Order furniture requests are currently fulfilled and shipped! No backlog in workshop.
+      </div>`;
     return;
   }
 
-  const TARGET_STOCK = 10;
-  analyticsLowStockListEl.innerHTML = lowItems
-    .map((p) => {
-      const stock = Number(p.stock) || 0;
-      const isCritical = stock <= 2;
-      const badgeClass = isCritical ? "critical" : "warning";
-      const badgeText = isCritical ? "Critical (< 3)" : "Low Stock";
-      const pct = Math.min(100, Math.max(5, (stock / TARGET_STOCK) * 100));
+  analyticsLowStockListEl.innerHTML = mtoOrders
+    .map((o) => {
+      const st = normalizeOrderStatus(o.status);
+      let pillClass = "production";
+      let statusLabel = "In Production";
+      if (st === "downpayment confirmed") {
+        pillClass = "downpayment";
+        statusLabel = "Downpayment Confirmed";
+      } else if (st === "quality checked") {
+        pillClass = "quality";
+        statusLabel = "Quality Check Passed";
+      } else if (st === "placed") {
+        pillClass = "downpayment";
+        statusLabel = "Order Placed";
+      }
 
-      return `<div class="stock-alert-item">
-        <div class="stock-alert-header">
-          <span class="stock-alert-title">${escapeHtml(p.name || "Unnamed Product")}</span>
-          <span class="stock-alert-badge ${badgeClass}">${badgeText} — ${stock} / ${TARGET_STOCK} left</span>
+      const items = Array.isArray(o.items) ? o.items : [];
+      const itemDesc = items.length
+        ? items
+            .map(
+              (it) =>
+                `${escapeHtml(it.name || "Custom Piece")}${it.material ? ` (${escapeHtml(it.material)})` : ""}${
+                  it.quantity > 1 ? ` × ${it.quantity}` : ""
+                }`
+            )
+            .join(", ")
+        : "Custom Furniture Order";
+
+      const customer = resolveCustomerDisplay(o);
+      const totalAmount = formatPeso(Number(o.total != null ? o.total : o.totalAmount) || 0);
+
+      let dateStr = "Recently";
+      if (o.createdAt && typeof o.createdAt.toDate === "function") {
+        dateStr = o.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      } else if (o.createdAt && o.createdAt.seconds) {
+        dateStr = new Date(o.createdAt.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      }
+
+      const leadTime = o.estimatedLeadTime || "14–21 Business Days (Crafted Upon Order)";
+
+      return `
+        <div class="mto-watchlist-item">
+          <div class="mto-item-main">
+            <div class="mto-item-title">${itemDesc}</div>
+            <div class="mto-item-meta">
+              <span>Order <strong>#${escapeHtml(o.orderId || o.id || "—")}</strong></span>
+              <span>•</span>
+              <span>Customer: <strong>${escapeHtml(customer)}</strong></span>
+              <span>•</span>
+              <span>Value: <strong>${totalAmount}</strong></span>
+              <span>•</span>
+              <span>Ordered: ${dateStr}</span>
+            </div>
+          </div>
+          <div class="mto-item-status-col">
+            <span class="mto-status-pill ${pillClass}">${statusLabel}</span>
+            <span class="mto-item-leadtime">⏱ ${escapeHtml(leadTime)}</span>
+          </div>
         </div>
-        <div class="stock-progress-track">
-          <div class="stock-progress-fill ${badgeClass}" style="width: ${pct}%;"></div>
-        </div>
-      </div>`;
+      `;
     })
     .join("");
 }
 
 const updateStats = (products) => {
-  let totalItems = products.length;
-  let lowStockCount = products.filter((p) => Number(p.stock) <= 5 && Number(p.stock) > 0).length;
-  let outOfStockCount = products.filter((p) => Number(p.stock) === 0).length;
-  let totalValue = products.reduce((sum, p) => sum + Number(p.price || 0) * Number(p.stock || 0), 0);
-  const totalUnits = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-  const avgPrice = totalItems
-    ? products.reduce((sum, p) => sum + (Number(p.price) || 0), 0) / totalItems
-    : 0;
-  const avgStockPerProduct = totalItems ? totalUnits / totalItems : 0;
+  const totalCatalogListings = products ? products.length : 0;
+  const activeOrders = Array.isArray(allOrders)
+    ? allOrders.filter((o) => normalizeOrderAction(o.action) !== "delete")
+    : [];
 
-  const materialUnits = products.reduce((acc, p) => {
-    const key = String(p.material || "Unspecified").trim() || "Unspecified";
-    acc[key] = (acc[key] || 0) + (Number(p.stock) || 0);
-    return acc;
-  }, {});
+  const inProductionOrders = activeOrders.filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return st === "placed" || st === "downpayment confirmed" || st === "in production" || st === "quality checked";
+  });
+  const inProductionCount = inProductionOrders.length;
 
-  if (totalProductsStat) totalProductsStat.textContent = totalItems;
-  if (lowStockStat) lowStockStat.textContent = lowStockCount;
+  const completedOrders = activeOrders.filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return st === "delivered" || st === "shipped";
+  });
+
+  const totalBookings = activeOrders.reduce((sum, o) => {
+    const val = Number(o.total != null ? o.total : o.totalAmount) || 0;
+    return sum + val;
+  }, 0);
+
+  const totalCashCollected = activeOrders.reduce((sum, o) => {
+    const total = Number(o.total != null ? o.total : o.totalAmount) || 0;
+    if (o.balanceStatus === "settled" || o.paymentOption === "full" || o.balanceSettlementMethod === "full_paid") {
+      return sum + total;
+    }
+    const dp = Number(o.downpaymentAmount);
+    if (!isNaN(dp) && dp > 0) return sum + dp;
+    return sum + total * 0.3; // Standard 30% downpayment
+  }, 0);
+
+  const totalBalanceDue = Math.max(0, totalBookings - totalCashCollected);
+
+  // Top stats grid
+  if (totalProductsStat) totalProductsStat.textContent = totalCatalogListings;
+  if (lowStockStat) lowStockStat.textContent = inProductionCount;
+  if (analyticsMtoSubEl) {
+    const pct = activeOrders.length ? ((inProductionCount / activeOrders.length) * 100).toFixed(0) : 0;
+    analyticsMtoSubEl.textContent = `${pct}% of total bookings in queue`;
+  }
   if (totalValueStat) {
-    totalValueStat.textContent =
-      "₱" +
-      totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    totalValueStat.textContent = formatPeso(totalBookings);
+  }
+  if (analyticsCashCollectedEl) {
+    analyticsCashCollectedEl.textContent = formatPeso(totalCashCollected);
+  }
+  if (analyticsBalanceDueEl) {
+    analyticsBalanceDueEl.textContent = `${formatPeso(totalBalanceDue)} balance pending`;
   }
 
-  if (analyticsTotalUnitsEl) analyticsTotalUnitsEl.textContent = String(totalUnits);
-  if (analyticsOutOfStockEl) analyticsOutOfStockEl.textContent = String(outOfStockCount);
+  // Production & Order Health Card
+  if (analyticsTotalUnitsEl) analyticsTotalUnitsEl.textContent = String(activeOrders.length);
+  if (analyticsOutOfStockEl) analyticsOutOfStockEl.textContent = String(inProductionCount);
   if (analyticsAvgPriceEl) {
-    analyticsAvgPriceEl.textContent =
-      "₱" +
-      avgPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const avgOrder = activeOrders.length ? totalBookings / activeOrders.length : 0;
+    analyticsAvgPriceEl.textContent = formatPeso(avgOrder);
   }
-  if (analyticsAvgStockEl) analyticsAvgStockEl.textContent = avgStockPerProduct.toFixed(1);
+  if (analyticsAvgStockEl) analyticsAvgStockEl.textContent = String(completedOrders.length);
 
-  const materialEntries = Object.entries(materialUnits).sort((a, b) => b[1] - a[1]);
-  renderBars(analyticsMaterialBarsEl, materialEntries, totalUnits);
-  renderCategoryDonutChart(products);
-  renderLowStockWatchlist(products);
+  // Customer Material Preferences (from actual order items + catalog options)
+  const materialCounts = {};
+  activeOrders.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      const mat = (it.material || "").trim();
+      if (mat) {
+        materialCounts[mat] = (materialCounts[mat] || 0) + (parseInt(it.quantity, 10) || 1);
+      }
+    });
+  });
+  if (products) {
+    products.forEach((p) => {
+      const mats = Array.isArray(p.materials) ? p.materials : (p.material ? p.material.split(",") : []);
+      mats.forEach((m) => {
+        const clean = m.trim();
+        if (clean && !materialCounts[clean]) materialCounts[clean] = 0;
+      });
+    });
+  }
+
+  const materialEntries = Object.entries(materialCounts).sort((a, b) => b[1] - a[1]);
+  const totalMaterialUnits = Object.values(materialCounts).reduce((a, b) => a + b, 0);
+  renderBars(analyticsMaterialBarsEl, materialEntries, Math.max(1, totalMaterialUnits));
+
+  if (products) renderCategoryDonutChart(products);
+  renderMtoProductionWatchlist(allOrders);
   updateDashboardKpis(products, allOrders);
 };
 
@@ -1549,17 +2056,6 @@ function getOrderRevenue(order) {
   }, 0);
 }
 
-function getOrderCost(order) {
-  const productById = new Map(allProducts.map((p) => [p.id, p]));
-  const items = Array.isArray(order.items) ? order.items : [];
-  return items.reduce((sum, item) => {
-    const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-    const product = item.productId ? productById.get(item.productId) : null;
-    const unitCost = Number(item.cost ?? item.productCost ?? product?.cost ?? 0);
-    return sum + (Number.isFinite(unitCost) ? unitCost : 0) * qty;
-  }, 0);
-}
-
 function getRevenueBuckets(orders, startDate, endDate, granularity) {
   const buckets = [];
   const keyOf = (dt) => {
@@ -1599,7 +2095,7 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
     const key = keyOf(cursor);
     if (!seen.has(key)) {
       seen.add(key);
-      buckets.push({ key, label: labelOf(cursor), revenue: 0, profit: 0 });
+      buckets.push({ key, label: labelOf(cursor), revenue: 0, profit: 0 }); // profit represents cash collections
     }
     if (granularity === "month") cursor.setMonth(cursor.getMonth() + 1, 1);
     else if (granularity === "week") cursor.setDate(cursor.getDate() + 7);
@@ -1609,7 +2105,8 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
 
   const indexByKey = new Map(buckets.map((b, idx) => [b.key, idx]));
   orders.forEach((order) => {
-    if (!isOrderCompleted(order)) return;
+    const st = normalizeOrderStatus(order.status);
+    if (st === "cancelled" || normalizeOrderAction(order.action) === "delete") return;
     const dt = orderEventDate(order);
     if (!dt) return;
     const ms = dt.getTime();
@@ -1619,9 +2116,16 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
     if (idx == null) return;
 
     const revenue = getOrderRevenue(order);
-    const cost = getOrderCost(order);
+    let collected = 0;
+    if (order.balanceStatus === "settled" || order.paymentOption === "full" || order.balanceSettlementMethod === "full_paid") {
+      collected = revenue;
+    } else {
+      const dp = Number(order.downpaymentAmount);
+      collected = !isNaN(dp) && dp > 0 ? dp : revenue * 0.3;
+    }
+
     buckets[idx].revenue += revenue;
-    buckets[idx].profit += revenue - cost;
+    buckets[idx].profit += collected;
   });
 
   return buckets;
@@ -1635,6 +2139,7 @@ function renderRevenueGraph() {
     ordersRevenueGraphEl.style.gridTemplateColumns = "1fr";
     if (ordersTotalRevenueEl) ordersTotalRevenueEl.textContent = formatPeso(0);
     if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(0);
+    if (ordersBalanceDueEl) ordersBalanceDueEl.textContent = formatPeso(0);
     return;
   }
 
@@ -1645,10 +2150,12 @@ function renderRevenueGraph() {
     ...buckets.map((b) => Math.max(Number(b.revenue) || 0, Number(b.profit) || 0))
   );
   const totalRevenue = buckets.reduce((sum, b) => sum + b.revenue, 0);
-  const totalProfit = buckets.reduce((sum, b) => sum + b.profit, 0);
+  const totalCollected = buckets.reduce((sum, b) => sum + b.profit, 0);
+  const totalBalanceDue = Math.max(0, totalRevenue - totalCollected);
 
   if (ordersTotalRevenueEl) ordersTotalRevenueEl.textContent = formatPeso(totalRevenue);
-  if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(totalProfit);
+  if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(totalCollected);
+  if (ordersBalanceDueEl) ordersBalanceDueEl.textContent = formatPeso(totalBalanceDue);
 
   if (!buckets.length) {
     ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty">No revenue data yet.</div>`;
@@ -1667,20 +2174,20 @@ function renderRevenueGraph() {
       const showLabel = index % labelInterval === 0 || index === buckets.length - 1;
       return `<div class="orders-revenue-row">
         <div class="orders-revenue-bars">
-          <div class="orders-revenue-fill revenue" style="height:${revPct.toFixed(1)}%" title="Revenue: ${escapeHtml(
+          <div class="orders-revenue-fill revenue" style="height:${revPct.toFixed(1)}%" title="Gross Bookings: ${escapeHtml(
             formatPeso(bucket.revenue)
           )}"></div>
-          <div class="orders-revenue-fill profit" style="height:${profitPct.toFixed(1)}%" title="Profit: ${escapeHtml(
+          <div class="orders-revenue-fill profit" style="height:${profitPct.toFixed(1)}%" title="Cash Collected: ${escapeHtml(
             formatPeso(bucket.profit)
           )}"></div>
         </div>
         <span class="orders-revenue-label ${showLabel ? "is-visible" : ""} ${hasData ? "has-data" : ""}">${escapeHtml(
           bucket.label
         )}</span>
-        <div class="orders-revenue-values" title="Revenue: ${escapeHtml(formatPeso(bucket.revenue))} | Profit: ${escapeHtml(
+        <div class="orders-revenue-values" title="Bookings: ${escapeHtml(formatPeso(bucket.revenue))} | Collected: ${escapeHtml(
           formatPeso(bucket.profit)
         )}">
-          ${hasData ? `R ${escapeHtml(formatPeso(bucket.revenue))}<br/>P ${escapeHtml(formatPeso(bucket.profit))}` : ""}
+          ${hasData ? `Booked ${escapeHtml(formatPeso(bucket.revenue))}<br/>Paid ${escapeHtml(formatPeso(bucket.profit))}` : ""}
         </div>
       </div>`;
     })
@@ -1700,21 +2207,27 @@ function exportInventoryCsv() {
     return;
   }
 
-  const headers = ["Product ID", "Name", "Category", "Price (PHP)", "Cost (PHP)", "Stock", "Material", "Color", "Dimensions (WxHxD in)"];
+  const headers = ["Product ID", "Name", "Category", "Price (PHP)", "Stock", "Materials", "Dimensions"];
   const csvRows = [headers.join(",")];
 
   allProducts.forEach((p) => {
-    const dims = p.size ? `"${p.size.w || 0}x${p.size.h || 0}x${p.size.d || 0}"` : '""';
+    let dimsStr = "";
+    if (p.dimensions && typeof p.dimensions.height === "number") {
+      dimsStr = `${p.dimensions.width} × ${p.dimensions.height} ${p.dimensions.unit || "in"}`;
+    } else if (p.size) {
+      dimsStr = typeof p.size === "string" ? p.size : `${p.size.w || 0} × ${p.size.h || 0} in`;
+    }
+
+    const matStr = Array.isArray(p.materials) ? p.materials.join("; ") : p.material || "";
+
     const row = [
       `"${(p.id || "").replace(/"/g, '""')}"`,
       `"${(p.name || "").replace(/"/g, '""')}"`,
       `"${(p.category || "").replace(/"/g, '""')}"`,
       Number(p.price || 0).toFixed(2),
-      Number(p.cost || 0).toFixed(2),
       Number(p.stock || 0),
-      `"${(p.material || "").replace(/"/g, '""')}"`,
-      `"${(p.color || "").replace(/"/g, '""')}"`,
-      dims
+      `"${matStr.replace(/"/g, '""')}"`,
+      `"${dimsStr.replace(/"/g, '""')}"`
     ];
     csvRows.push(row.join(","));
   });
@@ -1731,21 +2244,23 @@ function exportInventoryCsv() {
 
 function updateDashboardKpis(products, orders) {
   const totalProducts = products ? products.length : 0;
-  // Made-to-Order items have 0 physical stock. Showroom units normally have 1-3.
-  // Low stock warning alerts only if showroom display stock is 1 or 2 left.
-  const lowStockCount = products ? products.filter((p) => Number(p.stock) > 0 && Number(p.stock) <= 2).length : 0;
-
   const activeOrders = orders ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete") : [];
+
+  // Workshop Queue: active orders in Made-to-Order production lifecycle
+  const workshopQueueCount = activeOrders.filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return st === "placed" || st === "downpayment confirmed" || st === "in production" || st === "quality checked";
+  }).length;
 
   const pendingOrdersCount = activeOrders.filter((o) => {
     const st = normalizeOrderStatus(o.status);
-    return st === "placed" || st === "downpayment confirmed" || st === "in production";
+    return st === "placed" || st === "downpayment confirmed";
   }).length;
 
   const totalRevenue = activeOrders
     .filter((o) => {
       const st = normalizeOrderStatus(o.status);
-      return st === "delivered" || st === "shipped" || st === "quality checked" || st === "in production" || st === "downpayment confirmed";
+      return st !== "cancelled";
     })
     .reduce((sum, o) => sum + (Number(o.total != null ? o.total : o.totalAmount) || 0), 0);
 
@@ -1754,7 +2269,7 @@ function updateDashboardKpis(products, orders) {
       "₱" + totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   if (dashPendingOrdersEl) dashPendingOrdersEl.textContent = String(pendingOrdersCount);
-  if (dashLowStockEl) dashLowStockEl.textContent = String(lowStockCount);
+  if (dashLowStockEl) dashLowStockEl.textContent = String(workshopQueueCount);
   if (dashTotalProductsEl) dashTotalProductsEl.textContent = String(totalProducts);
 
   renderDashboardRecentOrders(activeOrders.slice(0, 5));

@@ -445,10 +445,12 @@
           <div class="product-detail-layout">
             <div class="product-detail-img-box">
               <img id="pv-image" src="assets/product_sofa.png" alt="Product Image" />
+              <div id="pv-thumbnails" class="modal-thumbnail-strip" style="display: none;"></div>
             </div>
             <div class="product-detail-info">
               <h4 id="pv-name">Aura Cloud Sofa</h4>
               <div id="pv-price" class="product-detail-price">₱1,299</div>
+              <div id="pv-dimensions-info" class="product-dimensions-badge" style="display: none; font-size: 0.82rem; color: #4b5563; margin-top: 4px; margin-bottom: 12px; font-weight: 500;"></div>
 
               <!-- Variant Material Selector -->
               <div class="variant-section">
@@ -456,7 +458,7 @@
                   <span>Select Material</span>
                   <span id="pv-stock-status">In Stock</span>
                 </div>
-                <div class="material-options">
+                <div class="material-options" id="pv-material-options">
                   <button type="button" class="material-btn selected" data-material="Fabric">
                     <span class="mat-title">Fabric</span>
                     <span id="pv-fabric-stock" class="mat-stock">0 left</span>
