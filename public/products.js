@@ -313,51 +313,6 @@ async function fetchProductsList() {
   }
 }
 
-// Filter and Sort Products
-function renderFilteredProducts() {
-  const container = getProductsContainer();
-  if (!container) return;
-
-  let filtered = allProductsList.filter((product) => {
-    const nameStr = (product.name || "").toLowerCase();
-    const descStr = (product.description || "").toLowerCase();
-    const matchesSearch = !searchQuery || nameStr.includes(searchQuery) || descStr.includes(searchQuery);
-
-    let matchesCat = true;
-    if (activeCategory !== "all") {
-      const catStr = (product.category || "").toLowerCase();
-      matchesCat = catStr.includes(activeCategory) || nameStr.includes(activeCategory);
-    }
-
-    return matchesSearch && matchesCat;
-  });
-
-  // Sorting logic
-  if (currentSort === "price-low") {
-    filtered.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-  } else if (currentSort === "price-high") {
-    filtered.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
-  } else if (currentSort === "name-asc") {
-    filtered.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
-  }
-
-  if (filtered.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state-container" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 40px 20px;">
-        <svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <h3 class="empty-state-title" style="margin-top: 12px; font-size: 1.2rem;">No Products Found</h3>
-        <p class="empty-state-subtitle" style="color: #6b7280; font-size: 0.9rem;">Try adjusting your search query or category filters.</p>
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = "";
-  let delay = 0.05;
-
 // Helper to get all thumbnails for a product with fallback
 function getProductThumbnails(product) {
   if (Array.isArray(product.thumbnails) && product.thumbnails.length > 0) {
@@ -476,6 +431,51 @@ function initCardSlideshows(root = document) {
     startAutoSlide();
   });
 }
+
+// Filter and Sort Products
+function renderFilteredProducts() {
+  const container = getProductsContainer();
+  if (!container) return;
+
+  let filtered = allProductsList.filter((product) => {
+    const nameStr = (product.name || "").toLowerCase();
+    const descStr = (product.description || "").toLowerCase();
+    const matchesSearch = !searchQuery || nameStr.includes(searchQuery) || descStr.includes(searchQuery);
+
+    let matchesCat = true;
+    if (activeCategory !== "all") {
+      const catStr = (product.category || "").toLowerCase();
+      matchesCat = catStr.includes(activeCategory) || nameStr.includes(activeCategory);
+    }
+
+    return matchesSearch && matchesCat;
+  });
+
+  // Sorting logic
+  if (currentSort === "price-low") {
+    filtered.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+  } else if (currentSort === "price-high") {
+    filtered.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+  } else if (currentSort === "name-asc") {
+    filtered.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state-container" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 40px 20px;">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <h3 class="empty-state-title" style="margin-top: 12px; font-size: 1.2rem;">No Products Found</h3>
+        <p class="empty-state-subtitle" style="color: #6b7280; font-size: 0.9rem;">Try adjusting your search query or category filters.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = "";
+  let delay = 0.05;
 
   filtered.forEach((product) => {
     const thumbnails = getProductThumbnails(product);
@@ -603,18 +603,31 @@ async function openProductQuickViewModal(productId) {
   if (!modal) return;
 
   try {
-    const productDoc = await getDoc(doc(db, "products", productId));
-    if (!productDoc.exists()) {
+    let productData = null;
+    try {
+      const productDoc = await getDoc(doc(db, "products", productId));
+      if (productDoc.exists()) {
+        productData = { id: productDoc.id, ...productDoc.data() };
+      }
+    } catch (fetchErr) {
+      console.warn("Could not fetch product from Firestore, checking catalog list:", fetchErr);
+    }
+
+    if (!productData && Array.isArray(allProductsList)) {
+      productData = allProductsList.find((p) => String(p.id) === String(productId));
+    }
+
+    if (!productData) {
       showToast("Product not found.", "error");
       return;
     }
 
-    currentModalProduct = { id: productDoc.id, ...productDoc.data() };
+    currentModalProduct = productData;
     currentSelectedQty = 1;
 
     const modalThumbs = getProductThumbnails(currentModalProduct);
-    document.getElementById("pv-name").textContent = currentModalProduct.name;
-    document.getElementById("pv-image").src = modalThumbs[0];
+    document.getElementById("pv-name").textContent = currentModalProduct.name || "Product";
+    document.getElementById("pv-image").src = modalThumbs[0] || "assets/product_sofa.png";
     document.getElementById("pv-price").textContent = `₱${parseFloat(currentModalProduct.price || 0).toLocaleString()}`;
 
     // Dimensions display
