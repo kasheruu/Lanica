@@ -375,8 +375,36 @@ function convertDimension(val, fromUnit, toUnit) {
 const heightInput = document.getElementById("product-height");
 const widthInput = document.getElementById("product-width");
 const lengthInput = document.getElementById("product-length");
+const length2Input = document.getElementById("product-length2");
+const length2Field = document.getElementById("dim-field-length2");
+const length1Label = document.getElementById("label-product-length");
+const isLTypeSelect = document.getElementById("product-is-ltype");
 const unitSelect = document.getElementById("product-unit");
 let currentDimensionUnit = unitSelect ? unitSelect.value : "in";
+
+function toggleLTypeFields(isLType) {
+  if (length2Field) {
+    if (isLType) {
+      length2Field.style.display = "block";
+      if (length1Label) length1Label.textContent = "Side A Length";
+      if (length2Input) length2Input.required = true;
+    } else {
+      length2Field.style.display = "none";
+      if (length1Label) length1Label.textContent = "Length";
+      if (length2Input) length2Input.required = false;
+    }
+  }
+}
+
+if (isLTypeSelect) {
+  isLTypeSelect.addEventListener("change", () => {
+    const isL = isLTypeSelect.value === "true";
+    toggleLTypeFields(isL);
+    if (typeof triggerDraftAutosave === "function") {
+      triggerDraftAutosave();
+    }
+  });
+}
 
 if (unitSelect) {
   unitSelect.addEventListener("change", () => {
@@ -386,6 +414,7 @@ if (unitSelect) {
       const h = parseFloat(heightInput.value);
       const w = parseFloat(widthInput.value);
       const l = parseFloat(lengthInput ? lengthInput.value : 0);
+      const l2 = parseFloat(length2Input ? length2Input.value : 0);
       if (!isNaN(h) && h > 0) {
         heightInput.value = convertDimension(h, oldUnit, newUnit);
       }
@@ -394,6 +423,9 @@ if (unitSelect) {
       }
       if (!isNaN(l) && l > 0 && lengthInput) {
         lengthInput.value = convertDimension(l, oldUnit, newUnit);
+      }
+      if (!isNaN(l2) && l2 > 0 && length2Input) {
+        length2Input.value = convertDimension(l2, oldUnit, newUnit);
       }
       currentDimensionUnit = newUnit;
       if (typeof triggerDraftAutosave === "function") {
@@ -778,6 +810,94 @@ function renderCategoryDropdowns(selectedCategory = null) {
     }
   }
 
+// ==========================================================================
+// Add-ons / Optional Upgrades Repeater State & Handlers
+// ==========================================================================
+let currentAddonsList = [];
+
+function renderAddonsRepeater() {
+  const container = document.getElementById("addons-repeater-list");
+  if (!container) return;
+
+  if (currentAddonsList.length === 0) {
+    container.innerHTML = `
+      <div style="font-size: 0.8rem; color: #94a3b8; text-align: center; padding: 10px 0;">
+        No optional upgrades added yet. Click "+ Add Optional Upgrade" below to offer add-ons.
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = currentAddonsList
+    .map((addon, index) => `
+      <div class="addon-row" style="display: flex; gap: 8px; align-items: center; background: #ffffff; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+        <input type="text" class="addon-name-input" data-index="${index}" placeholder="Add-on Name (e.g. Throw Pillows)" value="${escapeHtml(addon.name || '')}" style="flex: 2; padding: 6px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;" />
+        <div style="display: flex; align-items: center; flex: 1; position: relative;">
+          <span style="position: absolute; left: 8px; font-size: 0.78rem; color: #64748b; font-weight: 600;">₱</span>
+          <input type="number" step="any" min="0" class="addon-price-input" data-index="${index}" placeholder="Price" value="${addon.price !== undefined ? addon.price : ''}" style="width: 100%; padding: 6px 10px 6px 20px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;" />
+        </div>
+        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #475569; cursor: pointer; white-space: nowrap; user-select: none;">
+          <input type="checkbox" class="addon-active-toggle" data-index="${index}" ${addon.active !== false ? 'checked' : ''} /> Active
+        </label>
+        <button type="button" class="btn-remove-addon-row" data-index="${index}" style="background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; font-weight: 700; font-size: 1rem; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;" title="Remove upgrade">&times;</button>
+      </div>
+    `)
+    .join('');
+
+  container.querySelectorAll(".addon-name-input").forEach((inp) => {
+    inp.addEventListener("input", (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (currentAddonsList[idx]) currentAddonsList[idx].name = e.target.value;
+      triggerDraftAutosave();
+    });
+  });
+
+  container.querySelectorAll(".addon-price-input").forEach((inp) => {
+    inp.addEventListener("input", (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (currentAddonsList[idx]) currentAddonsList[idx].price = parseFloat(e.target.value) || 0;
+      triggerDraftAutosave();
+    });
+  });
+
+  container.querySelectorAll(".addon-active-toggle").forEach((inp) => {
+    inp.addEventListener("change", (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      if (currentAddonsList[idx]) currentAddonsList[idx].active = e.target.checked;
+      triggerDraftAutosave();
+    });
+  });
+
+  container.querySelectorAll(".btn-remove-addon-row").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      currentAddonsList.splice(idx, 1);
+      renderAddonsRepeater();
+      triggerDraftAutosave();
+    });
+  });
+}
+
+function clearAddonsRepeater() {
+  currentAddonsList = [];
+  renderAddonsRepeater();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const addAddonBtn = document.getElementById("btn-add-addon-row");
+  if (addAddonBtn) {
+    addAddonBtn.addEventListener("click", () => {
+      currentAddonsList.push({
+        id: `addon_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: "",
+        price: 0,
+        active: true,
+      });
+      renderAddonsRepeater();
+      triggerDraftAutosave();
+    });
+  }
+});
+
   // 3. Render Custom Dropdown Menu Items
   if (customItemsList) {
     customItemsList.innerHTML = cats
@@ -1088,6 +1208,8 @@ function saveFormDraft() {
   const height = document.getElementById("product-height")?.value || "72";
   const width = document.getElementById("product-width")?.value || "72";
   const length = document.getElementById("product-length")?.value || "72";
+  const length2 = document.getElementById("product-length2")?.value || "72";
+  const isLType = document.getElementById("product-is-ltype")?.value === "true";
   const unit = document.getElementById("product-unit")?.value || "in";
 
   const hasContent =
@@ -1108,9 +1230,11 @@ function saveFormDraft() {
     category,
     price,
     stock,
+    isLType,
     height,
     width,
     length,
+    length2,
     unit,
     materials: currentMaterialTags,
     thumbnailData,
@@ -1168,9 +1292,14 @@ function restoreFormDraft() {
     }
     if (draft.price !== undefined) document.getElementById("product-price").value = formatPriceWithCommas(draft.price);
     if (draft.stock !== undefined) document.getElementById("product-stock").value = draft.stock;
+    if (draft.isLType !== undefined && isLTypeSelect) {
+      isLTypeSelect.value = draft.isLType ? "true" : "false";
+      toggleLTypeFields(draft.isLType);
+    }
     if (draft.height !== undefined && heightInput) heightInput.value = draft.height;
     if (draft.width !== undefined && widthInput) widthInput.value = draft.width;
     if (draft.length !== undefined && lengthInput) lengthInput.value = draft.length;
+    if (draft.length2 !== undefined && length2Input) length2Input.value = draft.length2;
     if (draft.unit !== undefined && unitSelect) {
       unitSelect.value = draft.unit;
       currentDimensionUnit = draft.unit;
@@ -1378,9 +1507,13 @@ window.closeModal = () => {
   closeInlineCategoryManager();
   renderCategoryDropdowns();
   clearThumbnailItems();
+  clearAddonsRepeater();
   if (heightInput) heightInput.value = "72";
   if (widthInput) widthInput.value = "72";
   if (lengthInput) lengthInput.value = "72";
+  if (length2Input) length2Input.value = "72";
+  if (isLTypeSelect) isLTypeSelect.value = "false";
+  toggleLTypeFields(false);
   if (unitSelect) unitSelect.value = "in";
   currentDimensionUnit = "in";
 
@@ -1780,20 +1913,32 @@ productForm.addEventListener("submit", async (e) => {
     updateSaveProgress(75, "Validating product details...");
 
     const stock = parseInt(document.getElementById("product-stock").value, 10) || 0;
+    const isLType = isLTypeSelect ? (isLTypeSelect.value === "true") : false;
     const height = parseFloat(document.getElementById("product-height").value) || 0;
     const width = parseFloat(document.getElementById("product-width").value) || 0;
     const length = parseFloat(document.getElementById("product-length").value) || 0;
+    const length2 = isLType && length2Input ? (parseFloat(length2Input.value) || 0) : null;
     const unit = document.getElementById("product-unit").value || "in";
     const dimensions = {
+      isLType,
       height,
       width,
       length,
+      length2: isLType ? length2 : null,
       unit,
       heightCm: convertDimension(height, unit, "cm"),
       widthCm: convertDimension(width, unit, "cm"),
       lengthCm: convertDimension(length, unit, "cm"),
+      length2Cm: isLType && length2 ? convertDimension(length2, unit, "cm") : null,
     };
-    const size = length > 0 ? `${length} × ${width} × ${height} ${unit}` : `${width} × ${height} ${unit}`;
+    let size = "";
+    if (isLType && length2) {
+      size = `${length} × ${length2} (L-Type) × ${width} × ${height} ${unit}`;
+    } else if (length > 0) {
+      size = `${length} × ${width} × ${height} ${unit}`;
+    } else {
+      size = `${width} × ${height} ${unit}`;
+    }
 
     const productData = {
       name: document.getElementById("product-name").value,
@@ -1815,6 +1960,7 @@ productForm.addEventListener("submit", async (e) => {
         rightBgImage: rightBgImage || "",
         backBgImage: backBgImage || "",
       },
+      addons: currentAddonsList.filter((a) => a && (a.name || "").trim() !== ""),
       meshyTaskId: meshyTaskId,
       modelUrl: modelUrl,
       meshyStatus: meshyStatus,
@@ -2026,7 +2172,7 @@ window.view3DModel = async (productId) => {
     // First check if there's already a modelUrl stored
     if (productData.modelUrl) {
       const targetUrl = getGlbViewerUrl(productData.modelUrl);
-      
+
       // If model is already loaded, hide loading spinner immediately
       if (modelViewer.loaded && modelViewer.src === targetUrl) {
         hideViewerLoading();
@@ -2074,6 +2220,111 @@ if (viewerModal)
     if (e.target === viewerModal) window.closeViewer();
   });
 
+// Add-ons / Optional Upgrades Repeater State & Logic
+let currentAddonsList = [];
+
+function clearAddonsRepeater() {
+  currentAddonsList = [];
+  renderAddonsRepeater();
+}
+
+function renderAddonsRepeater() {
+  const container = document.getElementById("addons-repeater-list");
+  if (!container) return;
+
+  if (currentAddonsList.length === 0) {
+    container.innerHTML = `<p style="font-size: 0.78rem; color: #9ca3af; margin: 4px 0; font-style: italic;">No optional upgrades added yet. Click below to add upgrade options.</p>`;
+    return;
+  }
+
+  container.innerHTML = currentAddonsList
+    .map((addon, index) => {
+      const isActive = addon.active !== false;
+      return `
+    <div class="addon-repeater-row" data-index="${index}" style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px 10px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+      <input type="text" class="addon-input-name" placeholder="Upgrade Name (e.g. Throw Pillows)" value="${escapeHtml(addon.name || "")}" style="flex: 2; height: 38px; padding: 0 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" />
+      
+      <div style="display: flex; align-items: center; gap: 6px; flex: 1.2; height: 38px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; box-sizing: border-box;">
+        <span style="font-size: 0.85rem; font-weight: 700; color: #64748b; line-height: 1;">₱</span>
+        <input type="number" class="addon-input-price" placeholder="Price" min="0" step="any" value="${addon.price != null ? addon.price : ""}" style="width: 100%; height: 100%; font-size: 0.85rem; font-weight: 600; border: none; background: transparent; outline: none; margin: 0; padding: 0;" />
+      </div>
+
+      <button type="button" class="btn-toggle-addon-status" data-index="${index}" title="Click to toggle Active/Inactive" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; user-select: none; box-sizing: border-box; transition: all 0.2s; ${
+        isActive
+          ? "background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
+          : "background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb;"
+      }">
+        <span class="status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: ${isActive ? "#10b981" : "#9ca3af"}; display: inline-block;"></span>
+        <span style="line-height: 1;">${isActive ? "Active" : "Inactive"}</span>
+      </button>
+
+      <button type="button" class="btn-remove-addon-row" data-index="${index}" title="Remove Upgrade" style="background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; border-radius: 8px; width: 38px; height: 38px; min-width: 38px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-sizing: border-box; padding: 0; transition: all 0.2s;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    </div>
+  `;
+    })
+    .join("");
+
+  // Attach input listeners
+  container.querySelectorAll(".addon-repeater-row").forEach((row) => {
+    const idx = parseInt(row.dataset.index, 10);
+    const nameInp = row.querySelector(".addon-input-name");
+    const priceInp = row.querySelector(".addon-input-price");
+    const toggleBtn = row.querySelector(".btn-toggle-addon-status");
+    const removeBtn = row.querySelector(".btn-remove-addon-row");
+
+    if (nameInp) {
+      nameInp.addEventListener("input", (e) => {
+        if (currentAddonsList[idx]) currentAddonsList[idx].name = e.target.value;
+      });
+    }
+
+    if (priceInp) {
+      priceInp.addEventListener("input", (e) => {
+        if (currentAddonsList[idx]) currentAddonsList[idx].price = parseFloat(e.target.value) || 0;
+      });
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        if (currentAddonsList[idx]) {
+          const newActive = currentAddonsList[idx].active === false;
+          currentAddonsList[idx].active = newActive;
+          renderAddonsRepeater();
+        }
+      });
+    }
+
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        currentAddonsList.splice(idx, 1);
+        renderAddonsRepeater();
+      });
+    }
+  });
+}
+
+function setupAddonsRepeaterUI() {
+  document.addEventListener("click", (e) => {
+    const addBtn = e.target && e.target.closest ? e.target.closest("#btn-add-addon-row") : null;
+    if (addBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      currentAddonsList.push({
+        id: `addon_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        name: "",
+        price: 0,
+        active: true,
+      });
+      renderAddonsRepeater();
+    }
+  });
+}
+
 // Edit Product (Load data into form)
 window.editProduct = (id, productJsonBase64) => {
   try {
@@ -2095,18 +2346,29 @@ window.editProduct = (id, productJsonBase64) => {
     }
 
     // Dimensions
+    const isLType = (product.dimensions && product.dimensions.isLType === true) || product.isLType === true;
+    if (isLTypeSelect) isLTypeSelect.value = isLType ? "true" : "false";
+    toggleLTypeFields(isLType);
+
     let height = 72;
     let width = 72;
     let length = 72;
+    let length2 = 72;
     let unit = "in";
     if (product.dimensions && typeof product.dimensions.height === "number") {
       height = product.dimensions.height;
       width = product.dimensions.width;
       length = typeof product.dimensions.length === "number" ? product.dimensions.length : 72;
+      length2 = typeof product.dimensions.length2 === "number" ? product.dimensions.length2 : (length || 72);
       unit = product.dimensions.unit || "in";
     } else if (product.size) {
       const sizeParts = (product.size || "").split(" × ");
-      if (sizeParts.length >= 3) {
+      if (sizeParts.length >= 4 && product.size.includes("L-Type")) {
+        length = parseFloat(sizeParts[0]) || 72;
+        length2 = parseFloat(sizeParts[1]) || 72;
+        width = parseFloat(sizeParts[2]) || 72;
+        height = parseFloat(sizeParts[3]) || 72;
+      } else if (sizeParts.length >= 3) {
         length = parseFloat(sizeParts[0]) || 72;
         width = parseFloat(sizeParts[1]) || 72;
         height = parseFloat(sizeParts[2]) || 72;
@@ -2123,6 +2385,7 @@ window.editProduct = (id, productJsonBase64) => {
     if (heightInput) heightInput.value = height;
     if (widthInput) widthInput.value = width;
     if (lengthInput) lengthInput.value = length;
+    if (length2Input) length2Input.value = length2;
     if (unitSelect) unitSelect.value = unit;
     currentDimensionUnit = unit;
 
@@ -2142,6 +2405,13 @@ window.editProduct = (id, productJsonBase64) => {
       });
     });
     renderThumbnailPreviews();
+
+    // Add-ons / Optional Upgrades
+    clearAddonsRepeater();
+    if (Array.isArray(product.addons) && product.addons.length > 0) {
+      currentAddonsList = product.addons.map((a) => ({ ...a }));
+    }
+    renderAddonsRepeater();
 
     // When editing, front bg is not required unless replacing
     document.getElementById("img-bg").required = false;
@@ -2220,16 +2490,17 @@ const renderInventory = (products) => {
     const productPayload = btoa(encodeURIComponent(JSON.stringify(product)));
 
     const tr = document.createElement("tr");
+    const priceFormatted = Number(product.price || 0).toLocaleString();
     tr.innerHTML = `
             <td>
                 <div class="table-product-info">
-                    <img src="${thumbImage}" alt="${product.name}" class="table-product-img" onerror="this.src='https://via.placeholder.com/48'">
-                    <strong>${product.name}</strong>
+                    <img src="${thumbImage}" alt="${escapeHtml(product.name)}" class="table-product-img" onerror="this.src='assets/product_sofa.png'">
+                    <strong>${escapeHtml(product.name)}</strong>
                 </div>
             </td>
-            <td>${product.category}</td>
-            <td>₱${product.price.toFixed(2)}</td>
-            <td>${escapeHtml(product.material || "—")}</td>
+            <td>${escapeHtml(product.category)}</td>
+            <td>₱${priceFormatted}</td>
+            <td><span class="mat-val">${escapeHtml(product.material || "—")}</span></td>
             <td id="stock-cell-${product.id}">
                 ${product.stock !== undefined ? product.stock : 0}
             </td>
@@ -5277,6 +5548,7 @@ function setupAdminLiveChat() {
 }
 
 setupAdminLiveChat();
+setupAddonsRepeaterUI();
 
 syncBatchDeleteUi();
 

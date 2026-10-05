@@ -288,7 +288,8 @@ function initCardSlideshows(root = document) {
 
 // Load Products Catalog & Render Cards in Interactive Carousel
 async function loadProductsCatalog() {
-  const carouselTrack = document.getElementById("carousel-track") || document.querySelector(".products-grid");
+  const carouselTrack =
+    document.getElementById("carousel-track") || document.querySelector(".products-grid");
   if (!carouselTrack) return;
 
   try {
@@ -333,35 +334,38 @@ async function loadProductsCatalog() {
                   )
                   .join("")}
               </div>
-              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D / AR">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 <span>3D</span>
               </button>
-              <button class="btn-quick-order" data-product-id="${docSnap.id}">
-                Order Now
+              <button type="button" class="btn-wishlist-heart" data-product-id="${docSnap.id}" title="Wishlist">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
               </button>
             </div>
           `
           : `
             <div class="product-image-container">
               <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D / AR">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 <span>3D</span>
               </button>
-              <button class="btn-quick-order" data-product-id="${docSnap.id}">
-                Order Now
+              <button type="button" class="btn-wishlist-heart" data-product-id="${docSnap.id}" title="Wishlist">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
               </button>
             </div>
           `;
 
         const productHTML = `
           <div class="product-card-slide">
-            <div class="product-card reveal" style="--delay: ${delay}s">
+            <div class="product-card reveal" data-product-id="${docSnap.id}" style="--delay: ${delay}s">
               ${imageSectionHTML}
               <div class="product-info">
                 <h3>${escapeHtml(product.name)}</h3>
-                <p class="price">₱${priceFormatted}</p>
+                <div class="price-row">
+                  <span class="price">₱${priceFormatted}</span>
+                  <span class="price-badge-tag">${escapeHtml((product.category || 'SOFA').toUpperCase())}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -488,53 +492,131 @@ function setupCarouselControls() {
 function bindProductCardButtons() {
   bindARButtons();
 
-  document.querySelectorAll(".btn-quick-order").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const productId = btn.getAttribute("data-product-id");
-      if (productId) {
-        await openProductQuickViewModal(productId);
+  document.querySelectorAll(".product-card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (
+        e.target.closest(".btn-ar-view") ||
+        e.target.closest(".card-slideshow-btn") ||
+        e.target.closest(".btn-wishlist-heart")
+      ) {
+        return;
       }
+      const productId = card.getAttribute("data-product-id");
+      if (productId) {
+        openProductQuickViewModal(productId);
+      }
+    });
+  });
+
+  document.querySelectorAll(".btn-wishlist-heart").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      btn.classList.toggle("active");
+      const isFav = btn.classList.contains("active");
+      showToast(isFav ? "Saved to wishlist!" : "Removed from wishlist", "success");
     });
   });
 }
 
 // Phase 1: Open Product Quick View Modal with Variant Selection & Stock Validation
+let selectedModalAddons = [];
+
+function recalculatePdpTotals() {
+  if (!currentModalProduct) return;
+  const basePrice = parseFloat(currentModalProduct.price || 0);
+  let addonsTotal = 0;
+  selectedModalAddons = [];
+
+  document.querySelectorAll(".pdp-addon-checkbox:checked").forEach((cb) => {
+    const name = cb.getAttribute("data-addon-name");
+    const price = parseFloat(cb.getAttribute("data-addon-price") || 0);
+    selectedModalAddons.push({ name, price });
+    addonsTotal += price;
+  });
+
+  const unitPrice = basePrice + addonsTotal;
+  const totalPrice = unitPrice * currentSelectedQty;
+
+  const priceEl = document.getElementById("pv-price");
+  if (priceEl) priceEl.textContent = `₱${basePrice.toLocaleString()}`;
+
+  const totalDisplay = document.getElementById("pv-total-price-display");
+  if (totalDisplay) totalDisplay.textContent = `₱${totalPrice.toLocaleString()}`;
+}
+
 async function openProductQuickViewModal(productId) {
   const modal = document.getElementById("product-detail-modal");
   if (!modal) return;
 
   try {
-    const productDoc = await getDoc(doc(db, "products", productId));
-    if (!productDoc.exists()) {
+    let productData = null;
+    try {
+      const productDoc = await getDoc(doc(db, "products", productId));
+      if (productDoc.exists()) {
+        productData = { id: productDoc.id, ...productDoc.data() };
+      }
+    } catch (e) {
+      console.warn("Could not fetch product from Firestore, checking catalog list:", e);
+    }
+
+    if (!productData && Array.isArray(featuredProducts)) {
+      productData = featuredProducts.find((p) => String(p.id) === String(productId));
+    }
+
+    if (!productData) {
       showToast("Product not found.", "error");
       return;
     }
 
-    currentModalProduct = { id: productDoc.id, ...productDoc.data() };
+    currentModalProduct = productData;
     currentSelectedQty = 1;
+    selectedModalAddons = [];
+
+    // Header Badges
+    const catBadge = document.getElementById("pv-category-badge");
+    if (catBadge) catBadge.textContent = (currentModalProduct.category || "SOFA").toUpperCase();
 
     const modalThumbs = getProductThumbnails(currentModalProduct);
-    document.getElementById("pv-name").textContent = currentModalProduct.name;
-    document.getElementById("pv-image").src = modalThumbs[0];
-    document.getElementById("pv-price").textContent = `₱${parseFloat(currentModalProduct.price || 0).toLocaleString()}`;
+    document.getElementById("pv-name").textContent = currentModalProduct.name || "Product";
+    document.getElementById("pv-image").src = modalThumbs[0] || "assets/product_sofa.png";
 
-    // Dimensions display
+    const paginationEl = document.getElementById("pv-pagination-indicator");
+    if (paginationEl) {
+      paginationEl.textContent = `1/${modalThumbs.length}`;
+    }
+
+    // Dimensions display card
     const dimsEl = document.getElementById("pv-dimensions-info");
+    const dimsCard = document.getElementById("pv-dimensions-card");
     if (dimsEl) {
-      let dimsText = "";
-      if (currentModalProduct.dimensions && typeof currentModalProduct.dimensions.height === "number") {
-        dimsText = currentModalProduct.dimensions.length
-          ? `${currentModalProduct.dimensions.length} × ${currentModalProduct.dimensions.width} × ${currentModalProduct.dimensions.height} ${currentModalProduct.dimensions.unit || "in"}`
-          : `${currentModalProduct.dimensions.width} × ${currentModalProduct.dimensions.height} ${currentModalProduct.dimensions.unit || "in"}`;
+      let htmlContent = "";
+      if (
+        currentModalProduct.dimensions &&
+        typeof currentModalProduct.dimensions.height === "number"
+      ) {
+        const d = currentModalProduct.dimensions;
+        const u = d.unit || "in";
+        if (d.isLType && d.length2) {
+          htmlContent = `L: <strong>${d.length} × ${d.length2} ${u}</strong> <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin: 0 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span> · W: <strong>${d.width} ${u}</strong> · H: <strong>${d.height} ${u}</strong>`;
+        } else if (d.length) {
+          htmlContent = `${d.length} × ${d.width} × ${d.height} ${u}`;
+        } else {
+          htmlContent = `${d.width} × ${d.height} ${u}`;
+        }
       } else if (currentModalProduct.size) {
-        dimsText = currentModalProduct.size;
+        const s = currentModalProduct.size;
+        if (s.includes("L-Type")) {
+          const cleaned = s.replace("(L-Type)", "").replace(/\s+/g, " ").trim();
+          htmlContent = `${escapeHtml(cleaned)} <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-left: 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span>`;
+        } else {
+          htmlContent = escapeHtml(s);
+        }
       }
-      if (dimsText) {
-        dimsEl.textContent = `📐 Dimensions: ${dimsText}`;
-        dimsEl.style.display = "block";
+      if (htmlContent) {
+        dimsEl.innerHTML = htmlContent;
+        if (dimsCard) dimsCard.style.display = "block";
       } else {
-        dimsEl.style.display = "none";
+        if (dimsCard) dimsCard.style.display = "none";
       }
     }
 
@@ -554,10 +636,13 @@ async function openProductQuickViewModal(productId) {
         thumbStrip.style.display = "flex";
         thumbStrip.querySelectorAll(".modal-thumb-btn").forEach((btn) => {
           btn.addEventListener("click", () => {
-            thumbStrip.querySelectorAll(".modal-thumb-btn").forEach((b) => b.classList.remove("active"));
+            thumbStrip
+              .querySelectorAll(".modal-thumb-btn")
+              .forEach((b) => b.classList.remove("active"));
             btn.classList.add("active");
             const idx = parseInt(btn.dataset.index, 10);
             document.getElementById("pv-image").src = modalThumbs[idx];
+            if (paginationEl) paginationEl.textContent = `${idx + 1}/${modalThumbs.length}`;
           });
         });
       } else {
@@ -567,37 +652,68 @@ async function openProductQuickViewModal(productId) {
     }
 
     // Dynamic materials input / options
-    const prodMaterials = Array.isArray(currentModalProduct.materials) && currentModalProduct.materials.length > 0
-      ? currentModalProduct.materials
-      : currentModalProduct.material
-        ? currentModalProduct.material.split(",").map((s) => s.trim()).filter(Boolean)
-        : ["Standard"];
+    const prodMaterials =
+      Array.isArray(currentModalProduct.materials) && currentModalProduct.materials.length > 0
+        ? currentModalProduct.materials
+        : currentModalProduct.material
+          ? currentModalProduct.material
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : ["Standard"];
 
-    currentSelectedMaterial = prodMaterials[0] || "Standard";
+    currentSelectedMaterial = "Standard";
 
-    const matOptionsContainer = document.getElementById("pv-material-options") || modal.querySelector(".material-options");
+    const matOptionsContainer =
+      document.getElementById("pv-material-options") || modal.querySelector(".material-options");
     if (matOptionsContainer) {
-      matOptionsContainer.innerHTML = prodMaterials
-        .map((mat) => {
-          const matStock = getAvailableStock(currentModalProduct, mat);
-          return `
-            <button type="button" class="material-btn ${mat === currentSelectedMaterial ? "selected" : ""}" data-material="${escapeHtml(mat)}">
-              <span class="mat-title">${escapeHtml(mat)}</span>
-              <span class="mat-stock">${matStock} left</span>
-            </button>
-          `;
-        })
-        .join("");
+      matOptionsContainer.style.display = "none";
+      const parentVarSection = matOptionsContainer.closest(".variant-section");
+      if (parentVarSection) parentVarSection.style.display = "none";
+    }
 
-      matOptionsContainer.querySelectorAll(".material-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          currentSelectedMaterial = btn.getAttribute("data-material");
-          updateVariantStockUI();
+    // Populate Add-ons Section
+    const addonsListContainer = document.getElementById("pv-addons-list");
+    const addonsSec = document.getElementById("pv-addons-section");
+    const availableAddons =
+      Array.isArray(currentModalProduct.addons)
+        ? currentModalProduct.addons.filter(
+            (a) => a && a.active !== false && (a.name || "").trim() !== ""
+          )
+        : [];
+
+    if (addonsListContainer) {
+      if (availableAddons.length > 0) {
+        if (addonsSec) addonsSec.style.display = "block";
+        addonsListContainer.innerHTML = availableAddons
+          .map(
+            (addon) => `
+          <label class="pdp-addon-item">
+            <div class="pdp-addon-left">
+              <input type="checkbox" class="pdp-addon-checkbox" data-addon-name="${escapeHtml(addon.name)}" data-addon-price="${addon.price || 0}" />
+              <span class="pdp-addon-name">${escapeHtml(addon.name)}</span>
+            </div>
+            <span class="pdp-addon-price">+₱${parseFloat(addon.price || 0).toLocaleString()}</span>
+          </label>
+        `
+          )
+          .join("");
+
+        addonsListContainer.querySelectorAll(".pdp-addon-item").forEach((item) => {
+          const cb = item.querySelector(".pdp-addon-checkbox");
+          cb.addEventListener("change", () => {
+            item.classList.toggle("selected", cb.checked);
+            recalculatePdpTotals();
+          });
         });
-      });
+      } else {
+        if (addonsSec) addonsSec.style.display = "none";
+        addonsListContainer.innerHTML = "";
+      }
     }
 
     updateVariantStockUI();
+    recalculatePdpTotals();
 
     // Show modal
     modal.classList.add("active");
@@ -618,31 +734,56 @@ function updateVariantStockUI() {
 
   const available = getAvailableStock(currentModalProduct, currentSelectedMaterial);
   const statusEl = document.getElementById("pv-stock-status");
+  const leadBadge = document.getElementById("pv-leadtime-badge");
   const addBtn = document.getElementById("pv-add-to-cart-btn");
   const qtyMinus = document.getElementById("pv-qty-minus");
   const qtyPlus = document.getElementById("pv-qty-plus");
 
   if (available > 0) {
-    statusEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#059669; display:inline-block;"></span> Ready to Ship (${available} left in showroom)</span>`;
-    statusEl.style.color = "#059669";
-    addBtn.disabled = false;
-    addBtn.textContent = "Add Ready Stock to Bag";
+    if (statusEl) {
+      statusEl.innerHTML = `Ready to Ship (${available} left in showroom)`;
+      statusEl.className = "pdp-stock-chip ready";
+    }
+    if (leadBadge) {
+      leadBadge.textContent = "Ready to Ship";
+      leadBadge.style.background = "#ecfdf5";
+      leadBadge.style.color = "#059669";
+    }
+    if (addBtn) {
+      addBtn.disabled = false;
+      const ctaSpan = addBtn.querySelector("span:first-child");
+      if (ctaSpan) ctaSpan.textContent = "ADD READY STOCK TO BAG";
+    }
 
     if (currentSelectedQty < 1) currentSelectedQty = 1;
     if (currentSelectedQty > available) currentSelectedQty = available;
   } else {
-    statusEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:7px; height:7px; border-radius:50%; background:#2563eb; display:inline-block;"></span> Made-to-Order (Lead Time: 14–21 Days)</span>`;
-    statusEl.style.color = "#2563eb";
-    addBtn.disabled = false;
-    addBtn.textContent = "Place Made-to-Order";
+    if (statusEl) {
+      statusEl.innerHTML = `Made to Order (Lead Time: 14–21 Days)`;
+      statusEl.className = "pdp-stock-chip mto";
+    }
+    if (leadBadge) {
+      leadBadge.textContent = "MTO (~21-28 days)";
+      leadBadge.style.background = "#e0f2fe";
+      leadBadge.style.color = "#0369a1";
+    }
+    if (addBtn) {
+      addBtn.disabled = false;
+      const ctaSpan = addBtn.querySelector("span:first-child");
+      if (ctaSpan) ctaSpan.textContent = "PLACE MADE-TO-ORDER";
+    }
 
     if (currentSelectedQty < 1) currentSelectedQty = 1;
   }
 
-  document.getElementById("pv-qty-val").textContent = currentSelectedQty;
+  const qtyValEl = document.getElementById("pv-qty-val");
+  if (qtyValEl) qtyValEl.textContent = currentSelectedQty;
 
   if (qtyMinus) qtyMinus.disabled = currentSelectedQty <= 1;
-  if (qtyPlus) qtyPlus.disabled = available > 0 ? currentSelectedQty >= available : currentSelectedQty >= 10;
+  if (qtyPlus)
+    qtyPlus.disabled = available > 0 ? currentSelectedQty >= available : currentSelectedQty >= 20;
+
+  recalculatePdpTotals();
 }
 
 // Phase 2: Render Cart Drawer
@@ -687,9 +828,9 @@ function renderCartDrawer(items) {
     itemCard.className = "cart-item-card";
     const isMTO = item.orderType === "Made-to-Order";
     itemCard.innerHTML = `
-      <img src="${item.url}" alt="${escapeHtml(item.name || '')}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+      <img src="${item.url}" alt="${escapeHtml(item.name || "")}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
       <div class="cart-item-details">
-        <div class="cart-item-title">${escapeHtml(item.name || '')}</div>
+        <div class="cart-item-title">${escapeHtml(item.name || "")}</div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
           <span class="cart-item-material">${escapeHtml(item.material || "Fabric")}</span>
           ${
@@ -763,7 +904,7 @@ function updateSubmitButtonText() {
     (sum, item) => sum + parsePrice(item.price) * Number(item.quantity),
     0
   );
-  const downAmt = Math.round(grandTotal * 0.30);
+  const downAmt = Math.round(grandTotal * 0.3);
   const dueToday = selectedPaymentTerm === "downpayment" ? downAmt : grandTotal;
 
   const submitBtn = document.getElementById("place-order-submit-btn");
@@ -817,9 +958,9 @@ function updateCheckoutTotals() {
         (item) => `
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f9fafb; border-radius: 10px; border: 1px solid #f3f4f6;">
         <div style="display: flex; align-items: center; gap: 12px;">
-          <img src="${item.url || 'assets/product_sofa.png'}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <img src="${item.url || "assets/product_sofa.png"}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
           <div>
-            <div style="font-weight: 600; font-size: 0.88rem; color: #111827;">${escapeHtml(item.name || '')}</div>
+            <div style="font-weight: 600; font-size: 0.88rem; color: #111827;">${escapeHtml(item.name || "")}</div>
             <div style="font-size: 0.78rem; color: #6b7280;">Qty: ${item.quantity} · ${escapeHtml(item.material || "Fabric")}</div>
           </div>
         </div>
@@ -830,14 +971,15 @@ function updateCheckoutTotals() {
       .join("");
   }
 
-  const downAmt = Math.round(grandTotal * 0.30);
+  const downAmt = Math.round(grandTotal * 0.3);
   const balAmt = grandTotal - downAmt;
 
   if (termFullAmt) termFullAmt.textContent = `₱${grandTotal.toLocaleString()}`;
   if (termDownAmt) termDownAmt.textContent = `₱${downAmt.toLocaleString()}`;
 
   if (subtotalEl) subtotalEl.textContent = `₱${subtotal.toLocaleString()}`;
-  if (shippingEl) shippingEl.textContent = shippingFee === 0 ? "FREE" : `₱${shippingFee.toLocaleString()}`;
+  if (shippingEl)
+    shippingEl.textContent = shippingFee === 0 ? "FREE" : `₱${shippingFee.toLocaleString()}`;
   if (totalEl) totalEl.textContent = `₱${grandTotal.toLocaleString()}`;
 
   let dueToday = grandTotal;
@@ -986,7 +1128,9 @@ function setupStorefrontUI() {
     qtyPlus.addEventListener("click", () => {
       const maxStock = getAvailableStock(currentModalProduct, currentSelectedMaterial);
       if (maxStock > 0 && currentSelectedQty >= maxStock) {
-        showToast(`Selected quantity exceeds available showroom stock (${maxStock}). Additional units will be Made-to-Order.`);
+        showToast(
+          `Selected quantity exceeds available showroom stock (${maxStock}). Additional units will be Made-to-Order.`
+        );
       }
       if (currentSelectedQty < 20) {
         currentSelectedQty++;
@@ -999,6 +1143,9 @@ function setupStorefrontUI() {
     addToCartBtn.addEventListener("click", () => {
       if (!currentModalProduct) return;
       const customNotes = document.getElementById("pv-custom-notes")?.value || "";
+      const basePrice = parseFloat(currentModalProduct.price || 0);
+      const addonsTotal = selectedModalAddons.reduce((sum, a) => sum + (parseFloat(a.price) || 0), 0);
+      const unitPriceWithAddons = basePrice + addonsTotal;
 
       requireAuth(async () => {
         try {
@@ -1007,11 +1154,16 @@ function setupStorefrontUI() {
             currentModalProduct,
             currentSelectedMaterial,
             currentSelectedQty,
-            customNotes
+            customNotes,
+            selectedModalAddons,
+            unitPriceWithAddons
           );
           const available = getAvailableStock(currentModalProduct, currentSelectedMaterial);
           const modeLabel = available > 0 ? "Ready Stock" : "Made-to-Order";
-          showToast(`Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial} - ${modeLabel}) to bag!`);
+          const addonText = selectedModalAddons.length > 0 ? ` (+ ${selectedModalAddons.length} upgrades)` : "";
+          showToast(
+            `Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial}${addonText} - ${modeLabel}) to bag!`
+          );
           const notesBox = document.getElementById("pv-custom-notes");
           if (notesBox) notesBox.value = "";
           pvModal.classList.remove("active");
@@ -1027,7 +1179,9 @@ function setupStorefrontUI() {
   document.querySelectorAll('input[name="checkoutPaymentTerm"]').forEach((radio) => {
     radio.addEventListener("change", (e) => {
       selectedPaymentTerm = e.target.value;
-      document.querySelectorAll(".payment-term-card").forEach((c) => c.classList.remove("selected"));
+      document
+        .querySelectorAll(".payment-term-card")
+        .forEach((c) => c.classList.remove("selected"));
       e.target.closest(".payment-term-card")?.classList.add("selected");
       updateCheckoutTotals();
     });
@@ -1289,7 +1443,8 @@ async function handlePlaceOrderSubmit() {
 
     // 2. Atomic Order Placement with Made-to-Order & Downpayment Support
     submitBtn.textContent = "Finalizing Order...";
-    const nearestLandmarkVal = document.getElementById("checkout-nearest-landmark")?.value?.trim() || "";
+    const nearestLandmarkVal =
+      document.getElementById("checkout-nearest-landmark")?.value?.trim() || "";
     const addressWithLandmark = {
       ...targetAddress,
       nearestLandmark: nearestLandmarkVal,
@@ -1332,7 +1487,10 @@ async function handlePlaceOrderSubmit() {
     submitBtn.textContent = "Place Order Now";
     document.getElementById("checkout-modal")?.classList.remove("active");
 
-    showToast(`Order Placed Successfully! (ID: ${result.orderId}). Redirecting to order tracking...`, "success");
+    showToast(
+      `Order Placed Successfully! (ID: ${result.orderId}). Redirecting to order tracking...`,
+      "success"
+    );
     setTimeout(() => {
       window.location.href = "orders.html";
     }, 1500);
@@ -1404,7 +1562,9 @@ function initAnimations() {
   document.querySelectorAll(".slide-up, .reveal").forEach((el) => observer.observe(el));
 
   setTimeout(() => {
-    document.querySelectorAll(".hero .slide-up, .hero .reveal").forEach((el) => el.classList.add("active"));
+    document
+      .querySelectorAll(".hero .slide-up, .hero .reveal")
+      .forEach((el) => el.classList.add("active"));
   }, 100);
 
   bindARButtons();
@@ -1507,7 +1667,8 @@ async function show3DModelViewer(productName, productImage, productId, button, o
       statusEl.textContent = message || "3D model not available for this product yet.";
     }
     if (descEl) {
-      descEl.textContent = "This product doesn't have an active 3D model yet. You are viewing a 2D preview.";
+      descEl.textContent =
+        "This product doesn't have an active 3D model yet. You are viewing a 2D preview.";
     }
     if (wrapperEl) {
       wrapperEl.innerHTML = `
@@ -1542,7 +1703,11 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     modelViewerEl.addEventListener("error", (ev) => {
       console.warn("Model viewer load error:", ev);
       // Fallback: If proxy endpoint failed on static mobile server, retry directly from raw storage URL
-      if (!triedDirectUrl && currentRawModelUrl && (currentRawModelUrl.startsWith("http://") || currentRawModelUrl.startsWith("https://"))) {
+      if (
+        !triedDirectUrl &&
+        currentRawModelUrl &&
+        (currentRawModelUrl.startsWith("http://") || currentRawModelUrl.startsWith("https://"))
+      ) {
         triedDirectUrl = true;
         console.log("Retrying 3D model directly from raw storage URL:", currentRawModelUrl);
         statusEl.style.visibility = "visible";
@@ -1592,7 +1757,8 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     }
 
     const pData = productDoc.data();
-    const modelUrl = pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl;
+    const modelUrl =
+      pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl;
     currentRawModelUrl = modelUrl;
 
     if (modelUrl) {
@@ -1840,7 +2006,7 @@ function setupLiveChatWidget() {
 
     channelBar.style.display = "flex";
     let barHtml = `
-      <button type="button" class="chat-channel-pill ${currentChannel === 'support' ? 'active' : ''}" data-channel="support">
+      <button type="button" class="chat-channel-pill ${currentChannel === "support" ? "active" : ""}" data-channel="support">
         💬 Live Support
       </button>
     `;
@@ -1850,7 +2016,7 @@ function setupLiveChatWidget() {
       const orderNum = o.orderId || o.id;
       const isSel = currentChannel === "order" && activeChatOrderId === oId;
       barHtml += `
-        <button type="button" class="chat-channel-pill ${isSel ? 'active' : ''}" data-channel="order" data-order-id="${oId}">
+        <button type="button" class="chat-channel-pill ${isSel ? "active" : ""}" data-channel="order" data-order-id="${oId}">
           🧵 #${orderNum}
         </button>
       `;
@@ -1894,13 +2060,21 @@ function setupLiveChatWidget() {
     } else {
       messages.forEach((m) => {
         const isMe = currentUser && m.senderId === currentUser.uid;
-        const roleClass = isMe ? "customer" : (m.senderRole || "staff");
-        const senderLabel = isMe ? "You" : (m.senderName || (channelType === "support" ? "Lanica Support" : "Workshop Support"));
+        const roleClass = isMe ? "customer" : m.senderRole || "staff";
+        const senderLabel = isMe
+          ? "You"
+          : m.senderName || (channelType === "support" ? "Lanica Support" : "Workshop Support");
 
         const timeDate = m.timestamp?.toDate
           ? m.timestamp.toDate()
-          : (m.createdAt?.toDate ? m.createdAt.toDate() : (m.timestamp || m.createdAt ? new Date(m.timestamp || m.createdAt) : null));
-        const timeStr = timeDate ? timeDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+          : m.createdAt?.toDate
+            ? m.createdAt.toDate()
+            : m.timestamp || m.createdAt
+              ? new Date(m.timestamp || m.createdAt)
+              : null;
+        const timeStr = timeDate
+          ? timeDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
 
         if (m.isUnsent) {
           html += `
@@ -1919,9 +2093,9 @@ function setupLiveChatWidget() {
           <div class="chat-msg-row ${roleClass}">
             <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
             <div class="chat-msg-bubble">
-              ${(m.text || m.message || m.content) ? `<p style="margin: 0;">${escapeHtml(m.text || m.message || m.content)}</p>` : ""}
+              ${m.text || m.message || m.content ? `<p style="margin: 0;">${escapeHtml(m.text || m.message || m.content)}</p>` : ""}
               ${
-                (m.attachmentUrl || m.imageUrl)
+                m.attachmentUrl || m.imageUrl
                   ? `<a href="${m.attachmentUrl || m.imageUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl || m.imageUrl}" class="chat-msg-img" alt="Attachment" /></a>`
                   : ""
               }
@@ -1978,8 +2152,10 @@ function setupLiveChatWidget() {
       });
     } else {
       const matched = userOrdersList.find((o) => o.id === orderId);
-      const orderNum = matched ? (matched.orderId || matched.id) : orderId;
-      const statusText = matched ? (matched.orderStatus || matched.status || "In Production") : "Active";
+      const orderNum = matched ? matched.orderId || matched.id : orderId;
+      const statusText = matched
+        ? matched.orderStatus || matched.status || "In Production"
+        : "Active";
 
       if (headerTitle) headerTitle.textContent = `ORDER #${orderNum}`;
       if (headerStatus) headerStatus.textContent = `Workshop Thread · ${statusText}`;
@@ -2000,7 +2176,8 @@ function setupLiveChatWidget() {
       if (supportUnreadUnsubscribe) supportUnreadUnsubscribe();
       supportUnreadUnsubscribe = subscribeToUserSupportMessages(user.uid, (messages) => {
         const hasUnread = messages.some((m) => {
-          const isFromStaff = m.senderRole === "admin" || m.senderRole === "staff" || m.senderId === "support_admin";
+          const isFromStaff =
+            m.senderRole === "admin" || m.senderRole === "staff" || m.senderId === "support_admin";
           return isFromStaff && m.isRead === false;
         });
 

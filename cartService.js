@@ -136,23 +136,27 @@ export async function addToCart(
   product,
   material = "Fabric",
   quantity = 1,
-  customNotes = ""
+  customNotes = "",
+  selectedAddons = [],
+  customUnitPrice = null
 ) {
   if (!userId || !product || !product.id) {
     throw new Error("Invalid parameters for addToCart");
   }
 
   const mat = material || "Fabric";
-  const itemId = `${product.id}_${mat}`; // Unique per product variant
+  const addonsKey =
+    Array.isArray(selectedAddons) && selectedAddons.length > 0
+      ? `_${selectedAddons.map((a) => a.name).sort().join("_")}`
+      : "";
+  const itemId = `${product.id}_${mat}${addonsKey}`; // Unique per product variant and selected upgrades
   const itemRef = doc(db, "users", userId, "cart", itemId);
 
   // Fetch current fresh stock from Firestore to validate
   const freshProduct = await fetchProductById(product.id);
-  if (!freshProduct) {
-    throw new Error("Product no longer available.");
-  }
+  const prodToUse = freshProduct || product;
 
-  const availableStock = getAvailableStock(freshProduct, mat);
+  const availableStock = getAvailableStock(prodToUse, mat);
 
   // Check existing cart item quantity if any
   const existingDoc = await getDoc(itemRef);
@@ -160,21 +164,27 @@ export async function addToCart(
   const targetQty = existingQty + Number(quantity);
 
   // Determine availability mode:
-  // If there is physical stock available, mark as Ready-to-Ship; otherwise Made-to-Order
   const isMadeToOrder = availableStock <= 0 || targetQty > availableStock;
-  const leadTime = isMadeToOrder ? "14-21 Business Days (Crafted upon order)" : "3-5 Business Days (Ready stock)";
+  const leadTime = isMadeToOrder
+    ? "14-21 Business Days (Crafted upon order)"
+    : "3-5 Business Days (Ready stock)";
 
   const displayImage =
-    freshProduct.thumbnail ||
-    (freshProduct.images && (freshProduct.images.isoImage || freshProduct.images.frontBg)) ||
-    freshProduct.image ||
+    prodToUse.thumbnail ||
+    (prodToUse.images && (prodToUse.images.isoImage || prodToUse.images.frontBg)) ||
+    prodToUse.image ||
     product.url ||
     "assets/product_sofa.png";
 
+  const basePrice = parsePrice(prodToUse.price || product.price);
+  const finalUnitPrice = customUnitPrice !== null ? parsePrice(customUnitPrice) : basePrice;
+
   const cartPayload = {
-    productId: freshProduct.id,
-    name: freshProduct.name,
-    price: parsePrice(freshProduct.price || product.price),
+    productId: prodToUse.id,
+    name: prodToUse.name,
+    price: finalUnitPrice,
+    basePrice: basePrice,
+    selectedAddons: selectedAddons,
     url: displayImage,
     quantity: targetQty,
     material: mat,
@@ -354,22 +364,25 @@ export async function placeOrderAtomic({
       material: item.material || "Fabric",
       customNotes: item.customNotes || customNotes || "",
       orderType: item.orderType || (hasMadeToOrderItems ? "Made-to-Order" : "Ready-to-Ship"),
-      leadTime: item.leadTime || (hasMadeToOrderItems ? "14-21 Business Days" : "3-5 Business Days"),
+      leadTime:
+        item.leadTime || (hasMadeToOrderItems ? "14-21 Business Days" : "3-5 Business Days"),
       url: item.url || "",
       subtotal: Number(item.price) * Number(item.quantity),
     }));
 
     const isDownpayment = paymentOption === "downpayment";
     const parsedTotal = Number(totalAmount);
-    const downpaymentAmount = isDownpayment ? Math.round(parsedTotal * 0.30) : parsedTotal;
+    const downpaymentAmount = isDownpayment ? Math.round(parsedTotal * 0.3) : parsedTotal;
     const remainingBalance = isDownpayment ? parsedTotal - downpaymentAmount : 0;
 
-    const fulfillmentType = address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
+    const fulfillmentType =
+      address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
 
     const pMethodLower = String(paymentMethod || "").toLowerCase();
     let paymentType = "cod";
     if (pMethodLower.includes("gcash")) paymentType = "gcash";
-    else if (pMethodLower.includes("card") || pMethodLower.includes("paymongo")) paymentType = "card";
+    else if (pMethodLower.includes("card") || pMethodLower.includes("paymongo"))
+      paymentType = "card";
     else if (pMethodLower.includes("bank")) paymentType = "bank";
 
     const customerName = address.recipientName || address.fullName || address.name || "";
