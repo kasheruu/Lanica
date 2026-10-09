@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lanica | Profile & Account Hub</title>
+    <link rel="icon" type="image/jpeg" href="assets/lanicalogo.jpg" />
+    <meta
+      name="description"
+      content="Manage your Lanica account profile, shipping addresses, order preferences, support requests, and bug reports."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="profile.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+          "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+          "three/": "https://cdn.jsdelivr.net/npm/three@0.173.0/"
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Navigation Bar (Standardized Storefront Theme) -->
+    <header class="navbar">
+      <a href="index.html" class="logo-link">
+        <div class="logo">Lanica.</div>
+      </a>
+      <nav class="nav-links">
+        <a href="products.html">Products</a>
+        <a href="index.html#about">About us</a>
+        <a href="index.html#ar-feature">Live View</a>
+        <a href="orders.html" class="nav-my-orders-link" style="display: none;">My Orders</a>
+        <a href="profile.html" class="active nav-profile-link">Profile</a>
+      </nav>
+      <div class="nav-actions">
+        <button id="nav-wishlist-btn" class="nav-icon-btn" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+          <span id="wishlist-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
+        <button id="cart-toggle-btn" class="nav-icon-btn" aria-label="Shopping Cart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span id="cart-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
+        <button id="auth-modal-btn" class="nav-icon-btn" aria-label="Customer Account">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </button>
+
+        <button id="mobile-menu-btn" class="nav-icon-btn mobile-menu-btn" aria-label="Toggle Navigation Menu" aria-expanded="false">
+          <svg class="hamburger-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Profile Page Container -->
+    <main class="profile-page-container">
+      <!-- SECTION A: Dark Hero Header Card -->
+      <section class="profile-hero-header">
+        <div class="profile-hero-inner">
+          <div id="profile-avatar-wrapper" class="profile-avatar-wrapper" title="Click to edit profile photo">
+            <div id="profile-avatar-circle" class="profile-avatar-circle">L</div>
+            <div class="avatar-edit-overlay">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </div>
+          </div>
+
+          <h2 id="profile-display-name" class="profile-user-name">LANICA CUSTOMER</h2>
+          <p id="profile-display-email" class="profile-user-email">customer@lanicafurniture.com</p>
+
+          <button type="button" id="open-edit-profile-btn" class="btn-edit-profile-pill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span>EDIT PROFILE</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 4-Card Floating Metric Overview -->
+      <div class="metric-cards-wrapper">
+        <div class="metric-cards-grid">
+          <div class="metric-card">
+            <div class="metric-icon-badge active-orders">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </div>
+            <div id="metric-active-orders" class="metric-count">00</div>
+            <div class="metric-label">Active Orders</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon-badge completed">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <div id="metric-completed-orders" class="metric-count">00</div>
+            <div class="metric-label">Completed</div>
+          </div>
+
+          <div class="metric-card" onclick="window.location.href='wishlist.html'" style="cursor: pointer;">
+            <div class="metric-icon-badge saved">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </div>
+            <div id="metric-saved-items" class="metric-count">00</div>
+            <div class="metric-label">Saved Items</div>
+          </div>
+
+          <div class="metric-card" onclick="window.location.href='orders.html'" style="cursor: pointer;">
+            <div class="metric-icon-badge history">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <div id="metric-history-count" class="metric-count">00</div>
+            <div class="metric-label">History</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Body Container -->
+      <div class="profile-content-body">
+        <!-- SECTION B: Shipping Addresses Management (Image 2 Parity) -->
+        <section>
+          <div class="address-section-header">
+            <h3 class="profile-section-title" style="margin-bottom: 0;">ACCOUNT HUB — Shipping Addresses</h3>
+            <button type="button" id="open-add-address-btn" class="btn-add-address-header">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Add Address</span>
+            </button>
+          </div>
+          <div id="shipping-addresses-list" class="address-cards-list">
+            <!-- Dynamic Address Cards -->
+          </div>
+        </section>
+
+        <!-- SECTION C: App Settings & Preferences -->
+        <section>
+          <h3 class="profile-section-title">App Settings & Account Security</h3>
+          <div class="profile-hub-card">
+            <div class="profile-menu-item" id="btn-security-reset-password">
+              <div class="menu-item-left">
+                <div class="menu-item-icon">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </div>
+                <div>
+                  <div class="menu-item-title">Account Security</div>
+                  <div class="menu-item-subtitle">Send password reset link to your registered email</div>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="security-email-verification-badge" style="font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; background: #d1fae5; color: #059669;">Verified</span>
+                <span class="menu-item-arrow">→</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION D: Help Center & FAQs (Image 1 Parity) -->
+        <section>
+          <h3 class="profile-section-title">SUPPORT — Help Center FAQs</h3>
+          <div class="faq-accordion-group">
+            <div class="faq-accordion-item">
+              <button type="button" class="faq-accordion-header">
+                <span>How do I use the AR feature?</span>
+                <svg class="faq-chevron-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="faq-accordion-body">
+                Open the "Live View" tab on any 3D-supported furniture item. Ensure good ambient lighting and point your phone or WebGL camera at a flat surface (floor or table). Tap screen to place and position the 1:1 scale furniture model in your room.
+              </div>
+            </div>
+
+            <div class="faq-accordion-item">
+              <button type="button" class="faq-accordion-header">
+                <span>How does Made-to-Order (MTO) & 30% Downpayment work?</span>
+                <svg class="faq-chevron-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="faq-accordion-body">
+                Lanica handcrafted items are custom manufactured upon ordering. A 30% downpayment via PayMongo (QR Ph / GCash) or walk-in cash locks in your material procurement and master carpentry slot. Remaining balance is collected upon final delivery.
+              </div>
+            </div>
+
+            <div class="faq-accordion-item">
+              <button type="button" class="faq-accordion-header">
+                <span>How do I upload payment receipts and track my order?</span>
+                <svg class="faq-chevron-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="faq-accordion-body">
+                Go to "My Orders" and select your active order. Click "Upload Payment Receipt" to attach your transfer screenshot. Our finance team will verify the payment and update your live order status from Woodworking to Delivery.
+              </div>
+            </div>
+
+            <div class="faq-accordion-item">
+              <button type="button" class="faq-accordion-header">
+                <span>Can I cancel or request a refund on my order?</span>
+                <svg class="faq-chevron-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="faq-accordion-body">
+                Orders can be cancelled with full downpayment refund before master carpentry crafting commences. Once raw lumber cutting and custom upholstery begin, downpayment covers committed raw materials. Contact support for assistance.
+              </div>
+            </div>
+
+            <div class="faq-accordion-item">
+              <button type="button" class="faq-accordion-header">
+                <span>How can I contact support or visit your website?</span>
+                <svg class="faq-chevron-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="faq-accordion-body">
+                Reach our customer service hotline at <strong>09498136985</strong>, email us at <strong>support@lanicafurniture.com</strong>, or visit our official web portal at <strong>lanicafurniture.com</strong>.
+              </div>
+            </div>
+          </div>
+
+          <!-- Support Banner (Image 1 Bottom Parity) -->
+          <div class="support-banner-card" style="margin-top: 20px;">
+            <div class="support-banner-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18h6m-4 3h2M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"></path>
+              </svg>
+            </div>
+            <h4 class="support-banner-title">Still need help?</h4>
+            <p class="support-banner-desc">Our support team is available 24/7 to assist you with any inquiries.</p>
+          </div>
+        </section>
+
+        <!-- SECTION E: Bug Reporting & Sign Out -->
+        <section>
+          <h3 class="profile-section-title">ISSUES & ACCOUNT SESSION</h3>
+          <div class="profile-hub-card">
+            <div class="profile-menu-item" id="open-bug-report-btn">
+              <div class="menu-item-left">
+                <div class="menu-item-icon" style="background: #fee2e2; color: #dc2626;">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 2v4M16 2v4M9 11v6M15 11v6M4 7h16M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12"></path>
+                  </svg>
+                </div>
+                <div>
+                  <div class="menu-item-title">Report a Bug / Issue</div>
+                  <div class="menu-item-subtitle">Submit issue reports, screenshots & system feedback</div>
+                </div>
+              </div>
+              <div class="menu-item-arrow">→</div>
+            </div>
+
+            <div class="profile-menu-item" id="profile-sign-out-btn">
+              <div class="menu-item-left">
+                <div class="menu-item-icon" style="background: #fef2f2; color: #ef4444;">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                </div>
+                <div>
+                  <div class="menu-item-title" style="color: #ef4444;">Sign Out</div>
+                  <div class="menu-item-subtitle">Securely log out of your Lanica customer session</div>
+                </div>
+              </div>
+              <div class="menu-item-arrow" style="color: #ef4444;">→</div>
+            </div>
+          </div>
+          <div style="text-align: center; margin-top: 20px; font-size: 0.8rem; color: #9ca3af;">
+            Lanica E-Commerce Web Client v2.4.0 (Web Build)
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- MODAL 1: ADD / EDIT SHIPPING ADDRESS -->
+    <div id="address-modal" class="modal-backdrop-overlay">
+      <div class="modal-content-card">
+        <button id="close-address-modal-btn" class="modal-close-btn" aria-label="Close modal">&times;</button>
+        <h3 id="address-modal-title" style="font-size: 1.3rem; font-weight: 800; margin-bottom: 20px;">Add Shipping Address</h3>
+
+        <form id="address-form" style="display: flex; flex-direction: column; gap: 14px;">
+          <input type="hidden" id="addr-id" />
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Address Label (e.g. HOME, WORK)</label>
+            <input type="text" id="addr-label" class="auth-input-field" placeholder="HOME" required />
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Recipient Name</label>
+            <input type="text" id="addr-recipient" class="auth-input-field" placeholder="HEIDI AMATORIO" required />
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Contact Phone Number</label>
+            <input type="tel" id="addr-phone" class="auth-input-field" placeholder="+639282326967" required />
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Street Address / House & Lot No.</label>
+            <input type="text" id="addr-street" class="auth-input-field" placeholder="BLK4 LOT11 Mauro Alcalde Villas" required />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">City / Municipality</label>
+              <input type="text" id="addr-city" class="auth-input-field" placeholder="Calamba" required />
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Province</label>
+              <input type="text" id="addr-province" class="auth-input-field" placeholder="Laguna" required />
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Zip Code</label>
+            <input type="text" id="addr-zip" class="auth-input-field" placeholder="4027" required />
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+            <input type="checkbox" id="addr-is-default" style="width: 18px; height: 18px;" />
+            <label for="addr-is-default" style="font-size: 0.88rem; font-weight: 600; color: #111827;">Set as default shipping address</label>
+          </div>
+
+          <button type="submit" class="btn-auth-primary" style="margin-top: 10px; width: 100%;">SAVE ADDRESS</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 2: EDIT PROFILE (Mobile App Reference Screen Parity) -->
+    <div id="edit-profile-modal" class="modal-backdrop-overlay">
+      <div class="modal-content-card" style="max-width: 440px; border-radius: 28px; padding: 28px 24px 24px; position: relative;">
+        <!-- Top Right Close Button -->
+        <button id="close-edit-profile-modal-btn" class="modal-close-btn" aria-label="Close modal" style="position: absolute; top: 20px; right: 20px;">&times;</button>
+        
+        <!-- Modal Title -->
+        <h3 style="font-size: 1.3rem; font-weight: 800; text-align: center; margin: 0 0 20px 0; color: #0f1115;">Edit Profile</h3>
+
+        <!-- Centered Avatar Circle & Yellow Camera Badge -->
+        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 24px;">
+          <div id="modal-avatar-picker-trigger" style="position: relative; cursor: pointer;">
+            <div id="modal-avatar-preview-circle" class="profile-avatar-circle" style="width: 110px; height: 110px; border-width: 3.5px; font-size: 2.5rem;">
+              L
+            </div>
+            <div class="avatar-camera-badge">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </div>
+          </div>
+          <input type="file" id="edit-avatar-file" accept="image/png, image/jpeg, image/webp" style="display: none;" />
+        </div>
+
+        <form id="edit-profile-form" style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- SECTION: ACCOUNT DETAILS -->
+          <div>
+            <div style="font-size: 0.78rem; font-weight: 800; color: #8c909b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">
+              ACCOUNT DETAILS
+            </div>
+            <div class="account-details-card">
+              <!-- Full Name Field -->
+              <div class="edit-profile-field-row">
+                <div class="field-icon-badge">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FFC800" stroke-width="2.2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </div>
+                <div style="flex: 1;">
+                  <label class="field-label-small">Full Name</label>
+                  <input type="text" id="edit-full-name" class="field-input-clean" placeholder="HEIDI AMATORIO" required />
+                </div>
+              </div>
+
+              <div class="field-divider"></div>
+
+              <!-- Phone Number Field -->
+              <div class="edit-profile-field-row">
+                <div class="field-icon-badge">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FFC800" stroke-width="2.2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                    <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                  </svg>
+                </div>
+                <div style="flex: 1;">
+                  <label class="field-label-small">Phone Number</label>
+                  <input type="tel" id="edit-phone-number" class="field-input-clean" placeholder="+639282826967" />
+                </div>
+              </div>
+            </div>
+            <p style="font-size: 0.75rem; color: #8c909b; margin-top: 6px; padding-left: 4px;">Guide: Start with 09 or +63</p>
+          </div>
+
+          <!-- SECTION: QUICK LINKS -->
+          <div>
+            <div style="font-size: 0.78rem; font-weight: 800; color: #8c909b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">
+              QUICK LINKS
+            </div>
+            <div id="modal-quick-link-addresses" class="account-details-card" style="padding: 14px 18px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div class="field-icon-badge" style="background: #fefce8; border-radius: 10px;">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#d97706" stroke-width="2.2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                    <circle cx="12" cy="10" r="3"></circle>
+                  </svg>
+                </div>
+                <div>
+                  <div style="font-size: 0.95rem; font-weight: 700; color: #0f1115;">Manage Shipping Addresses</div>
+                  <div style="font-size: 0.78rem; color: #8c909b;">Add or remove delivery locations</div>
+                </div>
+              </div>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2.2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          </div>
+
+          <!-- SAVE CHANGES CTA BUTTON -->
+          <button type="submit" class="btn-auth-primary" style="background: #FFC800; color: #0f1115; font-weight: 800; padding: 14px; border-radius: 9999px; font-size: 0.9rem; margin-top: 10px; width: 100%; border: none;">
+            SAVE CHANGES
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 3: BUG REPORTING MODAL -->
+    <div id="bug-report-modal" class="modal-backdrop-overlay">
+      <div class="modal-content-card">
+        <button id="close-bug-report-modal-btn" class="modal-close-btn" aria-label="Close modal">&times;</button>
+        <h3 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 6px;">Report an Issue / Bug</h3>
+        <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 18px;">Encountered an issue with AR, checkout, or account specs? Let us know.</p>
+
+        <form id="bug-report-form" style="display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Issue Title / Summary</label>
+            <input type="text" id="bug-title" class="auth-input-field" placeholder="e.g. AR Live View surface not detecting floor" required />
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Category</label>
+            <select id="bug-category" class="auth-input-field" required>
+              <option value="UI/UX Issue">UI/UX Issue</option>
+              <option value="AR Feature Bug">AR Feature Bug</option>
+              <option value="Payment Problem">Payment Problem</option>
+              <option value="Crash/Performance">Crash/Performance</option>
+              <option value="Account Issue">Account Issue</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Severity Level</label>
+            <div class="severity-pill-group">
+              <div class="severity-pill" data-severity="Low">Low</div>
+              <div class="severity-pill active" data-severity="Medium">Medium</div>
+              <div class="severity-pill" data-severity="High">High</div>
+              <div class="severity-pill" data-severity="Critical">Critical</div>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Detailed Description</label>
+            <textarea id="bug-description" class="auth-input-field" rows="4" placeholder="Describe what happened and how to reproduce..." required></textarea>
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Upload Screenshots (Up to 3 files)</label>
+            <input type="file" id="bug-screenshots" accept="image/*" multiple style="margin-top: 6px;" />
+          </div>
+
+          <button type="submit" class="btn-auth-primary" style="margin-top: 10px; width: 100%;">SUBMIT BUG REPORT</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Script Imports -->
+    <script type="module" src="profile.js"></script>
+  </body>
+</html>

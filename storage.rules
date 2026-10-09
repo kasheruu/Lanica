@@ -23,8 +23,12 @@ service firebase.storage {
       allow write: if isSignedIn();
     }
 
-    // 3. User Profiles: Everyone can see avatar photos, authenticated users can upload
+    // 3. User Profiles & Profile Photos: Everyone can see avatar photos, authenticated users can upload
     match /user_profiles/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /profile_photos/{allPaths=**} {
       allow read: if true;
       allow write: if isSignedIn();
     }

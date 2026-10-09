@@ -92,7 +92,7 @@ export async function fetchProductById(productId) {
  */
 export function getAvailableStock(product, material) {
   if (!product) return 0;
-  const mat = (material || "").toLowerCase();
+  const mat = typeof material === "string" ? material.toLowerCase() : String(material || "").toLowerCase();
   if (mat === "fabric" && typeof product.FabricStocks === "number") {
     return product.FabricStocks;
   }
@@ -144,10 +144,36 @@ export async function addToCart(
     throw new Error("Invalid parameters for addToCart");
   }
 
-  const mat = material || "Fabric";
+  let mat = "Fabric";
+  let qty = 1;
+  let notes = "";
+  let addons = Array.isArray(selectedAddons) ? selectedAddons : [];
+  let customPrice = customUnitPrice;
+
+  if (typeof material === "number") {
+    qty = material;
+    mat = "Fabric";
+    if (typeof quantity === "string") {
+      notes = quantity;
+    } else if (typeof quantity === "object" && quantity !== null) {
+      notes = quantity.notes || quantity.customNotes || "";
+    }
+  } else if (typeof material === "string") {
+    mat = material;
+    qty = typeof quantity === "number" ? quantity : parseInt(quantity, 10) || 1;
+    if (typeof customNotes === "string") {
+      notes = customNotes;
+    } else if (typeof customNotes === "object" && customNotes !== null) {
+      notes = customNotes.notes || customNotes.customNotes || "";
+    }
+  } else {
+    mat = "Fabric";
+    qty = typeof quantity === "number" ? quantity : 1;
+  }
+
   const addonsKey =
-    Array.isArray(selectedAddons) && selectedAddons.length > 0
-      ? `_${selectedAddons.map((a) => a.name).sort().join("_")}`
+    addons.length > 0
+      ? `_${addons.map((a) => a.name).sort().join("_")}`
       : "";
   const itemId = `${product.id}_${mat}${addonsKey}`; // Unique per product variant and selected upgrades
   const itemRef = doc(db, "users", userId, "cart", itemId);
@@ -161,7 +187,7 @@ export async function addToCart(
   // Check existing cart item quantity if any
   const existingDoc = await getDoc(itemRef);
   const existingQty = existingDoc.exists() ? Number(existingDoc.data().quantity || 0) : 0;
-  const targetQty = existingQty + Number(quantity);
+  const targetQty = existingQty + Number(qty);
 
   // Determine availability mode:
   const allowsPreorder = prodToUse.allowPreorder !== false && prodToUse.isMadeToOrder !== false;
@@ -183,18 +209,18 @@ export async function addToCart(
     "assets/product_sofa.png";
 
   const basePrice = parsePrice(prodToUse.price || product.price);
-  const finalUnitPrice = customUnitPrice !== null ? parsePrice(customUnitPrice) : basePrice;
+  const finalUnitPrice = customPrice !== null ? parsePrice(customPrice) : basePrice;
 
   const cartPayload = {
     productId: prodToUse.id,
     name: prodToUse.name,
     price: finalUnitPrice,
     basePrice: basePrice,
-    selectedAddons: selectedAddons,
+    selectedAddons: addons,
     url: displayImage,
     quantity: targetQty,
     material: mat,
-    customNotes: String(customNotes || "").trim(),
+    customNotes: String(notes || "").trim(),
     orderType: isMadeToOrder ? "Made-to-Order" : "Ready-to-Ship",
     leadTime: leadTime,
     availableStockSnapshot: availableStock,
@@ -202,7 +228,7 @@ export async function addToCart(
   };
 
   await setDoc(itemRef, cartPayload, { merge: true });
-  return cartPayload;
+  return { success: true, ...cartPayload };
 }
 
 /**
@@ -390,11 +416,12 @@ export async function placeOrderAtomic({
       address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
 
     const pMethodLower = String(paymentMethod || "").toLowerCase();
-    let paymentType = "cod";
-    if (pMethodLower.includes("gcash")) paymentType = "gcash";
-    else if (pMethodLower.includes("card") || pMethodLower.includes("paymongo"))
-      paymentType = "card";
-    else if (pMethodLower.includes("bank")) paymentType = "bank";
+    let paymentType = "qr_code";
+    if (pMethodLower.includes("cash") || pMethodLower.includes("walk_in") || pMethodLower.includes("walk-in") || pMethodLower.includes("over-the-counter")) {
+      paymentType = "walk_in_cash";
+    } else {
+      paymentType = "qr_code";
+    }
 
     const customerName = address.recipientName || address.fullName || address.name || "";
     const customerEmail = address.email || "";
@@ -473,7 +500,18 @@ export async function placeOrderAtomic({
 }
 
 // --- Wishlist Service Functions ---
+export function clearLocalWishlist() {
+  try {
+    localStorage.removeItem("lanica_wishlist");
+  } catch (e) {
+    console.error("Failed to clear local wishlist:", e);
+  }
+}
+
 export function getLocalWishlist() {
+  if (typeof auth !== "undefined" && !auth?.currentUser) {
+    return [];
+  }
   try {
     const data = localStorage.getItem("lanica_wishlist");
     return data ? JSON.parse(data) : [];
@@ -484,37 +522,42 @@ export function getLocalWishlist() {
 
 export function saveLocalWishlist(list) {
   try {
-    localStorage.setItem("lanica_wishlist", JSON.stringify(list || []));
+    if (!list || list.length === 0) {
+      localStorage.removeItem("lanica_wishlist");
+    } else {
+      localStorage.setItem("lanica_wishlist", JSON.stringify(list));
+    }
   } catch (e) {
     console.error("Failed to save wishlist to localStorage:", e);
   }
 }
 
 export async function fetchWishlist(userId) {
-  const localList = getLocalWishlist();
-  if (!userId) return localList;
+  if (!userId) {
+    clearLocalWishlist();
+    return [];
+  }
 
   try {
     const userDocRef = doc(db, "users", userId);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
       const dbList = snap.data().wishlist || [];
-      const merged = Array.from(new Set([...localList, ...dbList]));
-      saveLocalWishlist(merged);
-      if (merged.length !== dbList.length) {
-        await setDoc(userDocRef, { wishlist: merged }, { merge: true });
-      }
-      return merged;
-    } else if (localList.length > 0) {
-      await setDoc(userDocRef, { wishlist: localList }, { merge: true });
+      saveLocalWishlist(dbList);
+      return dbList;
     }
   } catch (err) {
     console.error("Error fetching wishlist from Firestore:", err);
   }
-  return localList;
+  return getLocalWishlist();
 }
 
 export async function toggleWishlist(productId, userId) {
+  if (!userId) {
+    clearLocalWishlist();
+    return { wishlist: [], isFav: false, requireAuth: true };
+  }
+
   let list = getLocalWishlist();
   const targetId = String(productId && productId.id ? productId.id : productId);
   const index = list.findIndex((item) => String(item && item.id ? item.id : item) === targetId);
@@ -526,20 +569,158 @@ export async function toggleWishlist(productId, userId) {
   }
   saveLocalWishlist(list);
 
-  if (userId) {
-    try {
-      const userDocRef = doc(db, "users", userId);
-      await setDoc(userDocRef, { wishlist: list }, { merge: true });
-    } catch (err) {
-      console.error("Error persisting wishlist to Firestore:", err);
-    }
+  try {
+    const userDocRef = doc(db, "users", userId);
+    await setDoc(userDocRef, { wishlist: list }, { merge: true });
+  } catch (err) {
+    console.error("Error persisting wishlist to Firestore:", err);
   }
-  return { wishlist: list, isFav };
+  return { wishlist: list, isFav, requireAuth: false };
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export function isItemInWishlist(productId) {
   const list = getLocalWishlist();
   const targetId = String(productId && productId.id ? productId.id : productId);
   return list.some((item) => String(item && item.id ? item.id : item) === targetId);
+}
+
+/**
+ * Unified Cart Drawer UI Component Renderer
+ * Renders modern, polished cart cards with thumbnail, titles, tags, custom notes,
+ * quantity controls (- / + pill), red SVG trash icon remove button, subtotal, and checkout state.
+ */
+export function renderCartDrawerComponent({
+  items = [],
+  containerId = "cart-items-container",
+  badgeId = "cart-badge",
+  subtotalId = "cart-subtotal-display",
+  checkoutBtnId = "proceed-checkout-btn",
+  onUpdateQty = null,
+  onRemoveItem = null,
+}) {
+  const container = document.getElementById(containerId);
+  const badge = document.getElementById(badgeId);
+  const subtotalEl = document.getElementById(subtotalId);
+  const checkoutBtn = document.getElementById(checkoutBtnId);
+
+  const cartItems = Array.isArray(items) ? items : [];
+  const totalItemCount = cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+  if (badge) {
+    badge.textContent = totalItemCount;
+    badge.style.display = totalItemCount > 0 ? "flex" : "none";
+  }
+
+  if (!container) return;
+
+  if (cartItems.length === 0) {
+    container.innerHTML = `
+      <div class="cart-empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+        <p>Your shopping bag is empty.</p>
+      </div>
+    `;
+    if (subtotalEl) subtotalEl.textContent = "₱0";
+    if (checkoutBtn) checkoutBtn.disabled = true;
+    return;
+  }
+
+  let subtotal = 0;
+  container.innerHTML = "";
+
+  cartItems.forEach((item) => {
+    const itemPrice = parsePrice(item.price);
+    const qty = Number(item.quantity || 1);
+    const itemTotal = itemPrice * qty;
+    subtotal += itemTotal;
+
+    const imgUrl = item.url || item.imageUrl || item.image || "assets/product_sofa.png";
+    const isMTO = item.orderType === "Made-to-Order" || item.isMadeToOrder === true;
+
+    const itemCard = document.createElement("div");
+    itemCard.className = "cart-item-card";
+    itemCard.innerHTML = `
+      <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(item.name || "")}" class="cart-item-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+      <div class="cart-item-details">
+        <div class="cart-item-title">${escapeHtml(item.name || "")}</div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+          <span class="cart-item-material">${escapeHtml(item.material || "Fabric")}</span>
+          ${
+            isMTO
+              ? '<span style="font-size: 0.72rem; color: #2563eb; background: #eff6ff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Made-to-Order (14-21d)</span>'
+              : '<span style="font-size: 0.72rem; color: #059669; background: #ecfdf5; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Ready Stock</span>'
+          }
+        </div>
+        ${
+          item.customNotes
+            ? `<p style="font-size: 0.74rem; color: #64748b; margin: 3px 0 0 0; font-style: italic;">Custom: ${escapeHtml(item.customNotes)}</p>`
+            : ""
+        }
+        <div class="cart-item-price" style="margin-top: 4px;">₱${itemTotal.toLocaleString("en-US", { minimumFractionDigits: 0 })}</div>
+        <div class="quantity-control" style="margin-top: 8px;">
+          <button type="button" class="qty-btn cart-qty-minus" data-id="${item.id}">-</button>
+          <span class="qty-value">${qty}</span>
+          <button type="button" class="qty-btn cart-qty-plus" data-id="${item.id}">+</button>
+        </div>
+      </div>
+      <button class="cart-item-remove" data-id="${item.id}" aria-label="Remove item">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    `;
+
+    container.appendChild(itemCard);
+  });
+
+  if (subtotalEl) subtotalEl.textContent = `₱${subtotal.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+  if (checkoutBtn) checkoutBtn.disabled = false;
+
+  // Bind Event Listeners
+  if (onUpdateQty) {
+    container.querySelectorAll(".cart-qty-minus").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-id");
+        const item = cartItems.find((i) => String(i.id) === String(id));
+        if (item) {
+          onUpdateQty(id, Number(item.quantity || 1) - 1, item);
+        }
+      });
+    });
+
+    container.querySelectorAll(".cart-qty-plus").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-id");
+        const item = cartItems.find((i) => String(i.id) === String(id));
+        if (item) {
+          onUpdateQty(id, Number(item.quantity || 1) + 1, item);
+        }
+      });
+    });
+  }
+
+  if (onRemoveItem) {
+    container.querySelectorAll(".cart-item-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-id");
+        onRemoveItem(id);
+      });
+    });
+  }
 }
 

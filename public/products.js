@@ -8,17 +8,21 @@ import {
   updateDoc,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
-
 import {
   auth,
   db,
+  signUpUser,
+  signInUser,
+  signInWithGoogle,
+  sendPasswordReset,
+  validatePasswordStrength,
+} from "./authService.js";
+import { initAuthModalController } from "./authModalController.js";
+
+import {
   ensureAuth,
   subscribeToCart,
   addToCart,
@@ -30,12 +34,14 @@ import {
   getAvailableStock,
   parsePrice,
   fetchWishlist,
+  clearLocalWishlist,
   toggleWishlist,
   isItemInWishlist,
   getLocalWishlist,
+  renderCartDrawerComponent,
 } from "./cartService.js";
 
-import { getCachedModelUrl } from "./modelCacheService.js";
+import { getCachedModelUrl, attachModelToViewer, loadCachedModel } from "./modelCacheService.js";
 
 import {
   getCustomerOrders,
@@ -180,6 +186,7 @@ function getProductsContainer() {
 }
 
 async function initProductsApp() {
+  initAuthModalController();
   // 1. Navbar Scroll Effect & Mobile Drawer Menu
   const navbar = document.querySelector(".navbar");
   if (navbar) {
@@ -214,6 +221,10 @@ async function initProductsApp() {
       updateAuthUi(user);
       liveChatController?.initUserChat(user);
       fetchWishlist(user.uid).then((wl) => updateWishlistBadges(wl));
+    } else {
+      currentUser = null;
+      clearLocalWishlist();
+      updateWishlistBadges([]);
     }
   });
 
@@ -300,6 +311,74 @@ function setupCartSubscription(userId) {
   }
 }
 
+// Helper to format category labels nicely
+function formatCategoryLabel(catKey) {
+  const cat = String(catKey || "").toLowerCase().trim();
+  const labelMap = {
+    all: "All",
+    sofa: "Sofas",
+    sofas: "Sofas",
+    chair: "Chairs",
+    chairs: "Chairs",
+    table: "Tables & Sets",
+    tables: "Tables & Sets",
+    lamp: "Lamps",
+    lamps: "Lamps",
+    bed: "Beds",
+    beds: "Beds",
+    dining: "Dining",
+    storage: "Storage",
+    decor: "Decor & Lighting",
+    accent: "Accent Chairs",
+    outdoor: "Outdoor",
+  };
+  if (labelMap[cat]) return labelMap[cat];
+  return cat.charAt(0).toUpperCase() + cat.slice(1);
+}
+
+// Dynamically generate filter buttons for categories existing in database
+function renderDynamicCategories(productsList) {
+  const categoriesContainer = document.getElementById("catalog-categories") || document.querySelector(".catalog-categories");
+  if (!categoriesContainer) return;
+
+  const categoryCounts = {};
+  (productsList || []).forEach((product) => {
+    if (!product) return;
+    const cat = (product.category || "").trim().toLowerCase();
+    if (cat) {
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    }
+  });
+
+  const activeCategories = Object.keys(categoryCounts).filter((cat) => categoryCounts[cat] > 0);
+  activeCategories.sort();
+
+  if (activeCategory !== "all" && !activeCategories.includes(activeCategory.toLowerCase())) {
+    activeCategory = "all";
+  }
+
+  let categoriesHTML = `<button type="button" class="category-pill ${activeCategory === 'all' ? 'active' : ''}" data-category="all">All</button>`;
+
+  activeCategories.forEach((catKey) => {
+    const isSelected = activeCategory.toLowerCase() === catKey;
+    const label = formatCategoryLabel(catKey);
+    categoriesHTML += `<button type="button" class="category-pill ${isSelected ? 'active' : ''}" data-category="${escapeHtml(catKey)}">${escapeHtml(label)}</button>`;
+  });
+
+  categoriesContainer.innerHTML = categoriesHTML;
+
+  const categoryButtons = categoriesContainer.querySelectorAll(".category-pill");
+  categoryButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      categoryButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeCategory = btn.getAttribute("data-category") || "all";
+      catalogCurrentBatch = 1;
+      renderFilteredProducts();
+    });
+  });
+}
+
 // Fetch products from Firestore with Fallback Catalog
 async function fetchProductsList() {
   const container = getProductsContainer();
@@ -320,10 +399,12 @@ async function fetchProductsList() {
       allProductsList = getFallbackProductsList();
     }
 
+    renderDynamicCategories(allProductsList);
     renderFilteredProducts();
   } catch (error) {
     console.warn("Firestore fetch error, falling back to local product catalogue:", error);
     allProductsList = getFallbackProductsList();
+    renderDynamicCategories(allProductsList);
     renderFilteredProducts();
   }
 }
@@ -448,7 +529,7 @@ function initCardSlideshows(root = document) {
 }
 
 function updateWishlistBadges(wishlist) {
-  const list = wishlist || getLocalWishlist();
+  const list = (auth?.currentUser && wishlist) ? wishlist : (auth?.currentUser ? getLocalWishlist() : []);
   const count = list.length;
   const badge = document.getElementById("wishlist-badge");
   const pillCount = document.getElementById("wishlist-pill-count");
@@ -617,11 +698,10 @@ function renderFilteredProducts() {
   initAnimations();
 }
 
-// Bind search, category pills & sort dropdown
+// Bind search & sort dropdown
 function setupCatalogFilters() {
   const searchInput = document.getElementById("catalog-search-input");
   const sortSelect = document.getElementById("catalog-sort-select");
-  const categoryButtons = document.querySelectorAll(".category-pill");
 
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
@@ -638,16 +718,6 @@ function setupCatalogFilters() {
       renderFilteredProducts();
     });
   }
-
-  categoryButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      categoryButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      activeCategory = btn.getAttribute("data-category") || "all";
-      catalogCurrentBatch = 1;
-      renderFilteredProducts();
-    });
-  });
 }
 
 // Bind product card AR and tap target handlers
@@ -675,7 +745,19 @@ function bindProductCardButtons() {
       e.stopPropagation();
       const productId = btn.getAttribute("data-product-id");
       if (!productId) return;
-      const res = await toggleWishlist(productId, currentUser?.uid);
+      if (!currentUser) {
+        showToast("Please log in to save items to your wishlist", "error");
+        const modal = document.getElementById("auth-modal");
+        if (modal) modal.classList.add("active");
+        return;
+      }
+      const res = await toggleWishlist(productId, currentUser.uid);
+      if (res.requireAuth) {
+        showToast("Please log in to save items to your wishlist", "error");
+        const modal = document.getElementById("auth-modal");
+        if (modal) modal.classList.add("active");
+        return;
+      }
       btn.classList.toggle("active", res.isFav);
       updateWishlistBadges(res.wishlist);
       showToast(res.isFav ? "Saved to wishlist!" : "Removed from wishlist", "success");
@@ -970,113 +1052,24 @@ function updateVariantStockUI() {
 
 // Render Cart Drawer
 function renderCartDrawer(items) {
-  const container = document.getElementById("cart-items-container");
-  const badge = document.getElementById("cart-badge");
-  const subtotalEl = document.getElementById("cart-subtotal-display");
-  const checkoutBtn = document.getElementById("proceed-checkout-btn");
-
-  const totalItemCount = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-
-  if (badge) {
-    badge.textContent = totalItemCount;
-    badge.style.display = totalItemCount > 0 ? "flex" : "none";
-  }
-
-  let subtotal = 0;
-
-  if (!items || items.length === 0) {
-    container.innerHTML = `
-      <div class="cart-empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <path d="M16 10a4 4 0 0 1-8 0"></path>
-        </svg>
-        <p>Your shopping bag is empty.</p>
-      </div>
-    `;
-    if (subtotalEl) subtotalEl.textContent = "₱0";
-    if (checkoutBtn) checkoutBtn.disabled = true;
-    return;
-  }
-
-  container.innerHTML = "";
-
-  items.forEach((item) => {
-    const itemTotal = parsePrice(item.price) * Number(item.quantity);
-    subtotal += itemTotal;
-
-    const itemCard = document.createElement("div");
-    itemCard.className = "cart-item-card";
-    const isMTO = item.orderType === "Made-to-Order";
-    itemCard.innerHTML = `
-      <img src="${item.url}" alt="${escapeHtml(item.name)}" class="cart-item-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-      <div class="cart-item-details">
-        <div class="cart-item-title">${escapeHtml(item.name)}</div>
-        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
-          <span class="cart-item-material">${escapeHtml(item.material || "Fabric")}</span>
-          ${
-            isMTO
-              ? '<span style="font-size: 0.72rem; color: #2563eb; background: #eff6ff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Made-to-Order (14-21d)</span>'
-              : '<span style="font-size: 0.72rem; color: #059669; background: #ecfdf5; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Ready Stock</span>'
-          }
-        </div>
-        ${
-          item.customNotes
-            ? `<p style="font-size: 0.74rem; color: #64748b; margin: 3px 0 0 0; font-style: italic;">Custom: ${escapeHtml(item.customNotes)}</p>`
-            : ""
-        }
-        <div class="cart-item-price" style="margin-top: 4px;">₱${itemTotal.toLocaleString()}</div>
-        <div class="quantity-control" style="margin-top: 8px;">
-          <button type="button" class="qty-btn cart-qty-minus" data-id="${item.id}">-</button>
-          <span class="qty-value">${item.quantity}</span>
-          <button type="button" class="qty-btn cart-qty-plus" data-id="${item.id}">+</button>
-        </div>
-      </div>
-      <button class="cart-item-remove" data-id="${item.id}" aria-label="Remove item">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      </button>
-    `;
-
-    container.appendChild(itemCard);
-  });
-
-  if (subtotalEl) subtotalEl.textContent = `₱${subtotal.toLocaleString()}`;
-  if (checkoutBtn) checkoutBtn.disabled = false;
-
-  container.querySelectorAll(".cart-qty-minus").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      const item = currentCartItems.find((i) => i.id === id);
-      if (item) {
-        await updateCartItemQuantity(currentUser.uid, id, item.quantity - 1);
-      }
-    });
-  });
-
-  container.querySelectorAll(".cart-qty-plus").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      const item = currentCartItems.find((i) => i.id === id);
-      if (item) {
+  renderCartDrawerComponent({
+    items: items,
+    onUpdateQty: async (id, newQty) => {
+      if (newQty > 0) {
         try {
-          await updateCartItemQuantity(currentUser.uid, id, item.quantity + 1);
+          await updateCartItemQuantity(currentUser?.uid, id, newQty);
         } catch (err) {
           showToast(err.message, "error");
         }
+      } else {
+        await removeCartItem(currentUser?.uid, id);
+        showToast("Item removed from bag.");
       }
-    });
-  });
-
-  container.querySelectorAll(".cart-item-remove").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      await removeCartItem(currentUser.uid, id);
+    },
+    onRemoveItem: async (id) => {
+      await removeCartItem(currentUser?.uid, id);
       showToast("Item removed from bag.");
-    });
+    },
   });
 }
 
@@ -1470,9 +1463,8 @@ function setupStorefrontUI() {
   if (googleBtn) {
     googleBtn.addEventListener("click", async () => {
       try {
-        const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
-        showToast("Signed in with Google!");
+        const res = await signInWithGoogle();
+        showToast(res.message, "success");
         authModal?.classList.remove("active");
       } catch (err) {
         console.error("Google Auth error:", err);
@@ -1512,12 +1504,13 @@ function setupStorefrontUI() {
       const errEl = document.getElementById("cust-auth-error");
 
       try {
-        errEl.textContent = "";
-        await signInWithEmailAndPassword(auth, email, pwd);
-        showToast("Signed in successfully!");
-        authModal.classList.remove("active");
+        if (errEl) errEl.textContent = "";
+        const res = await signInUser({ email, password: pwd });
+        showToast(res.message, "success");
+        authModal?.classList.remove("active");
       } catch (err) {
-        errEl.textContent = err.message || "Failed to sign in.";
+        if (errEl) errEl.textContent = err.message || "Failed to sign in.";
+        showToast(err.message, "error");
       }
     });
   }
@@ -1527,15 +1520,18 @@ function setupStorefrontUI() {
       e.preventDefault();
       const email = document.getElementById("cust-reg-email").value;
       const pwd = document.getElementById("cust-reg-pwd").value;
+      const nameEl = document.getElementById("cust-reg-name");
+      const displayName = nameEl ? nameEl.value : "";
       const errEl = document.getElementById("cust-reg-error");
 
       try {
-        errEl.textContent = "";
-        await createUserWithEmailAndPassword(auth, email, pwd);
-        showToast("Account created successfully!");
-        authModal.classList.remove("active");
+        if (errEl) errEl.textContent = "";
+        const res = await signUpUser({ email, password: pwd, displayName });
+        showToast(res.message, "info");
+        authModal?.classList.remove("active");
       } catch (err) {
-        errEl.textContent = err.message || "Failed to create account.";
+        if (errEl) errEl.textContent = err.message || "Failed to create account.";
+        showToast(err.message, "error");
       }
     });
   }
@@ -1855,7 +1851,17 @@ async function show3DModelViewer(productName, productImage, productId, button, o
 
     if (modelUrl) {
       statusEl.textContent = "Loading 3D model...";
-      modelViewerEl.src = getGlbViewerUrl(modelUrl);
+      const targetViewerUrl = getGlbViewerUrl(modelUrl);
+      const usdzUrl = pData.usdzUrl || "";
+      await attachModelToViewer(modelViewerEl, targetViewerUrl, {
+        usdzUrl,
+        onProgress: (pct) => {
+          if (statusEl) {
+            statusEl.style.visibility = "visible";
+            statusEl.textContent = pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
+          }
+        }
+      });
       return;
     }
 
@@ -1877,7 +1883,14 @@ async function show3DModelViewer(productName, productImage, productId, button, o
         if (status === "SUCCEEDED" && data.model_urls && data.model_urls.glb) {
           const targetUrl = getGlbViewerUrl(data.model_urls.glb);
           statusEl.textContent = "Downloading and Opening 3D Model... 100%";
-          modelViewerEl.src = targetUrl;
+          await attachModelToViewer(modelViewerEl, targetUrl, {
+            onProgress: (pct) => {
+              if (statusEl) {
+                statusEl.style.visibility = "visible";
+                statusEl.textContent = pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
+              }
+            }
+          });
           setTimeout(() => {
             if (modelViewerEl.loaded) hideLoading();
           }, 400);

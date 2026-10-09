@@ -37,10 +37,10 @@
         <a href="products.html">Products</a>
         <a href="index.html#about">About us</a>
         <a href="index.html#ar-feature">Live View</a>
-        <a href="orders.html" class="nav-my-orders-link">My Orders</a>
+        <a href="orders.html" class="nav-my-orders-link" style="display: none;">My Orders</a>
       </nav>
       <div class="nav-actions">
-        <button id="nav-wishlist-btn" class="nav-icon-btn active" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'">
+        <button id="nav-wishlist-btn" class="nav-icon-btn active" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'" style="display: none;">
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" style="color: #ef4444;">
             <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
           </svg>
@@ -276,7 +276,7 @@
                 <div class="variant-label">
                   <span>Customization / Special Instructions (Optional)</span>
                 </div>
-                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: vertical; box-sizing: border-box; background: #FAFAFA;"></textarea>
+                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: none; box-sizing: border-box; background: #FAFAFA;"></textarea>
               </div>
 
             </div>
@@ -288,14 +288,14 @@
           <div class="pdp-footer-qty-wrap">
             <span style="font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase;">Qty</span>
             <div class="quantity-control">
-              <button id="pdp-qty-minus" class="qty-btn" type="button" aria-label="Decrease Quantity">-</button>
-              <input id="pdp-qty-input" type="number" value="1" min="1" max="99" class="qty-input" />
-              <button id="pdp-qty-plus" class="qty-btn" type="button" aria-label="Increase Quantity">+</button>
+              <button id="pv-qty-minus" class="qty-btn" type="button" aria-label="Decrease Quantity">-</button>
+              <span id="pv-qty-val" class="qty-value">1</span>
+              <button id="pv-qty-plus" class="qty-btn" type="button" aria-label="Increase Quantity">+</button>
             </div>
           </div>
-          <button id="pdp-add-cart-btn" class="btn-primary pdp-cta-btn">
+          <button id="pv-add-to-cart-btn" class="btn-primary pdp-cta-btn">
             <span id="pdp-add-cart-label">Add to Cart</span>
-            <span id="pdp-sticky-price" class="pdp-sticky-price-pill">₱0</span>
+            <span id="pv-total-price-display" class="pdp-cta-price">₱0</span>
           </button>
         </div>
       </div>
@@ -337,80 +337,475 @@
       </div>
     </div>
 
-    <!-- Auth Modal -->
-    <div id="auth-modal" class="modal-overlay">
-      <div class="modal-card auth-modal-card" style="max-width: 440px;">
+    <!-- Checkout Modal -->
+    <div id="checkout-modal" class="modal-overlay">
+      <div class="modal-card checkout-modal-card">
         <div class="modal-header">
-          <h3>Customer Portal</h3>
-          <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal">
+          <h3>Complete Your Order</h3>
+          <button id="close-checkout-modal-btn" class="modal-close-btn" aria-label="Close Modal">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
           </button>
         </div>
-        <div class="modal-body" style="padding: 24px;">
-          <!-- Auth Form Tabs / Form logic managed by JS -->
-          <div id="auth-signed-out-view">
-            <div class="auth-tabs" style="display: flex; border-bottom: 2px solid #f3f4f6; margin-bottom: 20px;">
-              <button id="tab-login-btn" class="auth-tab-btn active" style="flex: 1; padding: 10px; font-weight: 600; border: none; background: none; cursor: pointer; border-bottom: 2px solid #111827; margin-bottom: -2px;">Sign In</button>
-              <button id="tab-register-btn" class="auth-tab-btn" style="flex: 1; padding: 10px; font-weight: 600; border: none; background: none; cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;">Register</button>
+        <div class="modal-body">
+          <!-- Step 1: Shipping Address -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              Shipping Address
             </div>
 
-            <!-- Sign In Form -->
-            <form id="auth-login-form">
-              <div class="form-group" style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Email Address</label>
-                <input type="email" id="login-email" required placeholder="you@example.com" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
-              </div>
-              <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Password</label>
-                <input type="password" id="login-password" required placeholder="••••••••" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
-              </div>
-              <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; border-radius: 10px; font-weight: 600;">Sign In</button>
-            </form>
+            <div id="saved-addresses-list" class="address-list">
+              <!-- Dynamically populated -->
+            </div>
 
-            <!-- Register Form -->
-            <form id="auth-register-form" style="display: none;">
-              <div class="form-group" style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Full Name</label>
-                <input type="text" id="reg-name" required placeholder="Juan Dela Cruz" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
-              </div>
-              <div class="form-group" style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Email Address</label>
-                <input type="email" id="reg-email" required placeholder="you@example.com" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
-              </div>
-              <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Password</label>
-                <input type="password" id="reg-password" required placeholder="At least 6 characters" minlength="6" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
-              </div>
-              <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; border-radius: 10px; font-weight: 600;">Create Account</button>
-            </form>
+            <button type="button" id="toggle-new-address-btn" class="btn-add-address">
+              + Add New Delivery Address
+            </button>
 
-            <div style="margin-top: 20px; text-align: center;">
-              <div style="position: relative; margin: 16px 0;">
-                <hr style="border: none; border-top: 1px solid #f3f4f6;" />
-                <span style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #fff; padding: 0 10px; font-size: 0.75rem; color: #9ca3af;">OR</span>
+            <form id="address-form" class="address-form-box" style="display: none;">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="addr-name">Recipient Name</label>
+                  <input type="text" id="addr-name" placeholder="Full Name" required />
+                </div>
+                <div class="form-group">
+                  <label for="addr-phone">Phone Number</label>
+                  <input type="tel" id="addr-phone" placeholder="0917XXXXXXX" required />
+                </div>
+                <div class="form-group full-width">
+                  <label for="addr-full">Full Delivery Address</label>
+                  <input type="text" id="addr-full" placeholder="House/Unit #, Street, Brgy, City, Province" required />
+                </div>
+                <div class="form-group">
+                  <label for="addr-lat">Latitude (Optional)</label>
+                  <input type="number" step="any" id="addr-lat" placeholder="14.195" />
+                </div>
+                <div class="form-group">
+                  <label for="addr-lng">Longitude (Optional)</label>
+                  <input type="number" step="any" id="addr-lng" placeholder="121.332" />
+                </div>
               </div>
-              <button id="google-signin-btn" type="button" class="btn-secondary" style="width: 100%; padding: 10px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px solid #e5e7eb;">
-                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
-                Continue with Google
-              </button>
+              <button type="submit" class="btn-primary" style="margin-top: 14px; width: 100%;">Save Address</button>
+            </form>
+          </div>
+
+          <!-- Step 1.5: Nearest Landmark / Delivery Instructions -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+              </svg>
+              Nearest Landmark / Delivery Instructions
+            </div>
+            <div class="landmark-input-wrapper" style="margin-top: 8px;">
+              <input
+                type="text"
+                id="checkout-nearest-landmark"
+                class="checkout-landmark-input"
+                placeholder="e.g., Beside Shell Gas Station, White Gate, Near..."
+              />
             </div>
           </div>
 
-          <!-- Signed In Profile View -->
-          <div id="auth-signed-in-view" style="display: none; text-align: center;">
-            <div style="width: 64px; height: 64px; border-radius: 50%; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 1.5rem; font-weight: 700;">
-              <span id="user-avatar-initial">U</span>
+          <!-- Step 2: Payment Method -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                <line x1="1" y1="10" x2="23" y2="10"></line>
+              </svg>
+              Payment Method
             </div>
-            <h3 id="user-display-name" style="margin-bottom: 4px; font-size: 1.15rem; color: #111827;">User Name</h3>
-            <p id="user-display-email" style="color: #6b7280; font-size: 0.9rem; margin-bottom: 24px;">user@example.com</p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <a href="orders.html" class="btn-primary" style="text-decoration: none; padding: 12px; border-radius: 10px; font-weight: 600;">View My Orders</a>
-              <button id="signout-btn" type="button" class="btn-secondary" style="padding: 12px; border-radius: 10px; font-weight: 600; color: #ef4444; border-color: #fee2e2;">Sign Out</button>
+            <div class="payment-methods-grid">
+              <div class="payment-card selected" data-method="qr_code">
+                <div class="payment-card-left">
+                  <div class="payment-card-icon">📱</div>
+                  <div class="payment-card-text">
+                    <h5>Online Payment (QR)</h5>
+                    <p>Pay 30% downpayment or 100% full via GCash / Maya / Bank QR</p>
+                  </div>
+                </div>
+                <div class="payment-card-check">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
+                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
+                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                  </svg>
+                </div>
+              </div>
+
+              <div class="payment-card" data-method="walk_in_cash">
+                <div class="payment-card-left">
+                  <div class="payment-card-icon">🏪</div>
+                  <div class="payment-card-text">
+                    <h5>Walk-in (Cash)</h5>
+                    <p>Over-the-counter cash settlement at Lanica Showroom</p>
+                  </div>
+                </div>
+                <div class="payment-card-check">
+                  <svg viewBox="0 0 24 24" width="20" height="20">
+                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
+                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Proof of Payment Upload box for Non-COD -->
+            <div id="proof-payment-box" style="display: none; margin-top: 14px; background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 12px;">
+              <label style="display: block; font-weight: 500; font-size: 0.85rem; margin-bottom: 6px;">
+                Upload Proof of Payment / Transaction Slip (Optional):
+              </label>
+              <input type="file" id="checkout-payment-slip" accept="image/*" style="font-size: 0.85rem;" />
+              <small style="display: block; color: #6b7280; margin-top: 4px; font-size: 0.78rem;">
+                Official receipt / screenshot can also be sent directly in our Live Chat.
+              </small>
             </div>
           </div>
+
+          <!-- Step 3: Select Payment Terms -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              SELECT PAYMENT TERMS
+            </div>
+            <div class="payment-terms-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+              <label class="payment-term-card" id="term-full-card" style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
+                <input type="radio" name="checkoutPaymentTerm" value="full" style="accent-color: #000; margin-bottom: 6px;">
+                <strong style="font-size: 0.85rem; text-transform: uppercase;">FULL PAYMENT (100%)</strong>
+                <span id="term-full-amount" style="font-weight: 800; font-size: 1rem; color: #111827; margin-top: 4px;">₱0</span>
+              </label>
+              <label class="payment-term-card selected" id="term-downpayment-card" style="border: 2px solid var(--clr-yellow, #fcd535); border-radius: 10px; padding: 12px; cursor: pointer; display: flex; flex-direction: column; background: #fff;">
+                <input type="radio" name="checkoutPaymentTerm" value="downpayment" checked style="accent-color: #000; margin-bottom: 6px;">
+                <strong style="font-size: 0.85rem; text-transform: uppercase;">30% DOWNPAYMENT</strong>
+                <span id="term-down-amount" style="font-weight: 800; font-size: 1rem; color: #059669; margin-top: 4px;">₱0</span>
+              </label>
+            </div>
+            <div style="background: #fffdf0; border: 1px solid #fef08a; border-radius: 10px; padding: 10px 14px; margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.88rem;">
+                <span id="term-summary-due-label" style="font-weight: 600; color: #111827;">Due Today (30% Downpayment):</span>
+                <strong id="checkout-due-today" style="color: #059669; font-size: 0.95rem;">₱0</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-top: 4px;">
+                <span style="color: #4b5563;">Balance Due at Delivery:</span>
+                <strong id="checkout-balance-due" style="color: #d97706;">₱0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3.5: Custom Design & Notes -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              CUSTOM DESIGN & NOTES
+            </div>
+            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #d97706; text-transform: uppercase; margin-bottom: 4px;">
+                  ATTACH AR SCREENSHOTS OR SKETCHES
+                </label>
+                <input type="file" id="checkout-custom-sketch" accept="image/*" style="font-size: 0.85rem; width: 100%; border: 1px dashed #fcd535; border-radius: 8px; padding: 10px; background: #fffbeb;" />
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #d97706; text-transform: uppercase; margin-bottom: 4px;">
+                  DESIGN REQUEST / COMMENTS
+                </label>
+                <textarea id="checkout-custom-comments" rows="3" placeholder="e.g. 'I want the sofa in blue velvet' or 'Please use leather'..." style="width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; font-size: 0.85rem; font-family: inherit; box-sizing: border-box;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Order Items List -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">
+              ORDER ITEMS (<span id="checkout-item-count">0</span>)
+            </div>
+            <div id="checkout-items-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;"></div>
+          </div>
+
+          <!-- Step 5: Order Summary -->
+          <div class="checkout-section">
+            <div class="checkout-section-title">ORDER SUMMARY</div>
+            <div class="checkout-summary-box">
+              <div class="summary-line">
+                <span>Total Product Value</span>
+                <span id="checkout-subtotal">₱0</span>
+              </div>
+              <div class="summary-line">
+                <span>Shipping Fee</span>
+                <span id="checkout-shipping">FREE</span>
+              </div>
+              <div class="summary-line total" id="checkout-downpayment-row" style="color: #059669; font-weight: 700; border-top: 1px dashed #e5e7eb; padding-top: 8px; margin-top: 8px;">
+                <span id="checkout-charge-label">Today's Charge (30% Downpayment)</span>
+                <span id="checkout-charge-amount">₱0</span>
+              </div>
+              <div class="summary-line" id="checkout-balance-row" style="color: #6b7280; font-size: 0.85rem; margin-top: 4px;">
+                <span>Remaining Balance Due at Delivery</span>
+                <span id="checkout-balance-due-summary">₱0</span>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" id="place-order-submit-btn" class="btn-primary" style="width: 100%; font-size: 1rem; padding: 16px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+            PLACE ORDER & PAY ₱0
+          </button>
+          <button type="button" id="cancel-checkout-modal-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; padding: 12px; font-size: 0.92rem; font-weight: 600;">
+            Cancel & Return to Cart
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unauthenticated Sign-In Prompt Modal -->
+    <div id="auth-prompt-modal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 440px; text-align: center;">
+        <div class="modal-header" style="justify-content: flex-end; border-bottom: none; padding-bottom: 0;">
+          <button id="close-auth-prompt-btn" class="modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding-top: 0;">
+          <div class="auth-prompt-icon" style="width: 64px; height: 64px; background: rgba(252, 213, 53, 0.15); color: var(--clr-black); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+          </div>
+          <h3 style="font-size: 1.4rem; margin-bottom: 10px; font-weight: 600;">Sign in to Continue</h3>
+          <p style="color: var(--clr-text-muted); font-size: 0.95rem; margin-bottom: 24px; line-height: 1.6;">
+            Please sign in to your account to add items to your shopping bag and proceed to checkout.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button id="prompt-signin-btn" class="btn-primary" style="width: 100%;">Sign In / Register</button>
+            <button id="prompt-continue-btn" class="btn-secondary" style="width: 100%;">Continue Browsing</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customer Auth Modal (Mobile-App Matched) -->
+    <div id="auth-modal" class="modal-overlay">
+      <div class="modal-card auth-modal-card">
+        <!-- Close Button -->
+        <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal" style="position: absolute; top: 18px; right: 18px; z-index: 10;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+
+        <!-- Signed In View -->
+        <div id="customer-signed-in-view" style="display: none; padding: 28px; text-align: center;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #FEF3C7; color: #D97706; font-size: 1.4rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;" id="cust-avatar-initial">U</div>
+          <h3 id="cust-signedin-name" style="margin: 0 0 4px 0; font-size: 1.2rem; color: #111827;">Customer Account</h3>
+          <p id="cust-signedin-email" style="color: #6B7280; font-size: 0.88rem; margin: 0 0 20px 0;"></p>
+          
+          <a href="profile.html" class="btn-auth-primary" style="text-decoration: none; margin-bottom: 10px; background: #FFD700; color: #111827;">PROFILE & ACCOUNT HUB</a>
+          <a href="orders.html" class="btn-auth-primary" style="text-decoration: none; margin-bottom: 10px;">MY ORDERS & TRACKING</a>
+          <button type="button" id="customer-signout-btn" class="btn-auth-google" style="margin-top: 6px;">SIGN OUT</button>
+        </div>
+
+        <!-- Signed Out View -->
+        <div id="customer-signed-out-view" style="padding: 24px; max-height: 85vh; overflow-y: auto;">
+          
+          <!-- WELCOME BACK (LOGIN) VIEW -->
+          <div id="auth-login-view">
+            <div class="auth-modal-header">
+              <div>
+                <h3 class="auth-modal-title">WELCOME BACK</h3>
+                <p class="auth-modal-subtitle">Sign in to access your wishlist, orders, and custom specs</p>
+              </div>
+            </div>
+
+            <form id="customer-login-form">
+              <div class="auth-input-group">
+                <label for="login-email">Email Address</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                  <input type="email" id="login-email" class="auth-input-field" required placeholder="yourname@example.com" autocomplete="email" />
+                </div>
+              </div>
+
+              <div class="auth-input-group" style="margin-bottom: 8px;">
+                <label for="login-password">Password</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <input type="password" id="login-password" class="auth-input-field" required placeholder="••••••••" autocomplete="current-password" />
+                  <button type="button" class="eye-toggle-btn" data-target="login-password" aria-label="Toggle Password Visibility">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div style="text-align: right; margin-bottom: 16px;">
+                <a href="#" id="auth-forgot-password-link" class="auth-forgot-link">Forgot Password?</a>
+              </div>
+
+              <div id="login-error-banner" style="display: none; color: #DC2626; background: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 14px;"></div>
+
+              <button type="submit" class="btn-auth-primary">LOGIN</button>
+            </form>
+
+            <div class="auth-divider-container">
+              <span class="auth-divider-badge">OR</span>
+            </div>
+
+            <button type="button" class="google-signin-btn btn-auth-google">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.32 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.42l4.02-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>CONTINUE WITH GOOGLE</span>
+            </button>
+
+            <div class="auth-footer-switcher">
+              New to Lanica? <button type="button" id="switch-to-signup-btn">SIGN UP</button>
+            </div>
+          </div>
+
+          <!-- CREATE ACCOUNT (REGISTER) VIEW -->
+          <div id="auth-register-view" style="display: none;">
+            <div class="auth-modal-header">
+              <div>
+                <h3 class="auth-modal-title">CREATE ACCOUNT</h3>
+                <p class="auth-modal-subtitle">Register to customize furniture and place orders</p>
+              </div>
+            </div>
+
+            <form id="customer-register-form">
+              <div class="auth-input-group">
+                <label for="reg-name">Full Name</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <input type="text" id="reg-name" class="auth-input-field" required placeholder="Juan Dela Cruz" autocomplete="name" />
+                </div>
+              </div>
+
+              <div class="auth-input-group">
+                <label for="reg-email">Email Address</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                  <input type="email" id="reg-email" class="auth-input-field" required placeholder="yourname@example.com" autocomplete="email" />
+                </div>
+              </div>
+
+              <div class="auth-input-group" style="margin-bottom: 6px;">
+                <label for="reg-password">Password</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <input type="password" id="reg-password" class="auth-input-field" required placeholder="••••••••" autocomplete="new-password" />
+                  <button type="button" class="eye-toggle-btn" data-target="reg-password" aria-label="Toggle Password Visibility">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interactive Password Strength Widget -->
+              <div id="password-strength-container" class="password-strength-widget">
+                <div id="strength-warning-banner" class="strength-banner-alert" style="display: none;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  <span>Weak password! Medium or Strong password is required.</span>
+                </div>
+
+                <div class="strength-header-bar">
+                  <span class="strength-header-title">PASSWORD STRENGTH</span>
+                  <span id="strength-status-label" class="strength-status-badge weak">WEAK PASSWORD</span>
+                </div>
+
+                <div class="strength-progress-track">
+                  <div id="strength-progress-bar" class="strength-progress-fill weak"></div>
+                </div>
+
+                <div class="strength-rules-list">
+                  <div id="rule-length" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>8+ characters</span>
+                  </div>
+                  <div id="rule-uppercase" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>1 uppercase (A-Z)</span>
+                  </div>
+                  <div id="rule-number" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>1 number (0-9)</span>
+                  </div>
+                  <div id="rule-special" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>1 special (!@#$)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="auth-input-group">
+                <label for="reg-confirm-password">Confirm Password</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <input type="password" id="reg-confirm-password" class="auth-input-field" required placeholder="••••••••" autocomplete="new-password" />
+                  <button type="button" class="eye-toggle-btn" data-target="reg-confirm-password" aria-label="Toggle Password Visibility">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div id="register-error-banner" style="display: none; color: #DC2626; background: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 14px;"></div>
+
+              <button type="submit" id="btn-submit-register" class="btn-auth-primary">REGISTER</button>
+            </form>
+
+            <div class="auth-divider-container">
+              <span class="auth-divider-badge">OR</span>
+            </div>
+
+            <button type="button" class="google-signin-btn btn-auth-google">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.32 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.42l4.02-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>CONTINUE WITH GOOGLE</span>
+            </button>
+
+            <div class="auth-footer-switcher">
+              Already have an account? <button type="button" id="switch-to-login-btn">LOG IN</button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

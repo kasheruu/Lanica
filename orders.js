@@ -1,18 +1,24 @@
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
-
 import {
   auth,
+  signUpUser,
+  signInUser,
+  signInWithGoogle,
+  sendPasswordReset,
+  validatePasswordStrength,
+} from "./authService.js";
+import { initAuthModalController } from "./authModalController.js";
+
+import {
   subscribeToUserOrders,
   cancelOrderAtomic,
   normalizeOrderStatus,
   getOrderCanonicalStatus,
+  classifyOrderScope,
+  isOrderFullyResolved,
   getRiderName,
   isOrderCancellable,
   getTrackingStepIndex,
@@ -20,7 +26,7 @@ import {
   formatOrderDate,
 } from "./orderService.js";
 
-import { ensureAuth, subscribeToCart, parsePrice } from "./cartService.js";
+import { ensureAuth, subscribeToCart, parsePrice, updateCartItemQuantity, removeCartItem, renderCartDrawerComponent } from "./cartService.js";
 import {
   sendChatMessage,
   subscribeToMessages,
@@ -118,6 +124,7 @@ function showToast(message, type = "success") {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  initAuthModalController();
   // 1. Navbar Scroll Effect
   const navbar = document.querySelector(".navbar");
   if (navbar) {
@@ -231,9 +238,8 @@ function setupHeaderAndAuthUI() {
   if (googleBtn) {
     googleBtn.addEventListener("click", async () => {
       try {
-        const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
-        showToast("Signed in with Google!");
+        const res = await signInWithGoogle();
+        showToast(res.message, "success");
         authModal?.classList.remove("active");
       } catch (err) {
         console.error("Google Auth error:", err);
@@ -269,11 +275,12 @@ function setupHeaderAndAuthUI() {
 
       try {
         if (errEl) errEl.textContent = "";
-        await signInWithEmailAndPassword(auth, email, pwd);
-        showToast("Signed in successfully!");
+        const res = await signInUser({ email, password: pwd });
+        showToast(res.message, "success");
         authModal?.classList.remove("active");
       } catch (err) {
         if (errEl) errEl.textContent = err.message || "Failed to sign in.";
+        showToast(err.message, "error");
       }
     });
   }
@@ -284,15 +291,18 @@ function setupHeaderAndAuthUI() {
       e.preventDefault();
       const email = document.getElementById("cust-reg-email").value;
       const pwd = document.getElementById("cust-reg-pwd").value;
+      const nameEl = document.getElementById("cust-reg-name");
+      const displayName = nameEl ? nameEl.value : "";
       const errEl = document.getElementById("cust-reg-error");
 
       try {
         if (errEl) errEl.textContent = "";
-        await createUserWithEmailAndPassword(auth, email, pwd);
-        showToast("Account created successfully!");
+        const res = await signUpUser({ email, password: pwd, displayName });
+        showToast(res.message, "info");
         authModal?.classList.remove("active");
       } catch (err) {
         if (errEl) errEl.textContent = err.message || "Failed to create account.";
+        showToast(err.message, "error");
       }
     });
   }
@@ -326,55 +336,19 @@ function setupCartSubscription(userId) {
 }
 
 function renderCartDrawerUI(items) {
-  const badge = document.getElementById("cart-badge");
-  const container = document.getElementById("cart-items-container");
-
-  const count = items.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
-
-  if (badge) {
-    badge.textContent = count;
-    badge.style.display = count > 0 ? "flex" : "none";
-  }
-
-  if (!container) return;
-
-  if (items.length === 0) {
-    container.innerHTML = `
-      <div class="cart-empty-state" style="text-align: center; padding: 40px 20px;">
-        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--clr-text-muted); margin-bottom: 12px;">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <path d="M16 10a4 4 0 0 1-8 0"></path>
-        </svg>
-        <p style="color: var(--clr-text-muted); font-size: 0.95rem; margin-bottom: 16px;">Your shopping bag is empty.</p>
-        <a href="index.html#collections" class="btn-primary" style="display: inline-block; font-size: 0.9rem; padding: 10px 20px;">
-          Browse Catalog
-        </a>
-      </div>
-    `;
-    return;
-  }
-
-  let html = `<div style="display: flex; flex-direction: column; gap: 14px;">`;
-  items.forEach((item) => {
-    html += `
-      <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--clr-gray-light); border-radius: 12px;">
-        <img src="${item.url || 'assets/product_sofa.png'}" alt="${item.name}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-        <div style="flex: 1;">
-          <div style="font-weight: 600; font-size: 0.9rem; color: var(--clr-black);">${item.name}</div>
-          <div style="font-size: 0.78rem; color: var(--clr-text-muted);">${item.material || 'Fabric'} x ${item.quantity}</div>
-        </div>
-        <div style="font-weight: 700; font-size: 0.95rem; color: var(--clr-black);">₱${(parsePrice(item.price) * Number(item.quantity)).toLocaleString()}</div>
-      </div>
-    `;
+  renderCartDrawerComponent({
+    items: items,
+    onUpdateQty: async (id, newQty) => {
+      if (newQty > 0) {
+        await updateCartItemQuantity(currentUser?.uid, id, newQty);
+      } else {
+        await removeCartItem(currentUser?.uid, id);
+      }
+    },
+    onRemoveItem: async (id) => {
+      await removeCartItem(currentUser?.uid, id);
+    },
   });
-  html += `
-    <a href="index.html#collections" class="btn-primary" style="display: block; text-align: center; text-decoration: none; margin-top: 16px;">
-      Browse Furniture Catalog
-    </a>
-  </div>`;
-
-  container.innerHTML = html;
 }
 
 let currentSubscribedUserId = null;
@@ -400,22 +374,22 @@ function setupOrdersSubscription(userId) {
 }
 
 function updateTabBadges(orders) {
+  const activeOrders = (orders || []).filter((o) => classifyOrderScope(o) === "active");
   const counts = {
-    all: orders.length,
+    all: activeOrders.length,
     placed: 0,
     inProduction: 0,
     shipped: 0,
     delivered: 0,
-    cancelled: 0,
+    cancelled: (orders || []).filter((o) => classifyOrderScope(o) === "history").length,
   };
 
-  orders.forEach((o) => {
+  activeOrders.forEach((o) => {
     const st = getOrderCanonicalStatus(o);
     if (st === "Placed" || st === "Downpayment Confirmed") counts.placed++;
     else if (st === "In Production" || st === "Quality Checked") counts.inProduction++;
     else if (st === "Shipped") counts.shipped++;
     else if (st === "Delivered") counts.delivered++;
-    else if (st === "Cancelled") counts.cancelled++;
   });
 
   if (document.getElementById("badge-all")) document.getElementById("badge-all").textContent = counts.all;
@@ -475,7 +449,9 @@ function renderCustomerTransactionsList(orders) {
   const container = document.getElementById("transactions-list-container");
   if (!container) return;
 
-  if (!orders || orders.length === 0) {
+  const historyOrders = (orders || []).filter((o) => classifyOrderScope(o) === "history");
+
+  if (!historyOrders || historyOrders.length === 0) {
     container.innerHTML = `
       <div class="orders-empty-state">
         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -489,13 +465,13 @@ function renderCustomerTransactionsList(orders) {
     return;
   }
 
-  const totalItems = orders.length;
+  const totalItems = historyOrders.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / transPerPage));
   if (transCurrentPage > totalPages) transCurrentPage = totalPages;
   if (transCurrentPage < 1) transCurrentPage = 1;
 
   const startIndex = (transCurrentPage - 1) * transPerPage;
-  const pagedOrders = orders.slice(startIndex, startIndex + transPerPage);
+  const pagedOrders = historyOrders.slice(startIndex, startIndex + transPerPage);
 
   container.innerHTML = "";
 
@@ -655,7 +631,8 @@ function renderOrdersList() {
   const container = document.getElementById("orders-list-container");
   if (!container) return;
 
-  const tabFiltered = filterOrdersByTab(allOrders, activeTabStatus);
+  const activeOrders = (allOrders || []).filter((o) => classifyOrderScope(o) === "active");
+  const tabFiltered = filterOrdersByTab(activeOrders, activeTabStatus);
   const filteredOrders = tabFiltered.filter((o) => matchesOrderSearch(o, orderSearchQuery));
 
   if (filteredOrders.length === 0) {

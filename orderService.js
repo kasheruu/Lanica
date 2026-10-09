@@ -139,6 +139,88 @@ export function isOrderCancellable(status) {
 }
 
 /**
+ * Categorizes an order record into active "Order Page" scope vs terminal "Transaction History" scope.
+ * 
+ * Rules:
+ * 1. "Order Page" Scope (Active / On-Process):
+ *    - Orders currently in progress: "Placed", "Downpayment Confirmed", "In Production", "Quality Checked", "Shipped".
+ *    - Orders marked "Delivered" where remaining balance is STILL PENDING (> 0).
+ *    - Orders with active "Request Refund" pending admin review.
+ * 
+ * 2. "Transaction History" Scope (Terminal / Resolved):
+ *    - Orders marked "Delivered" AND remaining balance is completely SETTLED (<= 0).
+ *    - "Refund Complete" / "refunded" orders.
+ *    - "Cancelled" orders.
+ *    - "Declined" orders.
+ * 
+ * @param {Object} order 
+ * @returns {"active" | "history"}
+ */
+export function classifyOrderScope(order) {
+  if (!order) return "history";
+
+  const status = getOrderCanonicalStatus(order);
+  const rawStatus = String(order.status || "").trim().toLowerCase();
+  const rawOrderStatus = String(order.orderStatus || "").trim().toLowerCase();
+
+  const remainingBalance = Number(order.remainingBalance ?? order.balanceDue ?? 0);
+  const balanceStatus = String(order.balanceStatus || "").trim().toLowerCase();
+  const isBalanceSettled = balanceStatus === "settled" || order.isBalanceSettled === true || remainingBalance <= 0;
+
+  const refundStatus = String(order.refundStatus || "").trim().toLowerCase();
+  const isRefundCompleted =
+    refundStatus === "completed" ||
+    refundStatus === "approved" ||
+    status === "Refund Complete" ||
+    status === "Refunded" ||
+    rawStatus === "refunded" ||
+    rawStatus === "refund complete";
+
+  // 1. Terminal / Completed Statuses strictly belong to Transaction History:
+  // - Cancelled
+  // - Declined
+  // - Refund Complete
+  if (
+    status === "Cancelled" ||
+    status === "Declined" ||
+    rawStatus === "cancelled" ||
+    rawStatus === "canceled" ||
+    rawStatus === "declined" ||
+    rawOrderStatus === "cancelled" ||
+    rawOrderStatus === "canceled" ||
+    rawOrderStatus === "declined" ||
+    isRefundCompleted
+  ) {
+    return "history";
+  }
+
+  // 2. Delivered or Completed Orders:
+  // - If remaining balance is settled (<= 0 or balanceStatus === "settled"), move to History.
+  // - If remaining balance is STILL PENDING (> 0), keep on Active Order Page.
+  if (
+    status === "Delivered" ||
+    rawStatus === "completed" ||
+    rawStatus === "delivered" ||
+    rawOrderStatus === "delivered" ||
+    rawOrderStatus === "completed"
+  ) {
+    if (isBalanceSettled || remainingBalance <= 0) {
+      return "history";
+    }
+  }
+
+  // 3. Active / On-Process Orders (Placed, Downpayment Confirmed, In Production, Quality Checked, Shipped, or pending refund review)
+  return "active";
+}
+
+/**
+ * Checks whether an order is fully resolved/completed for financial ledger tracking.
+ */
+export function isOrderFullyResolved(order) {
+  return classifyOrderScope(order) === "history";
+}
+
+/**
  * Returns tracking step index matching the 6-Stage Made-to-Order Stepper:
  * 0: PLACED
  * 1: DOWNPAYMENT CONFIRMED

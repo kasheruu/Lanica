@@ -36,10 +36,10 @@
         <a href="products.html">Products</a>
         <a href="#about">About us</a>
         <a href="#ar-feature">Live View</a>
-        <a href="orders.html" class="nav-my-orders-link">My Orders</a>
+        <a href="orders.html" class="nav-my-orders-link" style="display: none;">My Orders</a>
       </nav>
       <div class="nav-actions">
-        <button id="nav-wishlist-btn" class="nav-icon-btn" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'">
+        <button id="nav-wishlist-btn" class="nav-icon-btn" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'" style="display: none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
           </svg>
@@ -523,7 +523,7 @@
                 <div class="variant-label">
                   <span>Customization / Special Instructions (Optional)</span>
                 </div>
-                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: vertical; box-sizing: border-box; background: #FAFAFA;"></textarea>
+                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: none; box-sizing: border-box; background: #FAFAFA;"></textarea>
               </div>
 
             </div>
@@ -634,12 +634,12 @@
               Payment Method
             </div>
             <div class="payment-methods-grid">
-              <div class="payment-card selected" data-method="GCash">
+              <div class="payment-card selected" data-method="qr_code">
                 <div class="payment-card-left">
                   <div class="payment-card-icon">📱</div>
                   <div class="payment-card-text">
-                    <h5>GCash / E-Wallet</h5>
-                    <p>Pay 30% downpayment or 100% full via PayMongo</p>
+                    <h5>Online Payment (QR)</h5>
+                    <p>Pay 30% downpayment or 100% full via GCash / Maya / Bank QR</p>
                   </div>
                 </div>
                 <div class="payment-card-check">
@@ -650,44 +650,12 @@
                 </div>
               </div>
 
-              <div class="payment-card" data-method="Bank Transfer">
-                <div class="payment-card-left">
-                  <div class="payment-card-icon">🏦</div>
-                  <div class="payment-card-text">
-                    <h5>Bank Transfer</h5>
-                    <p>Direct online banking or QR bank transfer</p>
-                  </div>
-                </div>
-                <div class="payment-card-check">
-                  <svg viewBox="0 0 24 24" width="20" height="20">
-                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
-                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                  </svg>
-                </div>
-              </div>
-
-              <div class="payment-card" data-method="Workshop">
+              <div class="payment-card" data-method="walk_in_cash">
                 <div class="payment-card-left">
                   <div class="payment-card-icon">🏪</div>
                   <div class="payment-card-text">
-                    <h5>Walk-in / Workshop Payment</h5>
-                    <p>Pay 30% downpayment or 100% in-person at Lanica Workshop</p>
-                  </div>
-                </div>
-                <div class="payment-card-check">
-                  <svg viewBox="0 0 24 24" width="20" height="20">
-                    <circle cx="12" cy="12" r="10" fill="#fcd535" />
-                    <path d="M9 12l2 2 4-4" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                  </svg>
-                </div>
-              </div>
-
-              <div class="payment-card" data-method="COD">
-                <div class="payment-card-left">
-                  <div class="payment-card-icon">🚚</div>
-                  <div class="payment-card-text">
-                    <h5>Cash on Delivery</h5>
-                    <p>Pay cash upon delivery of ready items</p>
+                    <h5>Walk-in (Cash)</h5>
+                    <p>Over-the-counter cash settlement at Lanica Showroom</p>
                   </div>
                 </div>
                 <div class="payment-card-check">
@@ -841,74 +809,214 @@
       </div>
     </div>
 
-    <!-- Customer Auth Modal -->
+    <!-- Customer Auth Modal (Mobile-App Matched) -->
     <div id="auth-modal" class="modal-overlay">
-      <div class="modal-card" style="max-width: 420px;">
-        <div class="modal-header">
-          <h3>Customer Portal</h3>
-          <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div id="customer-signed-in-box" style="display: none; text-align: center;">
-            <p style="font-weight: 600; margin-bottom: 8px;">Signed in as:</p>
-            <p id="customer-email-display" style="color: var(--clr-text-muted); margin-bottom: 20px;"></p>
-            <a href="orders.html" class="btn-primary" style="display: block; width: 100%; text-decoration: none; box-sizing: border-box; margin-bottom: 12px;">
-              My Orders
-            </a>
-            <button id="customer-signout-btn" class="btn-secondary" style="width: 100%;">Sign Out</button>
-          </div>
+      <div class="modal-card auth-modal-card">
+        <!-- Close Button -->
+        <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal" style="position: absolute; top: 18px; right: 18px; z-index: 10;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
 
-          <div id="customer-auth-forms-box">
-            <button type="button" id="google-signin-btn" class="btn-google-auth">
+        <!-- Signed In View -->
+        <div id="customer-signed-in-view" style="display: none; padding: 28px; text-align: center;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #FEF3C7; color: #D97706; font-size: 1.4rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;" id="cust-avatar-initial">U</div>
+          <h3 id="cust-signedin-name" style="margin: 0 0 4px 0; font-size: 1.2rem; color: #111827;">Customer Account</h3>
+          <p id="cust-signedin-email" style="color: #6B7280; font-size: 0.88rem; margin: 0 0 20px 0;"></p>
+          
+          <a href="profile.html" class="btn-auth-primary" style="text-decoration: none; margin-bottom: 10px; background: #FFD700; color: #111827;">PROFILE & ACCOUNT HUB</a>
+          <a href="orders.html" class="btn-auth-primary" style="text-decoration: none; margin-bottom: 10px;">MY ORDERS & TRACKING</a>
+          <button type="button" id="customer-signout-btn" class="btn-auth-google" style="margin-top: 6px;">SIGN OUT</button>
+        </div>
+
+        <!-- Signed Out View -->
+        <div id="customer-signed-out-view" style="padding: 24px; max-height: 85vh; overflow-y: auto;">
+          
+          <!-- WELCOME BACK (LOGIN) VIEW -->
+          <div id="auth-login-view">
+            <div class="auth-modal-header">
+              <div>
+                <h3 class="auth-modal-title">WELCOME BACK</h3>
+                <p class="auth-modal-subtitle">Sign in to access your wishlist, orders, and custom specs</p>
+              </div>
+            </div>
+
+            <form id="customer-login-form">
+              <div class="auth-input-group">
+                <label for="login-email">Email Address</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                  <input type="email" id="login-email" class="auth-input-field" required placeholder="yourname@example.com" autocomplete="email" />
+                </div>
+              </div>
+
+              <div class="auth-input-group" style="margin-bottom: 8px;">
+                <label for="login-password">Password</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <input type="password" id="login-password" class="auth-input-field" required placeholder="••••••••" autocomplete="current-password" />
+                  <button type="button" class="eye-toggle-btn" data-target="login-password" aria-label="Toggle Password Visibility">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div style="text-align: right; margin-bottom: 16px;">
+                <a href="#" id="auth-forgot-password-link" class="auth-forgot-link">Forgot Password?</a>
+              </div>
+
+              <div id="login-error-banner" style="display: none; color: #DC2626; background: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 14px;"></div>
+
+              <button type="submit" class="btn-auth-primary">LOGIN</button>
+            </form>
+
+            <div class="auth-divider-container">
+              <span class="auth-divider-badge">OR</span>
+            </div>
+
+            <button type="button" class="google-signin-btn btn-auth-google">
               <svg viewBox="0 0 24 24" width="20" height="20">
                 <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                 <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.32 7.33 24 12 24z"/>
                 <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.42l4.02-3.15z"/>
                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
               </svg>
-              <span>Continue with Google</span>
+              <span>CONTINUE WITH GOOGLE</span>
             </button>
 
-            <div class="auth-divider">
-              <span>or email</span>
+            <div class="auth-footer-switcher">
+              New to Lanica? <button type="button" id="switch-to-signup-btn">SIGN UP</button>
             </div>
-
-            <div class="auth-tabs">
-              <button id="tab-login" class="auth-tab active">Sign In</button>
-              <button id="tab-register" class="auth-tab">Create Account</button>
-            </div>
-
-            <form id="customer-login-form" class="form-group" style="gap: 14px;">
-              <div class="form-group">
-                <label for="cust-login-email">Email</label>
-                <input type="email" id="cust-login-email" required placeholder="yourname@example.com" />
-              </div>
-              <div class="form-group">
-                <label for="cust-login-pwd">Password</label>
-                <input type="password" id="cust-login-pwd" required placeholder="••••••••" />
-              </div>
-              <div id="cust-auth-error" style="color: #ef4444; font-size: 0.85rem;"></div>
-              <button type="submit" class="btn-primary" style="margin-top: 10px;">Sign In</button>
-            </form>
-
-            <form id="customer-register-form" class="form-group" style="gap: 14px; display: none;">
-              <div class="form-group">
-                <label for="cust-reg-email">Email</label>
-                <input type="email" id="cust-reg-email" required placeholder="yourname@example.com" />
-              </div>
-              <div class="form-group">
-                <label for="cust-reg-pwd">Password</label>
-                <input type="password" id="cust-reg-pwd" required placeholder="At least 6 characters" minlength="6" />
-              </div>
-              <div id="cust-reg-error" style="color: #ef4444; font-size: 0.85rem;"></div>
-              <button type="submit" class="btn-primary" style="margin-top: 10px;">Create Account</button>
-            </form>
           </div>
+
+          <!-- CREATE ACCOUNT (REGISTER) VIEW -->
+          <div id="auth-register-view" style="display: none;">
+            <div class="auth-modal-header">
+              <div>
+                <h3 class="auth-modal-title">CREATE ACCOUNT</h3>
+                <p class="auth-modal-subtitle">Register to customize furniture and place orders</p>
+              </div>
+            </div>
+
+            <form id="customer-register-form">
+              <div class="auth-input-group">
+                <label for="reg-name">Full Name</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <input type="text" id="reg-name" class="auth-input-field" required placeholder="Juan Dela Cruz" autocomplete="name" />
+                </div>
+              </div>
+
+              <div class="auth-input-group">
+                <label for="reg-email">Email Address</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                  <input type="email" id="reg-email" class="auth-input-field" required placeholder="yourname@example.com" autocomplete="email" />
+                </div>
+              </div>
+
+              <div class="auth-input-group" style="margin-bottom: 6px;">
+                <label for="reg-password">Password</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <input type="password" id="reg-password" class="auth-input-field" required placeholder="••••••••" autocomplete="new-password" />
+                  <button type="button" class="eye-toggle-btn" data-target="reg-password" aria-label="Toggle Password Visibility">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interactive Password Strength Widget -->
+              <div id="password-strength-container" class="password-strength-widget">
+                <div id="strength-warning-banner" class="strength-banner-alert" style="display: none;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  <span>Weak password! Medium or Strong password is required.</span>
+                </div>
+
+                <div class="strength-header-bar">
+                  <span class="strength-header-title">PASSWORD STRENGTH</span>
+                  <span id="strength-status-label" class="strength-status-badge weak">WEAK PASSWORD</span>
+                </div>
+
+                <div class="strength-progress-track">
+                  <div id="strength-progress-bar" class="strength-progress-fill weak"></div>
+                </div>
+
+                <div class="strength-rules-list">
+                  <div id="rule-length" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>8+ characters</span>
+                  </div>
+                  <div id="rule-uppercase" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>1 uppercase (A-Z)</span>
+                  </div>
+                  <div id="rule-number" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>1 number (0-9)</span>
+                  </div>
+                  <div id="rule-special" class="strength-rule-item">
+                    <span class="rule-icon" style="color:#9CA3AF; font-size:0.8rem;">○</span>
+                    <span>1 special (!@#$)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="auth-input-group">
+                <label for="reg-confirm-password">Confirm Password</label>
+                <div class="auth-input-wrapper">
+                  <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <input type="password" id="reg-confirm-password" class="auth-input-field" required placeholder="••••••••" autocomplete="new-password" />
+                  <button type="button" class="eye-toggle-btn" data-target="reg-confirm-password" aria-label="Toggle Password Visibility">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div id="register-error-banner" style="display: none; color: #DC2626; background: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 14px;"></div>
+
+              <button type="submit" id="btn-submit-register" class="btn-auth-primary">REGISTER</button>
+            </form>
+
+            <div class="auth-divider-container">
+              <span class="auth-divider-badge">OR</span>
+            </div>
+
+            <button type="button" class="google-signin-btn btn-auth-google">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.32 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.42l4.02-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.68 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>CONTINUE WITH GOOGLE</span>
+            </button>
+
+            <div class="auth-footer-switcher">
+              Already have an account? <button type="button" id="switch-to-login-btn">LOG IN</button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

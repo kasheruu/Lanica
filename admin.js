@@ -42,6 +42,7 @@ import {
 } from "./paginationService.js";
 
 import { compressAndResizeImage } from "./imageOptimizationService.js";
+import { loadCachedModel, attachModelToViewer } from "./modelCacheService.js";
 
 import {
   logActivity,
@@ -822,94 +823,6 @@ function renderCategoryDropdowns(selectedCategory = null) {
       customTriggerBadge.className = `custom-cat-count-badge ${count > 0 ? "has-products" : "zero-products"}`;
     }
   }
-
-// ==========================================================================
-// Add-ons / Optional Upgrades Repeater State & Handlers
-// ==========================================================================
-let currentAddonsList = [];
-
-function renderAddonsRepeater() {
-  const container = document.getElementById("addons-repeater-list");
-  if (!container) return;
-
-  if (currentAddonsList.length === 0) {
-    container.innerHTML = `
-      <div style="font-size: 0.8rem; color: #94a3b8; text-align: center; padding: 10px 0;">
-        No optional upgrades added yet. Click "+ Add Optional Upgrade" below to offer add-ons.
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = currentAddonsList
-    .map((addon, index) => `
-      <div class="addon-row" style="display: flex; gap: 8px; align-items: center; background: #ffffff; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-        <input type="text" class="addon-name-input" data-index="${index}" placeholder="Add-on Name (e.g. Throw Pillows)" value="${escapeHtml(addon.name || '')}" style="flex: 2; padding: 6px 10px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;" />
-        <div style="display: flex; align-items: center; flex: 1; position: relative;">
-          <span style="position: absolute; left: 8px; font-size: 0.78rem; color: #64748b; font-weight: 600;">₱</span>
-          <input type="number" step="any" min="0" class="addon-price-input" data-index="${index}" placeholder="Price" value="${addon.price !== undefined ? addon.price : ''}" style="width: 100%; padding: 6px 10px 6px 20px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;" />
-        </div>
-        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #475569; cursor: pointer; white-space: nowrap; user-select: none;">
-          <input type="checkbox" class="addon-active-toggle" data-index="${index}" ${addon.active !== false ? 'checked' : ''} /> Active
-        </label>
-        <button type="button" class="btn-remove-addon-row" data-index="${index}" style="background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; font-weight: 700; font-size: 1rem; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;" title="Remove upgrade">&times;</button>
-      </div>
-    `)
-    .join('');
-
-  container.querySelectorAll(".addon-name-input").forEach((inp) => {
-    inp.addEventListener("input", (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      if (currentAddonsList[idx]) currentAddonsList[idx].name = e.target.value;
-      triggerDraftAutosave();
-    });
-  });
-
-  container.querySelectorAll(".addon-price-input").forEach((inp) => {
-    inp.addEventListener("input", (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      if (currentAddonsList[idx]) currentAddonsList[idx].price = parseFloat(e.target.value) || 0;
-      triggerDraftAutosave();
-    });
-  });
-
-  container.querySelectorAll(".addon-active-toggle").forEach((inp) => {
-    inp.addEventListener("change", (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      if (currentAddonsList[idx]) currentAddonsList[idx].active = e.target.checked;
-      triggerDraftAutosave();
-    });
-  });
-
-  container.querySelectorAll(".btn-remove-addon-row").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      currentAddonsList.splice(idx, 1);
-      renderAddonsRepeater();
-      triggerDraftAutosave();
-    });
-  });
-}
-
-function clearAddonsRepeater() {
-  currentAddonsList = [];
-  renderAddonsRepeater();
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const addAddonBtn = document.getElementById("btn-add-addon-row");
-  if (addAddonBtn) {
-    addAddonBtn.addEventListener("click", () => {
-      currentAddonsList.push({
-        id: `addon_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        name: "",
-        price: 0,
-        active: true,
-      });
-      renderAddonsRepeater();
-      triggerDraftAutosave();
-    });
-  }
-});
 
   // 3. Render Custom Dropdown Menu Items
   if (customItemsList) {
@@ -2147,14 +2060,16 @@ async function pollMeshyAndLoad(taskId, attempt = 0) {
 
   if (status === "SUCCEEDED" && data.model_urls && data.model_urls.glb) {
     const targetUrl = getGlbViewerUrl(data.model_urls.glb);
-    if (modelViewer.loaded && modelViewer.src === targetUrl) {
-      hideViewerLoading();
-      return;
-    }
     viewerStatus.style.visibility = "visible";
-    viewerStatus.textContent = "Starting 3D download...";
     setViewerLoading(true, "Calibrating 3D object...");
-    modelViewer.src = targetUrl;
+    await attachModelToViewer(modelViewer, targetUrl, {
+      onProgress: (pct) => {
+        if (viewerStatus) {
+          viewerStatus.style.visibility = "visible";
+          viewerStatus.textContent = pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
+        }
+      }
+    });
     setTimeout(() => {
       if (modelViewer.loaded) hideViewerLoading();
     }, 300);
@@ -2209,19 +2124,22 @@ window.view3DModel = async (productId) => {
     // First check if there's already a modelUrl stored
     if (productData.modelUrl) {
       const targetUrl = getGlbViewerUrl(productData.modelUrl);
-
-      // If model is already loaded, hide loading spinner immediately
-      if (modelViewer.loaded && modelViewer.src === targetUrl) {
-        hideViewerLoading();
-        return;
-      }
+      const usdzUrl = productData.usdzUrl || "";
 
       viewerStatus.style.visibility = "visible";
       viewerStatus.textContent = "Loading 3D model...";
       setViewerLoading(true, "Calibrating 3D object...");
-      modelViewer.src = targetUrl;
 
-      // Fallback check for instant browser cache loads
+      await attachModelToViewer(modelViewer, targetUrl, {
+        usdzUrl,
+        onProgress: (pct) => {
+          if (viewerStatus) {
+            viewerStatus.style.visibility = "visible";
+            viewerStatus.textContent = pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
+          }
+        }
+      });
+
       setTimeout(() => {
         if (modelViewer.loaded) hideViewerLoading();
       }, 300);
@@ -2258,6 +2176,7 @@ if (viewerModal)
   });
 
 // Add-ons / Optional Upgrades Repeater State & Logic
+let currentAddonsList = [];
 
 function clearAddonsRepeater() {
   currentAddonsList = [];
@@ -2514,8 +2433,48 @@ const renderInventory = (products) => {
   const startIndex = (adminInvCurrentPage - 1) * adminInvPerPage;
   const pagedProducts = products.slice(startIndex, startIndex + adminInvPerPage);
 
+function formatProductDate(createdAt) {
+  if (!createdAt) return "—";
+  let d = createdAt;
+  if (typeof createdAt === "object" && createdAt.seconds) {
+    d = new Date(createdAt.seconds * 1000);
+  } else if (typeof createdAt === "string" || typeof createdAt === "number") {
+    d = new Date(createdAt);
+  }
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+}
+
+function formatMaterialsListHtml(materialRaw) {
+  if (!materialRaw) return '<span style="color:#9ca3af;">—</span>';
+  let items = [];
+  if (Array.isArray(materialRaw)) {
+    items = materialRaw.map((s) => String(s).trim()).filter(Boolean);
+  } else if (typeof materialRaw === "string") {
+    items = materialRaw.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  if (items.length === 0) return '<span style="color:#9ca3af;">—</span>';
+
+  return `
+    <div class="materials-list-wrapper" style="display: flex; flex-direction: column; gap: 4px; max-width: 260px; padding: 2px 0;">
+      ${items
+        .map(
+          (item) => `
+        <div class="material-chip-item" style="display: inline-flex; align-items: flex-start; gap: 6px; font-size: 0.8rem; color: #374151; background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 6px; line-height: 1.3;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>${escapeHtml(item)}</span>
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
   if (pagedProducts.length === 0) {
-    inventoryList.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px;">No products found. Add some!</td></tr>`;
+    inventoryList.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 20px;">No products found. Add some!</td></tr>`;
   } else {
     pagedProducts.forEach((product) => {
       let statusClass = "status-in-stock";
@@ -2538,6 +2497,7 @@ const renderInventory = (products) => {
         product.thumbnail ||
         "https://via.placeholder.com/48";
       const productPayload = btoa(encodeURIComponent(JSON.stringify(product)));
+      const dateAddedStr = formatProductDate(product.createdAt || product.dateAdded || product.timestamp);
 
       const tr = document.createElement("tr");
       const priceFormatted = Number(product.price || 0).toLocaleString();
@@ -2550,11 +2510,12 @@ const renderInventory = (products) => {
               </td>
               <td>${escapeHtml(product.category)}</td>
               <td>₱${priceFormatted}</td>
-              <td><span class="mat-val">${escapeHtml(product.material || "—")}</span></td>
+              <td>${formatMaterialsListHtml(product.material)}</td>
               <td id="stock-cell-${product.id}">
                   ${product.stock !== undefined ? product.stock : 0}
               </td>
               <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+              <td><span style="font-size:0.82rem; color:#64748b; font-weight:500;">${dateAddedStr}</span></td>
               <td>
                   <div class="action-btns">
                       ${
@@ -3739,22 +3700,62 @@ function renderAdminTransactionsList(orders) {
 
 // Global Kebab Menu Click & Outside Dismiss Handler
 document.addEventListener("click", (e) => {
-  const kebabBtn = e.target.closest(".kebab-menu-btn");
+  const kebabBtn = e.target.closest(".kebab-trigger-btn, .kebab-menu-btn");
   if (kebabBtn) {
     e.stopPropagation();
-    const dropdown = kebabBtn.nextElementSibling;
+    const container = kebabBtn.closest(".kebab-menu-container, .kebab-container") || kebabBtn.parentElement;
+    const dropdown = container ? container.querySelector(".kebab-dropdown-menu, .kebab-menu-dropdown") : kebabBtn.nextElementSibling;
+    
     if (dropdown) {
-      document.querySelectorAll(".kebab-menu-dropdown.active").forEach((el) => {
-        if (el !== dropdown) el.classList.remove("active");
+      const isCurrentlyOpen = dropdown.style.display === "block" || dropdown.classList.contains("active");
+      
+      // Close all open dropdowns
+      document.querySelectorAll(".kebab-dropdown-menu, .kebab-menu-dropdown").forEach((el) => {
+        el.style.display = "none";
+        el.classList.remove("active");
       });
-      dropdown.classList.toggle("active");
+      
+      if (!isCurrentlyOpen) {
+        dropdown.style.display = "block";
+        dropdown.classList.add("active");
+
+        // Use fixed positioning to prevent overflow clipping by table containers
+        dropdown.style.position = "fixed";
+        dropdown.style.zIndex = "999999";
+        
+        const rect = kebabBtn.getBoundingClientRect();
+        const dropdownHeight = dropdown.offsetHeight || 180;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        
+        // Vertical positioning (flip upward if near viewport bottom)
+        if (spaceBelow < dropdownHeight && rect.top > dropdownHeight) {
+          dropdown.style.top = `${rect.top - dropdownHeight - 6}px`;
+        } else {
+          dropdown.style.top = `${rect.bottom + 6}px`;
+        }
+        
+        // Horizontal positioning (align right edge with button right edge)
+        const rightEdge = window.innerWidth - rect.right;
+        dropdown.style.right = `${Math.max(10, rightEdge)}px`;
+        dropdown.style.left = "auto";
+      }
     }
   } else {
-    document.querySelectorAll(".kebab-menu-dropdown.active").forEach((el) => {
+    // Dismiss all dropdowns on outside click or menu item selection
+    document.querySelectorAll(".kebab-dropdown-menu, .kebab-menu-dropdown").forEach((el) => {
+      el.style.display = "none";
       el.classList.remove("active");
     });
   }
 });
+
+// Dismiss fixed dropdowns on window scroll or resize to prevent floating misalignments
+window.addEventListener("scroll", () => {
+  document.querySelectorAll(".kebab-dropdown-menu, .kebab-menu-dropdown").forEach((el) => {
+    el.style.display = "none";
+    el.classList.remove("active");
+  });
+}, { passive: true });
 
 if (navDashboard) {
   navDashboard.addEventListener("click", (e) => {
@@ -5050,7 +5051,10 @@ function renderOrdersList(orders) {
           <button type="button" class="kebab-trigger-btn" aria-label="Row Actions" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; color: #334155; font-weight: bold; transition: all 0.2s;">
             ⋮
           </button>
-          <div class="kebab-dropdown-menu" style="display: none; position: absolute; right: 0; top: 36px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1000; min-width: 170px; padding: 6px; text-align: left;">
+          <div class="kebab-dropdown-menu" style="display: none; position: absolute; right: 0; top: 36px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1000; min-width: 190px; padding: 6px; text-align: left;">
+            <button type="button" class="kebab-menu-item btn-view-order-details" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #334155; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              📄 View Order Summary
+            </button>
             ${
               isRefundRequested
                 ? `<button type="button" class="kebab-menu-item btn-review-refund" data-order-id="${escapeHtml(
@@ -5084,7 +5088,35 @@ function renderOrdersList(orders) {
                 : ""
             }
             ${
-              st === "declined" || st === "cancelled"
+              st === "downpayment confirmed"
+                ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="In Production" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #2563eb; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    🔨 Start Production
+                  </button>`
+                : ""
+            }
+            ${
+              st === "in production"
+                ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="Quality Checked" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #7c3aed; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    ✨ Pass Quality Check
+                  </button>`
+                : ""
+            }
+            ${
+              st === "quality checked"
+                ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="Shipped" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #d97706; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    🚚 Dispatch / Ship Order
+                  </button>`
+                : ""
+            }
+            ${
+              st === "shipped"
+                ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="Delivered" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    📦 Mark as Delivered
+                  </button>`
+                : ""
+            }
+            ${
+              st === "declined" || st === "cancelled" || st === "delivered"
                 ? `<button type="button" class="kebab-menu-item btn-delete-order" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
@@ -5374,6 +5406,15 @@ if (ordersListEl) {
     const actionBtn = t.closest("button");
     if (!actionBtn) return;
 
+    if (actionBtn.classList.contains("btn-view-order-details")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      if (id) showOrderSummaryModal(id);
+    }
+    if (actionBtn.classList.contains("btn-advance-status")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      const nextStatus = actionBtn.getAttribute("data-next-status");
+      if (id && nextStatus) handleOrderStatusChange(id, nextStatus);
+    }
     if (actionBtn.classList.contains("btn-review-refund")) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) openRefundModal(id);
@@ -5394,6 +5435,99 @@ if (ordersListEl) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) handleDeclinedOrderDelete(id);
     }
+  });
+}
+
+function showOrderSummaryModal(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
+
+  const modal = document.createElement("div");
+  modal.className = "modal active";
+  modal.style.cssText = "position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;";
+
+  const shippingAddrObj = order.shippingAddress || order.address || {};
+  const recipientName = pickFirstNonEmpty(shippingAddrObj.fullName, shippingAddrObj.recipientName, order.customerName, "—");
+  const phone = pickFirstNonEmpty(shippingAddrObj.phoneNumber, shippingAddrObj.phone, order.phone, "—");
+  const street = pickFirstNonEmpty(shippingAddrObj.streetAddress, shippingAddrObj.street, order.address, "");
+  const city = pickFirstNonEmpty(shippingAddrObj.city, "");
+  const province = pickFirstNonEmpty(shippingAddrObj.province, "");
+  const postal = pickFirstNonEmpty(shippingAddrObj.postalCode, "");
+  const fullAddress = [street, city, province, postal].filter(Boolean).join(", ") || "No delivery address recorded";
+  const landmark = pickFirstNonEmpty(shippingAddrObj.nearestLandmark, shippingAddrObj.landmark, order.landmark, "");
+
+  const proofUrl = pickFirstNonEmpty(order.proofUrl, order.paymentProof, order.paymentProofUrl, "");
+
+  const itemsListHtml = (order.items || [])
+    .map(
+      (item) => `
+      <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+        <img src="${item.url || 'assets/product_sofa.png'}" alt="${escapeHtml(item.name || 'Item')}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" onerror="this.onerror=null;this.src='assets/product_sofa.png';">
+        <div style="flex: 1;">
+          <strong style="color: #0f172a; font-size: 0.9rem;">${escapeHtml(item.name || item.title || "Item")}</strong>
+          <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">Variant / Material: <strong>${escapeHtml(item.material || "Standard")}</strong> &bull; Qty: <strong>${item.quantity || 1}</strong></div>
+          ${item.customNotes ? `<div style="font-size: 0.76rem; color: #b45309; background: #fffbeb; border: 1px solid #fef3c7; padding: 4px 8px; border-radius: 6px; margin-top: 4px; line-height: 1.3;"><strong>Custom Specs:</strong> ${escapeHtml(item.customNotes)}</div>` : ""}
+        </div>
+        <strong style="color: #0f172a; font-size: 0.92rem;">₱${((parsePrice(item.price)) * Number(item.quantity || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+      </div>
+    `
+    )
+    .join("");
+
+  const totalVal = Number(order.totalAmount || order.total || 0);
+  const paidVal = Number(order.downpaymentAmount ?? totalVal);
+  const remainingVal = Number(order.remainingBalance ?? 0);
+  const canonicalStatus = getOrderCanonicalStatus(order);
+
+  modal.innerHTML = `
+    <div style="background: #ffffff; border-radius: 16px; max-width: 580px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+        <div>
+          <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a;">Order Summary #${escapeHtml(order.id.slice(0, 8))}</h3>
+          <div style="font-size: 0.78rem; color: #64748b; margin-top: 3px;">Placed on ${formatOrderDate(order.createdAt)}</div>
+        </div>
+        <button type="button" class="btn-close-modal" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
+      </div>
+
+      <div style="background: #f8fafc; padding: 14px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 0.85rem; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 6px;">
+        <div><strong>Customer Name:</strong> ${escapeHtml(resolveCustomerDisplay(order))} ${phone !== "—" ? `(${escapeHtml(phone)})` : ""}</div>
+        <div><strong>Delivery Address:</strong> ${escapeHtml(fullAddress)}</div>
+        ${landmark ? `<div style="color: #b45309; background: #fffbeb; padding: 4px 8px; border-radius: 4px; display: inline-block;">📌 <strong>Landmark:</strong> ${escapeHtml(landmark)}</div>` : ""}
+        <div><strong>Current Status:</strong> <span style="font-weight: 600; color: #1e293b; background: #e2e8f0; padding: 2px 8px; border-radius: 4px;">${escapeHtml(canonicalStatus)}</span></div>
+        <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod || "QR / Walk-in")}</div>
+      </div>
+
+      ${proofUrl ? `
+        <div style="margin-bottom: 16px; padding: 12px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px;">
+          <div style="font-size: 0.82rem; font-weight: 600; color: #6b21a8; margin-bottom: 6px;">Payment Verification Screenshot</div>
+          <a href="${proofUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block;">
+            <img src="${proofUrl}" alt="Proof of Payment" style="max-height: 140px; border-radius: 8px; border: 1px solid #d8b4fe; object-fit: contain;">
+          </a>
+        </div>
+      ` : ""}
+
+      <h4 style="margin: 0 0 8px; font-size: 0.95rem; color: #334155;">Ordered Items Breakdown</h4>
+      <div style="margin-bottom: 16px;">${itemsListHtml || "<p style='color:#94a3b8;'>No items listed.</p>"}</div>
+
+      <div style="border-top: 2px solid #e2e8f0; padding-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; background: #f8fafc; padding: 12px 16px; border-radius: 10px;">
+        <div style="display: flex; justify-content: space-between;"><span>Contract Total:</span><strong>₱${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+        <div style="display: flex; justify-content: space-between; color: #059669;"><span>Amount Paid:</span><strong>₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+        <div style="display: flex; justify-content: space-between; color: ${remainingVal > 0 ? "#dc2626" : "#64748b"};"><span>Balance Remaining:</span><strong>₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+      </div>
+
+      <div style="margin-top: 20px; text-align: right;">
+        <button type="button" class="btn-close-modal btn-primary" style="padding: 10px 24px; cursor: pointer; border-radius: 8px; background: #0f172a; color: white; border: none; font-weight: 600;">Close Summary</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelectorAll(".btn-close-modal").forEach((btn) => {
+    btn.addEventListener("click", () => modal.remove());
+  });
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.remove();
   });
 }
 
