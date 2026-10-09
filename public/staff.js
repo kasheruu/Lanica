@@ -3446,9 +3446,25 @@ function setupStaffLiveChat() {
     });
   }
 
+  const mobileBackBtn = document.getElementById("staff-chat-mobile-back");
+  const chatWorkspaceEl = document.getElementById("staff-chat-workspace");
+
+  if (mobileBackBtn && chatWorkspaceEl) {
+    mobileBackBtn.addEventListener("click", () => {
+      chatWorkspaceEl.classList.remove("mobile-chat-open");
+    });
+  }
+
+  let staffChatVisibleLimit = 5;
+
   function selectStaffChatSession(session) {
     activeStaffChatSessionId = session.id;
+    staffChatVisibleLimit = 5; // Reset batch to 5 latest messages
     const isSupport = session.sessionType === "support";
+
+    if (chatWorkspaceEl) {
+      chatWorkspaceEl.classList.add("mobile-chat-open");
+    }
 
     staffSessionUnreadCounts.set(session.id, 0);
     updateStaffNavChatBadge();
@@ -3481,22 +3497,39 @@ function setupStaffLiveChat() {
 
     if (activeStaffChatUnsubscribe) activeStaffChatUnsubscribe();
 
-    activeStaffChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
+    let allLoadedMessages = [];
+
+    function renderMessageBatch() {
       if (!messagesEl) return;
-
-      markOrderMessagesAsRead(session.id, "staff", isSupport);
-      staffSessionUnreadCounts.set(session.id, 0);
-      updateStaffNavChatBadge();
-
-      if (messages.length === 0) {
+      if (allLoadedMessages.length === 0) {
         messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this ${
           isSupport ? "support" : "order"
         } thread yet. Send a greeting!</div>`;
         return;
       }
 
+      const totalCount = allLoadedMessages.length;
+      const startIndex = Math.max(0, totalCount - staffChatVisibleLimit);
+      const visibleMsgs = allLoadedMessages.slice(startIndex);
+      const hiddenCount = startIndex;
+
       messagesEl.innerHTML = "";
-      messages.forEach((m) => {
+
+      if (hiddenCount > 0) {
+        const loadMoreBtn = document.createElement("div");
+        loadMoreBtn.className = "chat-load-earlier-btn";
+        loadMoreBtn.style.cssText = "text-align: center; margin: 4px auto 12px auto; font-size: 0.78rem; color: #2563eb; cursor: pointer; padding: 6px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; font-weight: 600; width: fit-content; user-select: none; transition: all 0.15s ease;";
+        loadMoreBtn.innerHTML = `📜 Load earlier messages (${hiddenCount} hidden)`;
+        loadMoreBtn.addEventListener("click", () => {
+          const oldScrollHeight = messagesEl.scrollHeight;
+          staffChatVisibleLimit += 5;
+          renderMessageBatch();
+          messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
+        });
+        messagesEl.appendChild(loadMoreBtn);
+      }
+
+      visibleMsgs.forEach((m) => {
         const isStaff =
           m.senderRole === "admin" ||
           m.senderRole === "staff" ||
@@ -3538,13 +3571,35 @@ function setupStaffLiveChat() {
             }
             ${
               mediaUrl && !m.isUnsent
-                ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" style="max-width: 240px; max-height: 180px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
+                ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png';" style="max-width: 240px; max-height: 180px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
                 : ""
             }
           </div>
         `;
         messagesEl.appendChild(row);
       });
+    }
+
+    if (messagesEl) {
+      messagesEl.onscroll = () => {
+        if (messagesEl.scrollTop <= 10 && allLoadedMessages.length > staffChatVisibleLimit) {
+          const oldScrollHeight = messagesEl.scrollHeight;
+          staffChatVisibleLimit += 5;
+          renderMessageBatch();
+          messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
+        }
+      };
+    }
+
+    activeStaffChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
+      if (!messagesEl) return;
+
+      markOrderMessagesAsRead(session.id, "staff", isSupport);
+      staffSessionUnreadCounts.set(session.id, 0);
+      updateStaffNavChatBadge();
+
+      allLoadedMessages = messages;
+      renderMessageBatch();
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }, null, isSupport);

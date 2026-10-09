@@ -35,10 +35,17 @@
       <nav class="nav-links">
         <a href="products.html">Products</a>
         <a href="#about">About us</a>
-        <a href="#ar-feature">AR Experience</a>
-        <a href="orders.html">My Orders</a>
+        <a href="#ar-feature">Live View</a>
+        <a href="orders.html" class="nav-my-orders-link">My Orders</a>
       </nav>
       <div class="nav-actions">
+        <button id="nav-wishlist-btn" class="nav-icon-btn" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+          <span id="wishlist-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
         <button id="cart-toggle-btn" class="nav-icon-btn" aria-label="Shopping Cart">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
@@ -449,7 +456,7 @@
             <!-- Hero Image Showcase with Slider & Pagination Dots -->
             <div class="product-detail-img-box">
               <div class="pdp-hero-image-wrapper">
-                <img id="pv-image" src="assets/product_sofa.png" alt="Product Image" class="pdp-main-image" />
+                <img id="pv-image" src="assets/product_sofa.png" alt="Product Image" class="pdp-main-image" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png';" />
                 <div id="pv-pagination-indicator" class="pdp-pagination-indicator">1/1</div>
               </div>
               <div id="pv-thumbnails" class="modal-thumbnail-strip" style="display: none;"></div>

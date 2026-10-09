@@ -164,9 +164,15 @@ export async function addToCart(
   const targetQty = existingQty + Number(quantity);
 
   // Determine availability mode:
+  const allowsPreorder = prodToUse.allowPreorder !== false && prodToUse.isMadeToOrder !== false;
+  if (availableStock <= 0 && !allowsPreorder) {
+    throw new Error(`Product "${prodToUse.name || product.name}" is currently out of stock and pre-orders are disabled.`);
+  }
+
   const isMadeToOrder = availableStock <= 0 || targetQty > availableStock;
+  const customLeadTime = prodToUse.leadTime || prodToUse.estimated_lead_time || "14-21 Business Days";
   const leadTime = isMadeToOrder
-    ? "14-21 Business Days (Crafted upon order)"
+    ? `${customLeadTime} (Crafted upon order)`
     : "3-5 Business Days (Ready stock)";
 
   const displayImage =
@@ -324,6 +330,11 @@ export async function placeOrderAtomic({
         available = typeof pData.stock === "number" ? pData.stock : 0;
       }
 
+      const allowsPreorder = pData.allowPreorder !== false && pData.isMadeToOrder !== false;
+      if (available <= 0 && !allowsPreorder) {
+        throw new Error(`Product "${item.name}" is currently out of stock and pre-orders are disabled.`);
+      }
+
       if (available <= 0 || reqQty > available) {
         hasMadeToOrderItems = true;
       }
@@ -460,3 +471,75 @@ export async function placeOrderAtomic({
 
   return { success: true, orderId: orderId };
 }
+
+// --- Wishlist Service Functions ---
+export function getLocalWishlist() {
+  try {
+    const data = localStorage.getItem("lanica_wishlist");
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalWishlist(list) {
+  try {
+    localStorage.setItem("lanica_wishlist", JSON.stringify(list || []));
+  } catch (e) {
+    console.error("Failed to save wishlist to localStorage:", e);
+  }
+}
+
+export async function fetchWishlist(userId) {
+  const localList = getLocalWishlist();
+  if (!userId) return localList;
+
+  try {
+    const userDocRef = doc(db, "users", userId);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      const dbList = snap.data().wishlist || [];
+      const merged = Array.from(new Set([...localList, ...dbList]));
+      saveLocalWishlist(merged);
+      if (merged.length !== dbList.length) {
+        await setDoc(userDocRef, { wishlist: merged }, { merge: true });
+      }
+      return merged;
+    } else if (localList.length > 0) {
+      await setDoc(userDocRef, { wishlist: localList }, { merge: true });
+    }
+  } catch (err) {
+    console.error("Error fetching wishlist from Firestore:", err);
+  }
+  return localList;
+}
+
+export async function toggleWishlist(productId, userId) {
+  let list = getLocalWishlist();
+  const targetId = String(productId && productId.id ? productId.id : productId);
+  const index = list.findIndex((item) => String(item && item.id ? item.id : item) === targetId);
+  const isFav = index === -1;
+  if (index > -1) {
+    list.splice(index, 1);
+  } else {
+    list.push(productId);
+  }
+  saveLocalWishlist(list);
+
+  if (userId) {
+    try {
+      const userDocRef = doc(db, "users", userId);
+      await setDoc(userDocRef, { wishlist: list }, { merge: true });
+    } catch (err) {
+      console.error("Error persisting wishlist to Firestore:", err);
+    }
+  }
+  return { wishlist: list, isFav };
+}
+
+export function isItemInWishlist(productId) {
+  const list = getLocalWishlist();
+  const targetId = String(productId && productId.id ? productId.id : productId);
+  return list.some((item) => String(item && item.id ? item.id : item) === targetId);
+}
+

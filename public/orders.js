@@ -29,6 +29,12 @@ import {
   uploadChatAttachment,
 } from "./chatService.js";
 
+import {
+  renderPagination,
+  getURLQueryParam,
+  updateURLQueryParam,
+} from "./paginationService.js";
+
 // Global State
 let currentUser = null;
 let allOrders = [];
@@ -39,6 +45,51 @@ let ordersUnsubscribe = null;
 let cartUnsubscribe = null;
 let chatUnsubscribe = null;
 let liveChatController = null;
+let ordersCurrentPage = getURLParam("page", 1);
+let ordersPerPage = getURLParam("perPage", 5);
+let transCurrentPage = getURLParam("transPage", 1);
+let transPerPage = getURLParam("transPerPage", 5);
+
+function getURLParam(key, defaultVal) {
+  const params = new URLSearchParams(window.location.search);
+  const val = params.get(key);
+  return val !== null ? (isNaN(val) ? val : parseInt(val, 10)) : defaultVal;
+}
+
+function updateURLParams(paramsObj) {
+  const url = new URL(window.location.href);
+  Object.keys(paramsObj).forEach((key) => {
+    url.searchParams.set(key, paramsObj[key]);
+  });
+  window.history.replaceState({}, "", url.toString());
+}
+
+function updateAuthNavVisibility(user) {
+  const cartBtn = document.getElementById("cart-toggle-btn");
+  const myOrdersLinks = document.querySelectorAll(".nav-my-orders-link, a[href='orders.html']");
+
+  if (cartBtn) {
+    cartBtn.style.display = user ? "inline-flex" : "none";
+  }
+  myOrdersLinks.forEach((link) => {
+    if (link.closest(".nav-links")) {
+      link.style.display = user ? "inline-block" : "none";
+    }
+  });
+}
+
+function generateSmartPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+}
 
 // Helper: Escape HTML
 function escapeHtml(text) {
@@ -91,12 +142,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   onAuthStateChanged(auth, (user) => {
     currentUser = user;
     updateAuthUi(user);
+    updateAuthNavVisibility(user);
     if (user) {
       setupOrdersSubscription(user.uid);
       setupCartSubscription(user.uid);
       liveChatController?.initUserChat(user);
     } else {
-      window.location.href = "index.html";
+      window.location.href = "index.html?auth=required";
     }
   });
 
@@ -307,7 +359,7 @@ function renderCartDrawerUI(items) {
   items.forEach((item) => {
     html += `
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--clr-gray-light); border-radius: 12px;">
-        <img src="${item.url || 'assets/product_sofa.png'}" alt="${item.name}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">
+        <img src="${item.url || 'assets/product_sofa.png'}" alt="${item.name}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
         <div style="flex: 1;">
           <div style="font-weight: 600; font-size: 0.9rem; color: var(--clr-black);">${item.name}</div>
           <div style="font-size: 0.78rem; color: var(--clr-text-muted);">${item.material || 'Fabric'} x ${item.quantity}</div>
@@ -342,6 +394,7 @@ function setupOrdersSubscription(userId) {
     allOrders = orders;
     updateTabBadges(orders);
     renderOrdersList();
+    renderCustomerTransactionsList(orders);
     liveChatController?.renderChannelBar?.();
   });
 }
@@ -374,6 +427,36 @@ function updateTabBadges(orders) {
 }
 
 function setupTabListeners() {
+  const btnOrders = document.getElementById("tab-nav-orders");
+  const btnTransactions = document.getElementById("tab-nav-transactions");
+  const secOrders = document.getElementById("section-orders-view");
+  const secTransactions = document.getElementById("section-transactions-view");
+
+  if (btnOrders && btnTransactions && secOrders && secTransactions) {
+    btnOrders.addEventListener("click", () => {
+      btnOrders.classList.add("active");
+      btnOrders.style.borderBottom = "3px solid var(--clr-yellow)";
+      btnOrders.style.color = "var(--clr-black)";
+      btnTransactions.classList.remove("active");
+      btnTransactions.style.borderBottom = "none";
+      btnTransactions.style.color = "var(--clr-text-muted)";
+      secOrders.style.display = "block";
+      secTransactions.style.display = "none";
+    });
+
+    btnTransactions.addEventListener("click", () => {
+      btnTransactions.classList.add("active");
+      btnTransactions.style.borderBottom = "3px solid var(--clr-yellow)";
+      btnTransactions.style.color = "var(--clr-black)";
+      btnOrders.classList.remove("active");
+      btnOrders.style.borderBottom = "none";
+      btnOrders.style.color = "var(--clr-text-muted)";
+      secTransactions.style.display = "block";
+      secOrders.style.display = "none";
+      renderCustomerTransactionsList(allOrders);
+    });
+  }
+
   const tabsContainer = document.getElementById("orders-status-tabs");
   if (!tabsContainer) return;
 
@@ -382,8 +465,107 @@ function setupTabListeners() {
       tabsContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       activeTabStatus = btn.getAttribute("data-status") || "all";
+      ordersCurrentPage = 1;
       renderOrdersList();
     });
+  });
+}
+
+function renderCustomerTransactionsList(orders) {
+  const container = document.getElementById("transactions-list-container");
+  if (!container) return;
+
+  if (!orders || orders.length === 0) {
+    container.innerHTML = `
+      <div class="orders-empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <line x1="2" y1="10" x2="22" y2="10"></line>
+        </svg>
+        <h3 class="empty-title">No transactions recorded</h3>
+        <p class="empty-desc">Your payment transaction records and receipts will appear here once you place an order.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const totalItems = orders.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / transPerPage));
+  if (transCurrentPage > totalPages) transCurrentPage = totalPages;
+  if (transCurrentPage < 1) transCurrentPage = 1;
+
+  const startIndex = (transCurrentPage - 1) * transPerPage;
+  const pagedOrders = orders.slice(startIndex, startIndex + transPerPage);
+
+  container.innerHTML = "";
+
+  pagedOrders.forEach((order) => {
+    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+    const totalVal = Number(order.totalAmount || order.total || 0);
+    const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
+    const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+    const payStatus = order.paymentStatus || (isDownpayment ? "Downpayment Confirmed" : "Paid");
+    const pMethod = order.paymentMethod || "COD";
+    const refNum = order.orderId || order.id || "N/A";
+    const dateStr = formatOrderDate(order.createdAt || order.timestamp);
+
+    const card = document.createElement("div");
+    card.className = "order-card";
+    card.style.cssText = "background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);";
+    card.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+        <div>
+          <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600;">Transaction Reference</span>
+          <h4 style="margin: 2px 0 0; font-size: 1.05rem; font-weight: 700; color: #0f172a;">${escapeHtml(refNum)}</h4>
+          <span style="font-size: 0.8rem; color: #94a3b8;">Issued on ${escapeHtml(dateStr)}</span>
+        </div>
+        <div style="text-align: right;">
+          <span class="status-badge" style="background: ${isDownpayment ? '#eff6ff' : '#ecfdf5'}; color: ${isDownpayment ? '#1d4ed8' : '#047857'}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">
+            ${escapeHtml(payStatus)}
+          </span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; background: #f8fafc; padding: 14px 16px; border-radius: 8px;">
+        <div>
+          <span style="font-size: 0.78rem; color: #64748b; display: block;">Payment Method</span>
+          <strong style="font-size: 0.92rem; color: #0f172a;">💳 ${escapeHtml(pMethod)}</strong>
+        </div>
+        <div>
+          <span style="font-size: 0.78rem; color: #64748b; display: block;">Payment Terms</span>
+          <strong style="font-size: 0.92rem; color: #0f172a;">${isDownpayment ? '30% Downpayment Deposit' : 'Full Payment'}</strong>
+        </div>
+        <div>
+          <span style="font-size: 0.78rem; color: #64748b; display: block;">Amount Paid</span>
+          <strong style="font-size: 1rem; color: #059669;">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+        </div>
+        <div>
+          <span style="font-size: 0.78rem; color: #64748b; display: block;">Outstanding Balance</span>
+          <strong style="font-size: 1rem; color: ${remainingVal > 0 ? '#dc2626' : '#64748b'};">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  renderPagination({
+    container,
+    currentPage: transCurrentPage,
+    totalPages,
+    totalItems,
+    pageSize: transPerPage,
+    pageSizeOptions: [5, 10, 20],
+    urlParamPrefix: "trans",
+    onPageChange: (newPage) => {
+      transCurrentPage = newPage;
+      renderCustomerTransactionsList(orders);
+      container.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    onPageSizeChange: (newSize) => {
+      transPerPage = newSize;
+      transCurrentPage = 1;
+      renderCustomerTransactionsList(orders);
+    },
   });
 }
 
@@ -438,6 +620,7 @@ function setupOrderSearchListener() {
     }
     debounceTimer = setTimeout(() => {
       orderSearchQuery = val;
+      ordersCurrentPage = 1;
       renderOrdersList();
     }, 250);
   });
@@ -447,6 +630,7 @@ function setupOrderSearchListener() {
       searchInput.value = "";
       clearBtn.style.display = "none";
       orderSearchQuery = "";
+      ordersCurrentPage = 1;
       searchInput.focus();
       renderOrdersList();
     });
@@ -505,17 +689,47 @@ function renderOrdersList() {
         if (input) input.value = "";
         if (clearBtn) clearBtn.style.display = "none";
         orderSearchQuery = "";
+        ordersCurrentPage = 1;
         renderOrdersList();
       });
     }
     return;
   }
 
+  const totalItems = filteredOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ordersPerPage));
+  if (ordersCurrentPage > totalPages) ordersCurrentPage = totalPages;
+  if (ordersCurrentPage < 1) ordersCurrentPage = 1;
+
+  const startIndex = (ordersCurrentPage - 1) * ordersPerPage;
+  const pagedOrders = filteredOrders.slice(startIndex, startIndex + ordersPerPage);
+
   container.innerHTML = "";
 
-  filteredOrders.forEach((order) => {
+  pagedOrders.forEach((order) => {
     const card = createOrderCardElement(order);
     container.appendChild(card);
+  });
+
+  // Render standardized enterprise pagination footer
+  renderPagination({
+    container,
+    currentPage: ordersCurrentPage,
+    totalPages,
+    totalItems,
+    pageSize: ordersPerPage,
+    pageSizeOptions: [5, 10, 20, 50],
+    urlParamPrefix: "orders",
+    onPageChange: (newPage) => {
+      ordersCurrentPage = newPage;
+      renderOrdersList();
+      container.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    onPageSizeChange: (newSize) => {
+      ordersPerPage = newSize;
+      ordersCurrentPage = 1;
+      renderOrdersList();
+    },
   });
 
   // Bind cancel buttons
@@ -584,7 +798,7 @@ function createOrderCardElement(order) {
 
       return `
         <div class="order-item-row">
-          <img src="${imgUrl}" alt="${escapeHtml(item.name)}" class="item-thumb" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <img src="${imgUrl}" alt="${escapeHtml(item.name)}" class="item-thumb" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
           <div class="item-info">
             <div class="item-name">${escapeHtml(item.name)}</div>
             <div>

@@ -263,3 +263,44 @@
   }
 }
 
+/* Responsive Mobile Chat Workspace Layout */
+@media (max-width: 768px) {
+  .admin-chat-workspace {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    min-height: 520px !important;
+    height: calc(100vh - 160px) !important;
+    border-radius: 8px !important;
+  }
+
+  .admin-chat-workspace .admin-chat-sidebar {
+    width: 100% !important;
+    flex: 1 !important;
+    display: flex !important;
+    border-right: none !important;
+  }
+
+  .admin-chat-workspace #admin-active-chat-box,
+  .admin-chat-workspace #staff-active-chat-box {
+    display: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 !important;
+  }
+
+  .admin-chat-workspace.mobile-chat-open .admin-chat-sidebar {
+    display: none !important;
+  }
+
+  .admin-chat-workspace.mobile-chat-open #admin-active-chat-box,
+  .admin-chat-workspace.mobile-chat-open #staff-active-chat-box {
+    display: flex !important;
+  }
+
+  .admin-chat-back-btn {
+    display: inline-flex !important;
+  }
+}
+
+

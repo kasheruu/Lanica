@@ -35,6 +35,19 @@ import {
   markOrderMessagesAsRead,
 } from "./chatService.js";
 
+import {
+  renderPagination,
+  showTableSkeleton,
+  renderTableEmptyState,
+} from "./paginationService.js";
+
+import { compressAndResizeImage } from "./imageOptimizationService.js";
+
+import {
+  logActivity,
+  fetchAuditLogs,
+} from "./auditService.js";
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAb2kDAVp9N_afxgOw5hSzDIvQ3UAIZVNU",
@@ -1628,18 +1641,23 @@ async function uploadImage(file, folderPath) {
   if (!file) return null;
 
   try {
-    console.log("Starting upload for file:", file.name, "Size:", file.size, "Type:", file.type);
-    // Create a unique filename
-    const uniqueName = `${Date.now()}_${file.name}`;
+    const compressedFile = await compressAndResizeImage(file, 500, 500, 80 * 1024);
+    console.log("Starting upload for compressed file:", compressedFile.name, "Size:", compressedFile.size, "Type:", compressedFile.type);
+
+    const safeName = compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const uniqueName = `${Date.now()}_${safeName}`;
     const targetPath = folderPath ? `${folderPath}/${uniqueName}` : `products/${uniqueName}`;
     const storageRef = ref(storage, targetPath);
 
-    console.log("Uploading to path:", targetPath);
-    // Upload file to Firebase Storage
-    const snapshot = await uploadBytes(storageRef, file);
+    const metadata = {
+      cacheControl: "public, max-age=31536000, immutable",
+      contentType: compressedFile.type || "image/webp",
+    };
+
+    console.log("Uploading to path:", targetPath, "with cache-control metadata");
+    const snapshot = await uploadBytes(storageRef, compressedFile, metadata);
     console.log("Upload successful, getting download URL...");
 
-    // Get download URL
     const downloadURL = await getDownloadURL(snapshot.ref);
     console.log("Download URL obtained:", downloadURL);
 
@@ -1940,12 +1958,21 @@ productForm.addEventListener("submit", async (e) => {
       size = `${width} × ${height} ${unit}`;
     }
 
+    const allowPreorder = document.getElementById("product-allow-preorder")
+      ? document.getElementById("product-allow-preorder").checked
+      : true;
+    const leadTime = document.getElementById("product-lead-time")?.value?.trim() || "14-21 Business Days";
+
     const productData = {
       name: document.getElementById("product-name").value,
       description: document.getElementById("product-description").value,
       category: document.getElementById("product-category").value,
       price: parseFloat(String(document.getElementById("product-price").value).replace(/,/g, "").trim()) || 0,
       stock,
+      allowPreorder,
+      isMadeToOrder: allowPreorder,
+      leadTime,
+      estimated_lead_time: leadTime,
       materials,
       material,
       dimensions,
@@ -1973,8 +2000,18 @@ productForm.addEventListener("submit", async (e) => {
     if (isEditing) {
       savedProductRef = doc(db, "products", currentEditId);
       await updateDoc(savedProductRef, productData);
+      logActivity(
+        "PRODUCT_UPDATE",
+        `Updated product "${productData.name}" (Stock: ${stock}, Price: ₱${productData.price.toLocaleString()}, Pre-Order: ${allowPreorder ? "Allowed" : "Disabled"})`,
+        { productId: currentEditId, category: productData.category, stock, allowPreorder }
+      );
     } else {
       savedProductRef = await addDoc(productsCollection, productData);
+      logActivity(
+        "PRODUCT_CREATE",
+        `Created product "${productData.name}" (Stock: ${stock}, Price: ₱${productData.price.toLocaleString()}, Pre-Order: ${allowPreorder ? "Allowed" : "Disabled"})`,
+        { productId: savedProductRef.id, category: productData.category, stock, allowPreorder }
+      );
     }
 
     // Ensure regenerated products eventually store Meshy URLs uploaded to Firebase Storage.
@@ -2221,7 +2258,6 @@ if (viewerModal)
   });
 
 // Add-ons / Optional Upgrades Repeater State & Logic
-let currentAddonsList = [];
 
 function clearAddonsRepeater() {
   currentAddonsList = [];
@@ -2336,6 +2372,13 @@ window.editProduct = (id, productJsonBase64) => {
     renderCategoryDropdowns(product.category);
     document.getElementById("product-price").value = formatPriceWithCommas(product.price);
     document.getElementById("product-stock").value = product.stock || 0;
+
+    if (document.getElementById("product-allow-preorder")) {
+      document.getElementById("product-allow-preorder").checked = product.allowPreorder !== false && product.isMadeToOrder !== false;
+    }
+    if (document.getElementById("product-lead-time")) {
+      document.getElementById("product-lead-time").value = product.leadTime || product.estimated_lead_time || "14-21 Business Days";
+    }
 
     // Materials tags
     clearMaterialTags();
@@ -2460,73 +2503,106 @@ window.editProduct = (id, productJsonBase64) => {
 
 // --- Rendering ---
 const renderInventory = (products) => {
+  if (!inventoryList) return;
   inventoryList.innerHTML = "";
 
-  if (products.length === 0) {
+  const totalItems = products.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / adminInvPerPage));
+  if (adminInvCurrentPage > totalPages) adminInvCurrentPage = totalPages;
+  if (adminInvCurrentPage < 1) adminInvCurrentPage = 1;
+
+  const startIndex = (adminInvCurrentPage - 1) * adminInvPerPage;
+  const pagedProducts = products.slice(startIndex, startIndex + adminInvPerPage);
+
+  if (pagedProducts.length === 0) {
     inventoryList.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px;">No products found. Add some!</td></tr>`;
-    return;
+  } else {
+    pagedProducts.forEach((product) => {
+      let statusClass = "status-in-stock";
+      let statusText = "In Stock";
+
+      if (product.stock === 0) {
+        statusClass = "status-mto";
+        statusText = "Made-to-Order";
+      } else if (product.stock <= 2) {
+        statusClass = "status-low-stock";
+        statusText = `Showroom (${product.stock})`;
+      } else {
+        statusClass = "status-in-stock";
+        statusText = `In Stock (${product.stock})`;
+      }
+
+      const thumbImage =
+        (product.thumbnails && product.thumbnails[0]) ||
+        (product.images && (product.images.isoImage || product.images.frontBg)) ||
+        product.thumbnail ||
+        "https://via.placeholder.com/48";
+      const productPayload = btoa(encodeURIComponent(JSON.stringify(product)));
+
+      const tr = document.createElement("tr");
+      const priceFormatted = Number(product.price || 0).toLocaleString();
+      tr.innerHTML = `
+              <td>
+                  <div class="table-product-info">
+                      <img src="${thumbImage}" alt="${escapeHtml(product.name)}" class="table-product-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+                      <strong>${escapeHtml(product.name)}</strong>
+                  </div>
+              </td>
+              <td>${escapeHtml(product.category)}</td>
+              <td>₱${priceFormatted}</td>
+              <td><span class="mat-val">${escapeHtml(product.material || "—")}</span></td>
+              <td id="stock-cell-${product.id}">
+                  ${product.stock !== undefined ? product.stock : 0}
+              </td>
+              <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+              <td>
+                  <div class="action-btns">
+                      ${
+                        product.meshyTaskId || product.modelUrl
+                          ? `<button class="btn-icon" title="View 3D Model" onclick="view3DModel('${product.id}')">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                      </button>`
+                          : ""
+                      }
+                      <button class="btn-icon" title="Edit Product" onclick="editProduct('${product.id}', '${productPayload}')">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
+                      <button class="btn-icon delete" onclick="deleteProduct('${product.id}')">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                  </div>
+              </td>
+          `;
+      inventoryList.appendChild(tr);
+    });
   }
 
-  products.forEach((product) => {
-    let statusClass = "status-in-stock";
-    let statusText = "In Stock";
-
-    if (product.stock === 0) {
-      statusClass = "status-mto";
-      statusText = "Made-to-Order";
-    } else if (product.stock <= 2) {
-      statusClass = "status-low-stock";
-      statusText = `Showroom (${product.stock})`;
-    } else {
-      statusClass = "status-in-stock";
-      statusText = `In Stock (${product.stock})`;
-    }
-
-    const thumbImage =
-      (product.thumbnails && product.thumbnails[0]) ||
-      (product.images && (product.images.isoImage || product.images.frontBg)) ||
-      product.thumbnail ||
-      "https://via.placeholder.com/48";
-    const productPayload = btoa(encodeURIComponent(JSON.stringify(product)));
-
-    const tr = document.createElement("tr");
-    const priceFormatted = Number(product.price || 0).toLocaleString();
-    tr.innerHTML = `
-            <td>
-                <div class="table-product-info">
-                    <img src="${thumbImage}" alt="${escapeHtml(product.name)}" class="table-product-img" onerror="this.src='assets/product_sofa.png'">
-                    <strong>${escapeHtml(product.name)}</strong>
-                </div>
-            </td>
-            <td>${escapeHtml(product.category)}</td>
-            <td>₱${priceFormatted}</td>
-            <td><span class="mat-val">${escapeHtml(product.material || "—")}</span></td>
-            <td id="stock-cell-${product.id}">
-                ${product.stock !== undefined ? product.stock : 0}
-            </td>
-            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-            <td>
-                <div class="action-btns">
-                    ${
-                      product.meshyTaskId || product.modelUrl
-                        ? `<button class="btn-icon" title="View 3D Model" onclick="view3DModel('${product.id}')">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                    </button>`
-                        : ""
-                    }
-                    <!-- encoded values handle quotes -->
-                    <button class="btn-icon" title="Edit Product" onclick="editProduct('${product.id}', '${productPayload}')">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    </button>
-                    <button class="btn-icon delete" onclick="deleteProduct('${product.id}')">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    </button>
-                </div>
-            </td>
-        `;
-    inventoryList.appendChild(tr);
-  });
+  renderInventoryPagination(totalItems, totalPages, startIndex);
 };
+
+function renderInventoryPagination(totalItems, totalPages) {
+  const tableContainer = inventoryList ? inventoryList.closest(".table-container") : null;
+  if (!tableContainer) return;
+
+  renderPagination({
+    container: tableContainer,
+    currentPage: adminInvCurrentPage,
+    totalPages,
+    totalItems,
+    pageSize: adminInvPerPage,
+    pageSizeOptions: [5, 10, 25, 50, 100],
+    urlParamPrefix: "inv",
+    onPageChange: (newPage) => {
+      adminInvCurrentPage = newPage;
+      renderInventory(allProducts);
+    },
+    onPageSizeChange: (newSize) => {
+      adminInvPerPage = newSize;
+      adminInvCurrentPage = 1;
+      renderInventory(allProducts);
+    },
+  });
+}
 
 function renderBars(container, entries, totalUnits) {
   if (!container) return;
@@ -2829,14 +2905,18 @@ const navAnalytics = document.getElementById("nav-analytics");
 const navWorkshop = document.getElementById("nav-workshop");
 const navChats = document.getElementById("nav-chats");
 const navOrders = document.getElementById("nav-orders");
+const navTransactions = document.getElementById("nav-transactions");
 const navUsers = document.getElementById("nav-users");
+const navAuditLogs = document.getElementById("nav-audit-logs");
 const dashboardSection = document.getElementById("dashboard-section");
 const inventorySection = document.getElementById("inventory-section");
 const analyticsSection = document.getElementById("analytics-section");
 const workshopSection = document.getElementById("workshop-section");
 const chatsSection = document.getElementById("chats-section");
 const ordersSection = document.getElementById("orders-section");
+const transactionsSection = document.getElementById("transactions-section");
 const usersSection = document.getElementById("users-section");
+const auditLogsSection = document.getElementById("audit-logs-section");
 
 const dashTotalRevenueEl = document.getElementById("dash-total-revenue");
 const dashPendingOrdersEl = document.getElementById("dash-pending-orders");
@@ -2852,7 +2932,6 @@ const analyticsCategoryDonutEl = document.getElementById("analytics-category-don
 const analyticsCategoryLegendEl = document.getElementById("analytics-category-legend");
 
 let allOrders = [];
-staffMembers = [];
 let ordersFilterValue = "all";
 let adminOrdersSearchQuery = "";
 let adminChatSearchQuery = "";
@@ -2863,6 +2942,39 @@ let usersFilterValue = "all";
 const customerNameByUid = new Map();
 const customerNameByEmail = new Map();
 let customerHydrationInFlight = false;
+
+// Global pagination and user management state
+let activeUserTab = "customers";
+let usersCurrentPage = 1;
+let usersPerPage = 10;
+let usersSearchQuery = "";
+let adminInvCurrentPage = 1;
+let adminInvPerPage = 10;
+let dashRecentOrdersCurrentPage = 1;
+let dashRecentOrdersPerPage = 5;
+let adminTransCurrentPage = 1;
+let adminTransPerPage = 10;
+
+function showToast(message, type = "success") {
+  let container = document.getElementById("toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toast-container";
+    container.style.cssText = "position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.style.cssText = `background: ${type === "error" ? "#ef4444" : "#10b981"}; color: #fff; padding: 12px 20px; border-radius: 8px; font-weight: 500; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; z-index: 10000;`;
+  toast.innerHTML = `<span>${type === "error" ? "⚠️" : "✓"}</span> <span>${escapeHtml(message)}</span>`;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
 
 const ORDERS_COLLECTION = collection(db, "orders");
 
@@ -3444,10 +3556,19 @@ function renderDashboardRecentOrders(recentOrders) {
 
   if (!recentOrders || recentOrders.length === 0) {
     dashRecentOrdersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: #6b7280;">No customer orders recorded yet.</td></tr>`;
+    renderDashRecentOrdersPagination(0, 1);
     return;
   }
 
-  recentOrders.forEach((order) => {
+  const totalItems = recentOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / dashRecentOrdersPerPage));
+  if (dashRecentOrdersCurrentPage > totalPages) dashRecentOrdersCurrentPage = totalPages;
+  if (dashRecentOrdersCurrentPage < 1) dashRecentOrdersCurrentPage = 1;
+
+  const startIndex = (dashRecentOrdersCurrentPage - 1) * dashRecentOrdersPerPage;
+  const pagedOrders = recentOrders.slice(startIndex, startIndex + dashRecentOrdersPerPage);
+
+  pagedOrders.forEach((order) => {
     const st = normalizeOrderStatus(order.status);
     const created = order.createdAt;
     let dateStr = "—";
@@ -3475,6 +3596,32 @@ function renderDashboardRecentOrders(recentOrders) {
     `;
     dashRecentOrdersListEl.appendChild(tr);
   });
+
+  renderDashRecentOrdersPagination(totalItems, totalPages);
+}
+
+function renderDashRecentOrdersPagination(totalItems, totalPages) {
+  const container = dashRecentOrdersListEl ? dashRecentOrdersListEl.closest(".table-container") : null;
+  if (!container) return;
+
+  renderPagination({
+    container,
+    currentPage: dashRecentOrdersCurrentPage,
+    totalPages,
+    totalItems,
+    pageSize: dashRecentOrdersPerPage,
+    pageSizeOptions: [5, 10, 25, 50],
+    urlParamPrefix: "dashOrders",
+    onPageChange: (newPage) => {
+      dashRecentOrdersCurrentPage = newPage;
+      updateDashboardKpis(allProducts, allOrders);
+    },
+    onPageSizeChange: (newSize) => {
+      dashRecentOrdersPerPage = newSize;
+      dashRecentOrdersCurrentPage = 1;
+      updateDashboardKpis(allProducts, allOrders);
+    },
+  });
 }
 
 function showAdminSection(name) {
@@ -3484,7 +3631,9 @@ function showAdminSection(name) {
   const showWorkshop = name === "workshop";
   const showChats = name === "chats";
   const showOrders = name === "orders";
+  const showTransactions = name === "transactions";
   const showUsers = name === "users";
+  const showAuditLogs = name === "audit-logs";
 
   if (dashboardSection) dashboardSection.classList.toggle("is-hidden", !showDash);
   if (inventorySection) inventorySection.classList.toggle("is-hidden", !showInv);
@@ -3492,7 +3641,9 @@ function showAdminSection(name) {
   if (workshopSection) workshopSection.classList.toggle("is-hidden", !showWorkshop);
   if (chatsSection) chatsSection.classList.toggle("is-hidden", !showChats);
   if (ordersSection) ordersSection.classList.toggle("is-hidden", !showOrders);
+  if (transactionsSection) transactionsSection.classList.toggle("is-hidden", !showTransactions);
   if (usersSection) usersSection.classList.toggle("is-hidden", !showUsers);
+  if (auditLogsSection) auditLogsSection.classList.toggle("is-hidden", !showAuditLogs);
 
   if (navDashboard) navDashboard.classList.toggle("active", showDash);
   if (navInventory) navInventory.classList.toggle("active", showInv);
@@ -3500,12 +3651,110 @@ function showAdminSection(name) {
   if (navWorkshop) navWorkshop.classList.toggle("active", showWorkshop);
   if (navChats) navChats.classList.toggle("active", showChats);
   if (navOrders) navOrders.classList.toggle("active", showOrders);
+  if (navTransactions) navTransactions.classList.toggle("active", showTransactions);
   if (navUsers) navUsers.classList.toggle("active", showUsers);
+  if (navAuditLogs) navAuditLogs.classList.toggle("active", showAuditLogs);
 
   if (showWorkshop) renderWorkshopQueue(allOrders);
+  if (showTransactions) renderAdminTransactionsList(allOrders);
+  if (showAuditLogs) renderAuditLogsSection();
 
   window.location.hash = name || "dashboard";
 }
+
+function renderAdminTransactionsList(orders) {
+  const tbody = document.getElementById("admin-transactions-table-body");
+  const pagContainer = document.getElementById("admin-transactions-pagination-container");
+  if (!tbody) return;
+
+  const validOrders = Array.isArray(orders) ? orders : allOrders;
+  if (!validOrders || validOrders.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 32px; color: #9ca3af;">No transaction records found.</td></tr>`;
+    if (pagContainer) pagContainer.innerHTML = "";
+    return;
+  }
+
+  const totalItems = validOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / adminTransPerPage));
+  if (adminTransCurrentPage > totalPages) adminTransCurrentPage = totalPages;
+  if (adminTransCurrentPage < 1) adminTransCurrentPage = 1;
+
+  const startIndex = (adminTransCurrentPage - 1) * adminTransPerPage;
+  const pagedOrders = validOrders.slice(startIndex, startIndex + adminTransPerPage);
+
+  tbody.innerHTML = "";
+  pagedOrders.forEach((order) => {
+    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+    const totalVal = Number(order.totalAmount || order.total || 0);
+    const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
+    const payStatus = order.paymentStatus || (isDownpayment ? "Downpayment Confirmed" : "Paid");
+    const pMethod = order.paymentMethod || "COD";
+    const refNum = order.orderId || order.id || "N/A";
+
+    let dateStr = "Recently";
+    if (order.createdAt && typeof order.createdAt.toDate === "function") {
+      dateStr = order.createdAt.toDate().toLocaleString();
+    } else if (order.createdAt && order.createdAt.seconds) {
+      dateStr = new Date(order.createdAt.seconds * 1000).toLocaleString();
+    }
+
+    const customer = order.customerName || order.shippingAddress?.recipientName || order.userEmail || "Customer";
+
+    const tr = document.createElement("tr");
+    tr.style.borderBottom = "1px solid #f1f5f9";
+    tr.innerHTML = `
+      <td style="padding: 14px 18px;"><strong>TX-${escapeHtml(String(refNum).slice(0, 10))}</strong></td>
+      <td style="padding: 14px 18px; font-size: 0.82rem; color: #64748b;">${escapeHtml(dateStr)}</td>
+      <td style="padding: 14px 18px; font-weight: 600; color: #0f172a;">${escapeHtml(refNum)}</td>
+      <td style="padding: 14px 18px; font-weight: 500;">${escapeHtml(customer)}</td>
+      <td style="padding: 14px 18px;"><span style="font-size: 0.8rem; background: #f1f5f9; padding: 4px 8px; border-radius: 6px;">${isDownpayment ? "30% Downpayment" : "Full Payment"}</span></td>
+      <td style="padding: 14px 18px; font-weight: 700; color: #059669;">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td style="padding: 14px 18px; font-weight: 500; color: #334155;">💳 ${escapeHtml(pMethod)}</td>
+      <td style="padding: 14px 18px;"><span class="status-badge" style="background: ${isDownpayment ? '#eff6ff' : '#ecfdf5'}; color: ${isDownpayment ? '#1d4ed8' : '#047857'}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;">${escapeHtml(payStatus)}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (pagContainer && typeof renderPagination === "function") {
+    renderPagination({
+      container: pagContainer,
+      currentPage: adminTransCurrentPage,
+      totalPages,
+      totalItems,
+      pageSize: adminTransPerPage,
+      pageSizeOptions: [10, 20, 50],
+      urlParamPrefix: "adminTrans",
+      onPageChange: (newPage) => {
+        adminTransCurrentPage = newPage;
+        renderAdminTransactionsList(validOrders);
+      },
+      onPageSizeChange: (newSize) => {
+        adminTransPerPage = newSize;
+        adminTransCurrentPage = 1;
+        renderAdminTransactionsList(validOrders);
+      },
+    });
+  }
+}
+
+// Global Kebab Menu Click & Outside Dismiss Handler
+document.addEventListener("click", (e) => {
+  const kebabBtn = e.target.closest(".kebab-menu-btn");
+  if (kebabBtn) {
+    e.stopPropagation();
+    const dropdown = kebabBtn.nextElementSibling;
+    if (dropdown) {
+      document.querySelectorAll(".kebab-menu-dropdown.active").forEach((el) => {
+        if (el !== dropdown) el.classList.remove("active");
+      });
+      dropdown.classList.toggle("active");
+    }
+  } else {
+    document.querySelectorAll(".kebab-menu-dropdown.active").forEach((el) => {
+      el.classList.remove("active");
+    });
+  }
+});
 
 if (navDashboard) {
   navDashboard.addEventListener("click", (e) => {
@@ -3544,11 +3793,160 @@ if (navOrders) {
     loadStaffMembers();
   });
 }
+if (navTransactions) {
+  navTransactions.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("transactions");
+  });
+}
 if (navUsers) {
   navUsers.addEventListener("click", (e) => {
     e.preventDefault();
     showAdminSection("users");
   });
+}
+if (navAuditLogs) {
+  navAuditLogs.addEventListener("click", (e) => {
+    e.preventDefault();
+    showAdminSection("audit-logs");
+  });
+}
+
+// Audit Logs Table Rendering with Smart Pagination
+let allAuditLogsData = [];
+let auditLogsCurrentPage = 1;
+const AUDIT_LOGS_PER_PAGE = 15;
+
+async function renderAuditLogsSection() {
+  const tableBody = document.getElementById("audit-logs-table-body");
+  const searchInput = document.getElementById("audit-log-search");
+  const roleFilter = document.getElementById("audit-log-role-filter");
+  const actionFilter = document.getElementById("audit-log-action-filter");
+  const refreshBtn = document.getElementById("btn-refresh-audit-logs");
+
+  if (!tableBody) return;
+  showTableSkeleton(tableBody, 5, 5);
+
+  if (refreshBtn && !refreshBtn.dataset.bound) {
+    refreshBtn.dataset.bound = "true";
+    refreshBtn.addEventListener("click", () => renderAuditLogsSection());
+  }
+
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = "true";
+    searchInput.addEventListener("input", () => {
+      auditLogsCurrentPage = 1;
+      applyAuditLogsFilters();
+    });
+  }
+
+  if (roleFilter && !roleFilter.dataset.bound) {
+    roleFilter.dataset.bound = "true";
+    roleFilter.addEventListener("change", () => {
+      auditLogsCurrentPage = 1;
+      applyAuditLogsFilters();
+    });
+  }
+
+  if (actionFilter && !actionFilter.dataset.bound) {
+    actionFilter.dataset.bound = "true";
+    actionFilter.addEventListener("change", () => {
+      auditLogsCurrentPage = 1;
+      applyAuditLogsFilters();
+    });
+  }
+
+  allAuditLogsData = await fetchAuditLogs(300);
+  applyAuditLogsFilters();
+}
+
+function applyAuditLogsFilters() {
+  const tableBody = document.getElementById("audit-logs-table-body");
+  const pagContainer = document.getElementById("audit-logs-pagination-container");
+  const searchVal = (document.getElementById("audit-log-search")?.value || "").toLowerCase().trim();
+  const roleVal = (document.getElementById("audit-log-role-filter")?.value || "all").toLowerCase();
+  const actionVal = (document.getElementById("audit-log-action-filter")?.value || "all");
+
+  let filtered = allAuditLogsData.filter((log) => {
+    if (roleVal !== "all" && (log.userRole || "").toLowerCase() !== roleVal) return false;
+    if (actionVal !== "all" && (log.actionType || log.action || "") !== actionVal) return false;
+    if (searchVal) {
+      const uName = (log.userName || "").toLowerCase();
+      const uEmail = (log.userEmail || "").toLowerCase();
+      const act = (log.actionType || log.action || "").toLowerCase();
+      const det = (log.details || "").toLowerCase();
+      return uName.includes(searchVal) || uEmail.includes(searchVal) || act.includes(searchVal) || det.includes(searchVal);
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    renderTableEmptyState(tableBody, 5, "No audit trail records found matching your filters.");
+    if (pagContainer) pagContainer.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.ceil(filtered.length / AUDIT_LOGS_PER_PAGE);
+  if (auditLogsCurrentPage > totalPages) auditLogsCurrentPage = totalPages;
+
+  const startIdx = (auditLogsCurrentPage - 1) * AUDIT_LOGS_PER_PAGE;
+  const pageLogs = filtered.slice(startIdx, startIdx + AUDIT_LOGS_PER_PAGE);
+
+  tableBody.innerHTML = "";
+  pageLogs.forEach((log) => {
+    const tr = document.createElement("tr");
+    tr.style.cssText = "border-bottom: 1px solid #f3f4f6; font-size: 0.85rem;";
+
+    const timeVal = log.timestamp?.toDate ? log.timestamp.toDate() : (log.createdAt ? new Date(log.createdAt) : new Date());
+    const dateStr = timeVal.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    const role = (log.userRole || "USER").toUpperCase();
+    let roleBg = "#f3f4f6";
+    let roleColor = "#4b5563";
+    if (role === "ADMIN") { roleBg = "#fef3c7"; roleColor = "#92400e"; }
+    else if (role === "STAFF") { roleBg = "#e0f2fe"; roleColor = "#0369a1"; }
+    else if (role === "CUSTOMER") { roleBg = "#f3e8ff"; roleColor = "#6b21a8"; }
+
+    const actType = log.actionType || log.action || "EVENT";
+    let actBg = "#ecfdf5";
+    let actColor = "#047857";
+    if (actType.startsWith("AUTH_")) { actBg = "#eff6ff"; actColor = "#1d4ed8"; }
+    else if (actType.includes("DELETE") || actType.includes("SUSPEND")) { actBg = "#fef2f2"; actColor = "#dc2626"; }
+    else if (actType.includes("UPDATE") || actType.includes("ORDER")) { actBg = "#fef3c7"; actColor = "#b45309"; }
+
+    tr.innerHTML = `
+      <td style="padding: 12px 18px; color: #4b5563; font-size: 0.8rem; white-space: nowrap;">${dateStr}</td>
+      <td style="padding: 12px 18px;">
+        <strong style="color: #111827; display: block; font-size: 0.84rem;">${escapeHtml(log.userName || "System")}</strong>
+        <span style="font-size: 0.74rem; color: #6b7280; display: block;">${escapeHtml(log.userEmail || "")}</span>
+        <span style="display: inline-block; margin-top: 2px; font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${roleBg}; color: ${roleColor};">${role}</span>
+      </td>
+      <td style="padding: 12px 18px;">
+        <span style="display: inline-block; font-size: 0.74rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: ${actBg}; color: ${actColor}; letter-spacing: 0.02em;">${escapeHtml(actType)}</span>
+      </td>
+      <td style="padding: 12px 18px; color: #374151; max-width: 380px; word-break: break-word;">
+        ${escapeHtml(log.details || "—")}
+      </td>
+      <td style="padding: 12px 18px; color: #9ca3af; font-size: 0.74rem; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        ${escapeHtml(log.userAgent || "Web Browser")}
+      </td>
+    `;
+    tableBody.appendChild(tr);
+  });
+
+  if (pagContainer) {
+    renderPagination({
+      container: pagContainer,
+      currentPage: auditLogsCurrentPage,
+      totalPages: totalPages,
+      totalItems: filtered.length,
+      itemsPerPage: AUDIT_LOGS_PER_PAGE,
+      onPageChange: (newPage) => {
+        auditLogsCurrentPage = newPage;
+        applyAuditLogsFilters();
+      },
+    });
+  }
 }
 
 if (dashActionAddProduct) {
@@ -3581,7 +3979,6 @@ if (dashLinkAllOrders) {
 
 async function loadStaffMembers() {
   try {
-    // Read all users and filter client-side for staff, artisan, or admin
     const snap = await getDocs(collection(db, "users"));
     staffMembers = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
@@ -3597,7 +3994,6 @@ async function loadStaffMembers() {
       }))
       .filter((u) => !!u.uid);
 
-    // Re-render orders once staff list is ready so assignment dropdown gets populated.
     applyOrdersFilter();
   } catch (e) {
     console.warn("Could not load staff users (check Firestore rules / index):", e);
@@ -3623,75 +4019,393 @@ function normalizeUserStatus(status) {
 }
 
 function updateUsersStats(users) {
-  if (!usersTotalEl || !usersAdminsEl || !usersStaffEl || !usersInactiveEl) return;
   const total = users.length;
+  const customers = users.filter((u) => normalizeUserRole(u.role) === "customer").length;
   const admins = users.filter((u) => normalizeUserRole(u.role) === "admin").length;
   const staff = users.filter((u) => normalizeUserRole(u.role) === "staff").length;
-  const inactive = users.filter((u) => normalizeUserStatus(u.status) === "inactive").length;
-  usersTotalEl.textContent = String(total);
-  usersAdminsEl.textContent = String(admins);
-  usersStaffEl.textContent = String(staff);
-  usersInactiveEl.textContent = String(inactive);
+
+  if (usersTotalEl) usersTotalEl.textContent = String(total);
+  const custEl = document.getElementById("users-customers");
+  if (custEl) custEl.textContent = String(customers);
+  if (usersAdminsEl) usersAdminsEl.textContent = String(admins);
+  if (usersStaffEl) usersStaffEl.textContent = String(staff);
+}
+
+function updateURLQueryParam(key, value) {
+  const url = new URL(window.location.href);
+  if (value !== null && value !== undefined) {
+    url.searchParams.set(key, value);
+  } else {
+    url.searchParams.delete(key);
+  }
+  window.history.replaceState({}, "", url.toString());
+}
+
+function generateSmartPageNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
 }
 
 function renderUsersList(users) {
   if (!usersListEl) return;
   usersListEl.innerHTML = "";
 
-  if (!users.length) {
-    usersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#6b7280;">No users found.</td></tr>`;
-    return;
+  const tableHead = document.getElementById("users-table-thead");
+  if (tableHead) {
+    if (activeUserTab === "customers") {
+      tableHead.innerHTML = `
+        <tr>
+          <th>Customer Name</th>
+          <th>Email Address</th>
+          <th>Total Orders</th>
+          <th>Lifetime Value (LTV)</th>
+          <th>Account Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      `;
+    } else {
+      tableHead.innerHTML = `
+        <tr>
+          <th>Staff Member</th>
+          <th>Email Address</th>
+          <th>Role & Access Level</th>
+          <th>Permissions Scope</th>
+          <th>Security Status</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      `;
+    }
   }
 
-  users.forEach((u) => {
-    const name = pickFirstNonEmpty(u.displayName, u.name, u.fullName, "—");
-    const email = pickFirstNonEmpty(u.email, "—");
-    const uid = pickFirstNonEmpty(u.uid, u.id, "—");
-    const role = normalizeUserRole(u.role);
-    const status = normalizeUserStatus(u.status);
-    const isSelf = !!currentUser && (uid === currentUser.uid || u.id === currentUser.uid);
+  const totalItems = users.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / usersPerPage));
+  if (usersCurrentPage > totalPages) usersCurrentPage = totalPages;
+  if (usersCurrentPage < 1) usersCurrentPage = 1;
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(name)}</td>
-      <td>${escapeHtml(email)}</td>
-      <td>
-        <select class="user-role-select" data-user-doc-id="${escapeHtml(u.id)}" ${isSelf ? "disabled" : ""}>
-          <option value="admin" ${role === "admin" ? "selected" : ""}>Admin</option>
-          <option value="staff" ${role === "staff" ? "selected" : ""}>Staff</option>
-          <option value="customer" ${role === "customer" ? "selected" : ""}>Customer</option>
-        </select>
-      </td>
-      <td>
-        <select class="user-status-select" data-user-doc-id="${escapeHtml(u.id)}" ${isSelf ? "disabled" : ""}>
-          <option value="active" ${status === "active" ? "selected" : ""}>Active</option>
-          <option value="inactive" ${status === "inactive" ? "selected" : ""}>Inactive</option>
-        </select>
-      </td>
-      <td style="font-size:0.8rem;color:#6b7280;">${escapeHtml(uid)}</td>
-      <td>
-        ${
-          isSelf
-            ? `<span style="font-size:0.82rem;color:#6b7280;">Current account</span>`
-            : `<button class="btn-secondary user-save-btn" data-user-doc-id="${escapeHtml(u.id)}">Save</button>`
+  updateURLQueryParam("userPage", usersCurrentPage);
+  updateURLQueryParam("userPerPage", usersPerPage);
+
+  const startIndex = (usersCurrentPage - 1) * usersPerPage;
+  const pagedUsers = users.slice(startIndex, startIndex + usersPerPage);
+
+  if (!pagedUsers.length) {
+    usersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b;">No ${activeUserTab === "customers" ? "customer" : "staff"} accounts found matching your query.</td></tr>`;
+  } else {
+    pagedUsers.forEach((u) => {
+      const name = pickFirstNonEmpty(u.displayName, u.name, u.fullName, "—");
+      const email = pickFirstNonEmpty(u.email, "—");
+      const uid = pickFirstNonEmpty(u.uid, u.id, "—");
+      const role = normalizeUserRole(u.role);
+      const status = normalizeUserStatus(u.status);
+      const isSelf = !!currentUser && (uid === currentUser.uid || u.id === currentUser.uid);
+
+      const tr = document.createElement("tr");
+
+      if (activeUserTab === "customers") {
+        // Calculate Customer Metrics
+        const custOrders = (Array.isArray(allOrders) ? allOrders : []).filter(
+          (o) => (o.userId && o.userId === u.id) || (o.customerEmail && o.customerEmail.toLowerCase() === email.toLowerCase())
+        );
+        const totalOrdersCount = custOrders.length;
+        const lifetimeValue = custOrders.reduce((sum, o) => {
+          const val = parseFloat(o.total || o.pricing?.total || o.amount || 0);
+          return sum + (isNaN(val) ? 0 : val);
+        }, 0);
+
+        tr.innerHTML = `
+          <td>
+            <div style="display:flex;flex-direction:column;">
+              <strong style="color:#0f172a;font-weight:600;">${escapeHtml(name)}</strong>
+              <span style="font-size:0.75rem;color:#94a3b8;">UID: ${escapeHtml(uid.slice(0, 10))}…</span>
+            </div>
+          </td>
+          <td><span style="color:#334155;">${escapeHtml(email)}</span></td>
+          <td><span style="font-weight:600;color:#0f172a;">${totalOrdersCount} ${totalOrdersCount === 1 ? "order" : "orders"}</span></td>
+          <td><span style="font-weight:700;color:#059669;">₱${lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
+          <td><span class="status-badge ${status === "active" ? "active" : "inactive"}">${status === "active" ? "● Active" : "● Inactive"}</span></td>
+          <td style="text-align: right;">
+            <button type="button" class="btn-secondary toggle-status-btn" data-user-doc-id="${escapeHtml(u.id)}" data-current-status="${status}" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">
+              ${status === "active" ? "Suspend" : "Activate"}
+            </button>
+          </td>
+        `;
+      } else {
+        // Render Staff & Security Directory Row
+        let roleBadgeClass = "staff";
+        let roleLabel = "Staff";
+        if (role === "admin" || role === "super_admin") {
+          roleBadgeClass = "super-admin";
+          roleLabel = role === "super_admin" ? "Super Admin" : "Administrator";
+        } else if (role === "artisan") {
+          roleBadgeClass = "artisan";
+          roleLabel = "Artisan Lead";
+        } else if (role === "inventory_manager") {
+          roleBadgeClass = "staff";
+          roleLabel = "Inventory Manager";
         }
-      </td>
-    `;
-    usersListEl.appendChild(tr);
+
+        const permSummary = role === "admin" || role === "super_admin" ? "Full Access" : "Orders & Inventory";
+
+        tr.innerHTML = `
+          <td>
+            <div style="display:flex;flex-direction:column;">
+              <strong style="color:#0f172a;font-weight:600;">${escapeHtml(name)} ${isSelf ? `<span style="font-size:0.7rem;background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;margin-left:4px;">You</span>` : ""}</strong>
+              <span style="font-size:0.75rem;color:#94a3b8;">UID: ${escapeHtml(uid.slice(0, 10))}…</span>
+            </div>
+          </td>
+          <td><span style="color:#334155;">${escapeHtml(email)}</span></td>
+          <td><span class="role-badge ${roleBadgeClass}">${escapeHtml(roleLabel)}</span></td>
+          <td><span style="font-size:0.8rem;color:#475569;background:#f1f5f9;padding:3px 8px;border-radius:6px;font-weight:500;">${escapeHtml(permSummary)}</span></td>
+          <td><span class="status-badge active">● Verified (2FA)</span></td>
+          <td style="text-align: right;">
+            ${
+              isSelf
+                ? `<span style="font-size:0.8rem;color:#94a3b8;font-style:italic;">Owner Account</span>`
+                : `<button type="button" class="btn-secondary open-role-modal-btn" data-user-doc-id="${escapeHtml(u.id)}" data-user-name="${escapeHtml(name)}" data-user-role="${escapeHtml(role)}" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Edit</button>`
+            }
+          </td>
+        `;
+      }
+
+      usersListEl.appendChild(tr);
+    });
+  }
+
+  renderUsersPaginationFooter(totalItems, totalPages);
+  bindUserTableActions();
+}
+
+function renderUsersPaginationFooter(totalItems, totalPages) {
+  const container = usersListEl ? usersListEl.closest(".table-container") : null;
+  if (!container) return;
+
+  renderPagination({
+    container,
+    currentPage: usersCurrentPage,
+    totalPages,
+    totalItems,
+    pageSize: usersPerPage,
+    pageSizeOptions: [5, 10, 25, 50, 100],
+    urlParamPrefix: "user",
+    onPageChange: (newPage) => {
+      usersCurrentPage = newPage;
+      applyUsersFilter();
+    },
+    onPageSizeChange: (newSize) => {
+      usersPerPage = newSize;
+      usersCurrentPage = 1;
+      applyUsersFilter();
+    },
   });
+}
+
+function bindUserTableActions() {
+  if (!usersListEl) return;
+
+  // Toggle user status (Activate / Suspend)
+  usersListEl.querySelectorAll(".toggle-status-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const docId = btn.getAttribute("data-user-doc-id");
+      const currentStatus = btn.getAttribute("data-current-status");
+      const newStatus = currentStatus === "active" ? "inactive" : "active";
+
+      try {
+        btn.setAttribute("disabled", "true");
+        await updateDoc(doc(db, "users", docId), {
+          status: newStatus,
+          updatedAt: new Date().toISOString(),
+        });
+        showToast(`Account status updated to ${newStatus}!`, "success");
+        const u = allUsers.find((x) => String(x.id) === String(docId));
+        if (u) u.status = newStatus;
+        applyUsersFilter();
+      } catch (err) {
+        console.error("Failed to update status:", err);
+        showToast("Failed to update account status.", "error");
+        btn.removeAttribute("disabled");
+      }
+    });
+  });
+
+  // Open Role Assignment Modal
+  usersListEl.querySelectorAll(".open-role-modal-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const docId = btn.getAttribute("data-user-doc-id");
+      const name = btn.getAttribute("data-user-name");
+      const role = btn.getAttribute("data-user-role");
+      const targetUser = allUsers.find((x) => String(x.id) === String(docId));
+
+      const modal = document.getElementById("user-role-modal");
+      const userIdInput = document.getElementById("role-modal-user-id");
+      const userNameInput = document.getElementById("role-modal-user-name");
+      const roleSelect = document.getElementById("role-modal-select");
+
+      const permOrders = document.getElementById("perm-orders");
+      const permInventory = document.getElementById("perm-inventory");
+      const permAnalytics = document.getElementById("perm-analytics");
+      const permUsers = document.getElementById("perm-users");
+
+      if (modal && userIdInput && userNameInput && roleSelect) {
+        userIdInput.value = docId;
+        userNameInput.value = name;
+        roleSelect.value = role || "staff";
+
+        const userPerms = targetUser?.permissions || {};
+        const isFull = role === "admin" || role === "super_admin";
+
+        if (permOrders) permOrders.checked = userPerms.manageOrders !== false;
+        if (permInventory) permInventory.checked = userPerms.inventoryControl !== false;
+        if (permAnalytics) permAnalytics.checked = isFull || !!userPerms.viewAnalytics;
+        if (permUsers) permUsers.checked = isFull || !!userPerms.manageUsers;
+
+        modal.classList.add("active");
+      }
+    });
+  });
+}
+
+function setupUserManagementControls() {
+  const tabsContainer = document.getElementById("user-management-tabs");
+  if (tabsContainer) {
+    tabsContainer.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        tabsContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeUserTab = btn.getAttribute("data-user-tab") || "customers";
+        usersCurrentPage = 1;
+        applyUsersFilter();
+      });
+    });
+  }
+
+  const searchInput = document.getElementById("users-search-input");
+  if (searchInput) {
+    let timer = null;
+    searchInput.addEventListener("input", (e) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        usersSearchQuery = e.target.value.toLowerCase().trim();
+        usersCurrentPage = 1;
+        applyUsersFilter();
+      }, 200);
+    });
+  }
+
+  const roleSelect = document.getElementById("role-modal-select");
+  if (roleSelect) {
+    roleSelect.addEventListener("change", (e) => {
+      const r = e.target.value;
+      const isFull = r === "admin" || r === "super_admin";
+      const permOrders = document.getElementById("perm-orders");
+      const permInventory = document.getElementById("perm-inventory");
+      const permAnalytics = document.getElementById("perm-analytics");
+      const permUsers = document.getElementById("perm-users");
+
+      if (permOrders) permOrders.checked = true;
+      if (permInventory) permInventory.checked = r !== "artisan";
+      if (permAnalytics) permAnalytics.checked = isFull;
+      if (permUsers) permUsers.checked = isFull;
+    });
+  }
+
+  // Setup Role Modal Close & Submit Handlers
+  const modal = document.getElementById("user-role-modal");
+  const closeBtn = document.getElementById("role-modal-close-btn");
+  const cancelBtn = document.getElementById("role-modal-cancel-btn");
+  const roleForm = document.getElementById("user-role-form");
+
+  const closeModal = () => {
+    if (modal) modal.classList.remove("active");
+  };
+
+  if (closeBtn) closeBtn.addEventListener("click", closeModal);
+  if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+
+  if (roleForm) {
+    roleForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const docId = document.getElementById("role-modal-user-id")?.value;
+      const newRole = document.getElementById("role-modal-select")?.value;
+      if (!docId || !newRole) return;
+
+      const permissionsPayload = {
+        manageOrders: document.getElementById("perm-orders")?.checked ?? true,
+        inventoryControl: document.getElementById("perm-inventory")?.checked ?? true,
+        viewAnalytics: document.getElementById("perm-analytics")?.checked ?? false,
+        manageUsers: document.getElementById("perm-users")?.checked ?? false,
+      };
+
+      try {
+        await updateDoc(doc(db, "users", docId), {
+          role: newRole,
+          permissions: permissionsPayload,
+          updatedAt: new Date().toISOString(),
+        });
+
+        const targetUser = allUsers.find((x) => String(x.id) === String(docId));
+        if (targetUser) {
+          targetUser.role = newRole;
+          targetUser.permissions = permissionsPayload;
+        }
+
+        showToast("Staff security role and permissions updated successfully!", "success");
+        closeModal();
+        applyUsersFilter();
+      } catch (err) {
+        console.error("Failed to update role:", err);
+        showToast("Failed to update staff security role.", "error");
+      }
+    });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupUserManagementControls);
+} else {
+  setupUserManagementControls();
 }
 
 function applyUsersFilter() {
   let rows = allUsers;
-  if (
-    usersFilterValue === "admin" ||
-    usersFilterValue === "staff" ||
-    usersFilterValue === "customer"
-  ) {
-    rows = rows.filter((u) => normalizeUserRole(u.role) === usersFilterValue);
+
+  // 1. Separate Customer directory vs Staff & Internal Team directory
+  if (activeUserTab === "customers") {
+    rows = rows.filter((u) => {
+      const r = normalizeUserRole(u.role);
+      return r === "customer" || (!u.role && r !== "staff" && r !== "admin");
+    });
+  } else {
+    rows = rows.filter((u) => {
+      const r = normalizeUserRole(u.role);
+      return r === "staff" || r === "admin" || r === "artisan" || r === "inventory_manager" || r === "super_admin";
+    });
+  }
+
+  // 2. Status Filter
+  if (usersFilterValue === "active") {
+    rows = rows.filter((u) => normalizeUserStatus(u.status) === "active");
   } else if (usersFilterValue === "inactive") {
     rows = rows.filter((u) => normalizeUserStatus(u.status) === "inactive");
   }
+
+  // 3. Search Query Filter
+  if (usersSearchQuery) {
+    rows = rows.filter((u) => {
+      const name = pickFirstNonEmpty(u.displayName, u.name, u.fullName, "").toLowerCase();
+      const email = String(u.email || "").toLowerCase();
+      const uid = String(u.uid || u.id || "").toLowerCase();
+      return name.includes(usersSearchQuery) || email.includes(usersSearchQuery) || uid.includes(usersSearchQuery);
+    });
+  }
+
   renderUsersList(rows);
   updateUsersStats(allUsers);
 }
@@ -4332,55 +5046,53 @@ function renderOrdersList(orders) {
         </select>
       </td>
       <td>
-        <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-          ${
-            isRefundRequested
-              ? `<button class="btn-primary btn-review-refund" data-order-id="${escapeHtml(
-                  order.id
-                )}" type="button" style="font-size:0.76rem; padding:4px 10px; background:#dc2626; border-radius:6px; font-weight:600; white-space:nowrap;">
-                  Review Refund
-                </button>`
-              : ""
-          }
-          ${
-            isMarkSettledVisible
-              ? `<button class="btn-secondary btn-settle-balance" data-order-id="${escapeHtml(
-                  order.id
-                )}" type="button" style="font-size:0.75rem; padding:4px 8px; font-weight:600; white-space:nowrap;">
-                  Mark Balance Settled
-                </button>`
-              : ""
-          }
-          ${
-            st === "placed" || st === "pending"
-              ? `<div class="order-action-group">
-                  <button class="btn-icon order-action-btn order-action-accept btn-accept-order" data-order-id="${escapeHtml(
+        <div class="kebab-menu-container" style="position: relative; display: inline-block;">
+          <button type="button" class="kebab-trigger-btn" aria-label="Row Actions" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; color: #334155; font-weight: bold; transition: all 0.2s;">
+            ⋮
+          </button>
+          <div class="kebab-dropdown-menu" style="display: none; position: absolute; right: 0; top: 36px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1000; min-width: 170px; padding: 6px; text-align: left;">
+            ${
+              isRefundRequested
+                ? `<button type="button" class="kebab-menu-item btn-review-refund" data-order-id="${escapeHtml(
                     order.id
-                  )}" aria-label="Accept order" title="Accept Order & Confirm Downpayment">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                  </button>
-                  <button class="btn-icon order-action-btn order-action-decline btn-decline-order" data-order-id="${escapeHtml(
-                    order.id
-                  )}" aria-label="Decline order" title="Decline Order">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>`
-              : st === "declined" || st === "cancelled"
-                ? `<button class="btn-icon order-action-btn order-action-delete btn-delete-order" data-order-id="${escapeHtml(
-                    order.id
-                  )}" aria-label="Delete declined order" title="Delete">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: #fef2f2; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    💸 Review Refund
                   </button>`
-                : `<span style="font-size:0.82rem;color:#059669;font-weight:500;text-transform:capitalize;">${escapeHtml(st)}</span>`
-          }
+                : ""
+            }
+            ${
+              isMarkSettledVisible
+                ? `<button type="button" class="kebab-menu-item btn-settle-balance" data-order-id="${escapeHtml(
+                    order.id
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    💵 Mark Balance Settled
+                  </button>`
+                : ""
+            }
+            ${
+              st === "placed" || st === "pending"
+                ? `<button type="button" class="kebab-menu-item btn-accept-order" data-order-id="${escapeHtml(
+                    order.id
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #16a34a; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    ✓ Confirm Downpayment
+                  </button>
+                  <button type="button" class="kebab-menu-item btn-decline-order" data-order-id="${escapeHtml(
+                    order.id
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    ✕ Decline Order
+                  </button>`
+                : ""
+            }
+            ${
+              st === "declined" || st === "cancelled"
+                ? `<button type="button" class="kebab-menu-item btn-delete-order" data-order-id="${escapeHtml(
+                    order.id
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    🗑 Delete Order
+                  </button>`
+                : ""
+            }
+          </div>
         </div>
       </td>
     `;
@@ -4899,14 +5611,32 @@ function renderWorkshopQueue(orders) {
     const customer = resolveCustomerDisplay(order);
     const items = Array.isArray(order.items) ? order.items : [];
 
+    let totalQty = 0;
+    items.forEach((it) => {
+      totalQty += Number(it.quantity || 1);
+    });
+
+    const totalVal = Number(order.totalAmount ?? order.total ?? 0);
+    const totalAmountStr = `₱${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
     const specsHTML = items
       .map((it) => {
+        const itemQty = Number(it.quantity || 1);
+        const itemPrice = Number(it.price || 0);
+        const itemSubtotal = Number(it.subtotal || itemPrice * itemQty);
         const notes = it.customNotes
           ? `<div class="kanban-custom-specs" style="margin-top:4px;"><strong>Custom Specs:</strong> ${escapeHtml(it.customNotes)}</div>`
           : "";
         return `
-          <div style="margin-bottom: 4px;">
-            <strong>${escapeHtml(it.name || "Item")}</strong> (${escapeHtml(it.material || "Standard")}) ×${it.quantity || 1}
+          <div style="margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem;">
+              <strong>${escapeHtml(it.name || "Item")}</strong>
+              <span style="font-weight: 700; color: #0f172a; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-size: 0.74rem;">Qty: ${itemQty}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: #64748b; margin-top: 2px;">
+              <span>Material: ${escapeHtml(it.material || "Standard")}</span>
+              <span style="font-weight: 600; color: #334155;">₱${itemSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
             ${notes}
           </div>
         `;
@@ -4916,16 +5646,22 @@ function renderWorkshopQueue(orders) {
     const card = document.createElement("div");
     card.className = "kanban-card";
     card.innerHTML = `
-      <div class="kanban-card-header">
+      <div class="kanban-card-header" style="padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; margin-bottom: 8px;">
         <div>
-          <div class="kanban-order-id">#${escapeHtml(order.id.slice(0, 8))}</div>
-          <div class="kanban-customer-name">${escapeHtml(String(customer))}</div>
+          <div class="kanban-order-id" style="font-weight:700; color:#0f172a;">#${escapeHtml(order.id.slice(0, 8))}</div>
+          <div class="kanban-customer-name" style="font-size:0.8rem; color:#475569;">${escapeHtml(String(customer))}</div>
         </div>
-        <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">${escapeHtml(order.orderType || "Made-to-Order")}</span>
+        <div style="text-align: right;">
+          <span style="font-size: 0.72rem; color: #c2410c; background: #fff7ed; padding: 2px 6px; border-radius: 6px; font-weight: 600; display: inline-block;">${escapeHtml(order.orderType || "Made-to-Order")}</span>
+          <div style="font-size:0.85rem; font-weight:700; color:#0f172a; margin-top:3px;">${totalAmountStr}</div>
+        </div>
       </div>
-      <div class="kanban-items-list">${specsHTML}</div>
-      <div class="kanban-card-footer">
-        <span class="kanban-lead-time">🕒 ${escapeHtml(order.estimatedLeadTime || "14–21 Days")}</span>
+      <div class="kanban-items-list" style="margin-bottom: 8px;">${specsHTML}</div>
+      <div class="kanban-card-footer" style="display: flex; justify-content: space-between; align-items: center; pt: 6px; border-top: 1px solid #f1f5f9;">
+        <div>
+          <span class="kanban-lead-time" style="font-size:0.73rem; color:#64748b; display:block;">🕒 ${escapeHtml(order.estimatedLeadTime || "14–21 Days")}</span>
+          <span style="font-size: 0.72rem; font-weight: 700; color: #334155;">Total Qty: ${totalQty} items</span>
+        </div>
         ${
           nextStage
             ? `<button type="button" class="kanban-btn-next btn-advance-crafting" data-order-id="${escapeHtml(
@@ -5394,9 +6130,25 @@ function setupAdminLiveChat() {
     });
   }
 
+  const mobileBackBtn = document.getElementById("admin-chat-mobile-back");
+  const chatWorkspaceEl = document.getElementById("admin-chat-workspace");
+
+  if (mobileBackBtn && chatWorkspaceEl) {
+    mobileBackBtn.addEventListener("click", () => {
+      chatWorkspaceEl.classList.remove("mobile-chat-open");
+    });
+  }
+
+  let adminChatVisibleLimit = 5;
+
   function selectChatSession(session) {
     activeChatSessionId = session.id;
+    adminChatVisibleLimit = 5; // Reset batch to 5 latest messages
     const isSupport = session.sessionType === "support";
+
+    if (chatWorkspaceEl) {
+      chatWorkspaceEl.classList.add("mobile-chat-open");
+    }
 
     // Immediately clear unread status for this session
     sessionUnreadCounts.set(session.id, 0);
@@ -5430,23 +6182,39 @@ function setupAdminLiveChat() {
 
     if (activeChatUnsubscribe) activeChatUnsubscribe();
 
-    activeChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
+    let allLoadedMessages = [];
+
+    function renderMessageBatch() {
       if (!messagesEl) return;
-
-      // Mark messages read in real time as they arrive while chat is open
-      markOrderMessagesAsRead(session.id, "admin", isSupport);
-      sessionUnreadCounts.set(session.id, 0);
-      updateAdminNavChatBadge();
-
-      if (messages.length === 0) {
+      if (allLoadedMessages.length === 0) {
         messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.88rem;">No messages in this ${
           isSupport ? "support" : "order"
         } thread yet. Send a greeting!</div>`;
         return;
       }
 
+      const totalCount = allLoadedMessages.length;
+      const startIndex = Math.max(0, totalCount - adminChatVisibleLimit);
+      const visibleMsgs = allLoadedMessages.slice(startIndex);
+      const hiddenCount = startIndex;
+
       messagesEl.innerHTML = "";
-      messages.forEach((m) => {
+
+      if (hiddenCount > 0) {
+        const loadMoreBtn = document.createElement("div");
+        loadMoreBtn.className = "chat-load-earlier-btn";
+        loadMoreBtn.style.cssText = "text-align: center; margin: 4px auto 12px auto; font-size: 0.78rem; color: #2563eb; cursor: pointer; padding: 6px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; font-weight: 600; width: fit-content; user-select: none; transition: all 0.15s ease;";
+        loadMoreBtn.innerHTML = `📜 Load earlier messages (${hiddenCount} hidden)`;
+        loadMoreBtn.addEventListener("click", () => {
+          const oldScrollHeight = messagesEl.scrollHeight;
+          adminChatVisibleLimit += 5;
+          renderMessageBatch();
+          messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
+        });
+        messagesEl.appendChild(loadMoreBtn);
+      }
+
+      visibleMsgs.forEach((m) => {
         const isStaff =
           m.senderRole === "admin" ||
           m.senderRole === "staff" ||
@@ -5495,6 +6263,29 @@ function setupAdminLiveChat() {
         `;
         messagesEl.appendChild(row);
       });
+    }
+
+    if (messagesEl) {
+      messagesEl.onscroll = () => {
+        if (messagesEl.scrollTop <= 10 && allLoadedMessages.length > adminChatVisibleLimit) {
+          const oldScrollHeight = messagesEl.scrollHeight;
+          adminChatVisibleLimit += 5;
+          renderMessageBatch();
+          messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
+        }
+      };
+    }
+
+    activeChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
+      if (!messagesEl) return;
+
+      // Mark messages read in real time as they arrive while chat is open
+      markOrderMessagesAsRead(session.id, "admin", isSupport);
+      sessionUnreadCounts.set(session.id, 0);
+      updateAdminNavChatBadge();
+
+      allLoadedMessages = messages;
+      renderMessageBatch();
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }, null, isSupport);

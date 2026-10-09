@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Wishlist | Lanica Premium Furniture</title>
+    <link rel="icon" type="image/jpeg" href="assets/lanicalogo.jpg" />
+    <meta
+      name="description"
+      content="View and manage your saved handcrafted furniture models at Lanica. Experience them in 3D AR or move items to your cart anytime."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+          "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
+          "three/": "https://cdn.jsdelivr.net/npm/three@0.173.0/"
+        }
+      }
+    </script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  </head>
+
+  <body>
+    <!-- Navbar -->
+    <header class="navbar">
+      <a href="index.html" class="logo" style="text-decoration: none; color: inherit;">Lanica.</a>
+      <nav class="nav-links">
+        <a href="products.html">Products</a>
+        <a href="index.html#about">About us</a>
+        <a href="index.html#ar-feature">Live View</a>
+        <a href="orders.html" class="nav-my-orders-link">My Orders</a>
+      </nav>
+      <div class="nav-actions">
+        <button id="nav-wishlist-btn" class="nav-icon-btn active" aria-label="Wishlist" title="Wishlist" onclick="window.location.href='wishlist.html'">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" style="color: #ef4444;">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+          <span id="wishlist-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
+        <button id="cart-toggle-btn" class="nav-icon-btn" aria-label="Shopping Cart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span id="cart-badge" class="cart-badge" style="display: none;">0</span>
+        </button>
+
+        <button id="auth-modal-btn" class="nav-icon-btn" aria-label="Customer Account">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </button>
+
+        <button id="mobile-menu-btn" class="nav-icon-btn mobile-menu-btn" aria-label="Toggle Navigation Menu" aria-expanded="false">
+          <svg class="hamburger-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+          <svg class="close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+
+        <a href="index.html#download" class="btn-download">
+          <span>Download App</span>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 16L12 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 13L12 16L15 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M5 18H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main style="padding-top: 120px;">
+      <!-- Wishlist Hero Banner -->
+      <section style="padding: 40px 5% 30px; text-align: center; background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%); border-bottom: 1px solid #f3f4f6;">
+        <div style="max-width: 800px; margin: 0 auto;">
+          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; background: rgba(239, 68, 68, 0.08); color: #ef4444; border-radius: 20px; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            Saved Collection
+          </span>
+          <h1 style="font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; color: #111827; margin-bottom: 12px; font-family: 'Outfit', sans-serif;">My Wishlist</h1>
+          <p style="font-size: 1.05rem; color: #6b7280; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+            Your personal collection of saved handcrafted furniture. Easily review specifications, preview in 3D AR, or move items to your cart.
+          </p>
+        </div>
+      </section>
+
+      <!-- Main Wishlist Catalog -->
+      <section class="section-padding" style="padding-top: 40px; padding-bottom: 60px;">
+        <div class="container" style="max-width: 1200px; margin: 0 auto;">
+          
+          <!-- Toolbar Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 16px;">
+            <h2 style="font-size: 1.25rem; font-weight: 600; color: #374151;">
+              Saved Furniture (<span id="wishlist-count-badge">0</span>)
+            </h2>
+            <a href="products.html" class="btn-secondary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 20px; border-radius: 12px; font-weight: 600;">
+              <span>Explore Catalog</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Wishlist Product Grid -->
+          <div id="wishlist-products-grid" class="products-catalog-grid">
+            <!-- Dynamically populated -->
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-content">
+        <div class="footer-brand">
+          <h2>Lanica.</h2>
+          <p>Bringing modern design into your reality.</p>
+        </div>
+        <div class="footer-links">
+          <a href="https://www.facebook.com/lanicassofasalaset" target="_blank" class="fb-contact">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07z"/>
+            </svg>
+            Contact Us
+          </a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lanica. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Cart Drawer (Slide-Over) -->
+    <div id="cart-drawer-overlay" class="cart-drawer-overlay">
+      <div class="cart-drawer">
+        <div class="cart-drawer-header">
+          <h3>Shopping Bag</h3>
+          <button id="close-cart-btn" class="modal-close-btn" aria-label="Close Shopping Bag">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div id="cart-items-container" class="cart-items-container">
+          <div class="cart-empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+            <p>Your shopping bag is empty.</p>
+          </div>
+        </div>
+
+        <div class="cart-drawer-footer">
+          <div class="cart-subtotal-row">
+            <span>Subtotal</span>
+            <span id="cart-subtotal-display" class="cart-subtotal-amount">₱0</span>
+          </div>
+          <button id="proceed-checkout-btn" class="btn-checkout-cta" disabled>
+            Proceed to Checkout
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Product Quick View & Variant Selection Modal -->
+    <div id="product-detail-modal" class="modal-overlay">
+      <div class="modal-card pdp-modal-card">
+        <div class="modal-header">
+          <div class="pdp-header-left">
+            <span id="pv-category-badge" class="pdp-badge-category">SOFA</span>
+            <span id="pv-leadtime-badge" class="pdp-badge-leadtime">MTO (~21-28 days)</span>
+          </div>
+          <button id="close-product-modal-btn" class="modal-close-btn" aria-label="Close Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body pdp-modal-body">
+          <div class="product-detail-layout">
+            <!-- Hero Image Showcase -->
+            <div class="product-detail-img-box">
+              <div class="pdp-hero-image-wrapper">
+                <img id="pv-image" src="assets/product_sofa.png" alt="Product Image" class="pdp-main-image" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png';" />
+                <div id="pv-pagination-indicator" class="pdp-pagination-indicator">1/1</div>
+              </div>
+              <div id="pv-thumbnails" class="modal-thumbnail-strip" style="display: none;"></div>
+            </div>
+
+            <div class="product-detail-info">
+              <h2 id="pv-name" class="pdp-title">Furniture Piece</h2>
+              <div class="pdp-price-row">
+                <span id="pv-price" class="product-detail-price">₱0</span>
+                <span id="pv-stock-status" class="pdp-stock-chip">Made to Order</span>
+              </div>
+
+              <!-- Dedicated SIZE Card -->
+              <div id="pv-dimensions-card" class="pdp-spec-card pdp-size-card">
+                <div class="pdp-spec-title">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 3H3v18h18V3zM9 3v18M15 3v18M3 9h18M3 15h18"></path>
+                  </svg>
+                  <span>SIZE & DIMENSIONS</span>
+                </div>
+                <div id="pv-dimensions-info" class="pdp-spec-value">36 × 64 in</div>
+              </div>
+
+              <!-- MATERIALS Card -->
+              <div class="pdp-spec-card pdp-materials-card">
+                <div class="pdp-spec-title">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                  </svg>
+                  <span>MATERIALS FOR THAT PRODUCT</span>
+                </div>
+                <div class="pdp-materials-checklist">
+                  <div class="pdp-check-item">
+                    <span class="pdp-check-icon">✓</span>
+                    <span>4 inches Pure Original Uratex Foam</span>
+                  </div>
+                  <div class="pdp-check-item">
+                    <span class="pdp-check-icon">✓</span>
+                    <span>Good lumber wood frame (Kiln dried)</span>
+                  </div>
+                  <div class="pdp-check-item">
+                    <span class="pdp-check-icon">✓</span>
+                    <span>Anti Anay at Bukbok Treated</span>
+                  </div>
+                  <div class="pdp-check-item">
+                    <span class="pdp-check-icon">✓</span>
+                    <span>Plush Premium Upholstery Fabric</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add-Ons Section -->
+              <div id="pv-addons-section" class="variant-section pdp-addons-section" style="margin-top: 16px;">
+                <div class="variant-label">
+                  <span style="font-weight: 700; color: #111827;">OPTIONAL UPGRADES & ADD-ONS</span>
+                </div>
+                <div id="pv-addons-list" class="pdp-addons-list"></div>
+              </div>
+
+              <!-- Customization Notes -->
+              <div class="variant-section" style="margin-top: 14px;">
+                <div class="variant-label">
+                  <span>Customization / Special Instructions (Optional)</span>
+                </div>
+                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: vertical; box-sizing: border-box; background: #FAFAFA;"></textarea>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Sticky Action Footer -->
+        <div class="pdp-sticky-footer">
+          <div class="pdp-footer-qty-wrap">
+            <span style="font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase;">Qty</span>
+            <div class="quantity-control">
+              <button id="pdp-qty-minus" class="qty-btn" type="button" aria-label="Decrease Quantity">-</button>
+              <input id="pdp-qty-input" type="number" value="1" min="1" max="99" class="qty-input" />
+              <button id="pdp-qty-plus" class="qty-btn" type="button" aria-label="Increase Quantity">+</button>
+            </div>
+          </div>
+          <button id="pdp-add-cart-btn" class="btn-primary pdp-cta-btn">
+            <span id="pdp-add-cart-label">Add to Cart</span>
+            <span id="pdp-sticky-price" class="pdp-sticky-price-pill">₱0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3D AR Model Viewer Modal -->
+    <div id="ar-modal" class="modal-overlay">
+      <div class="modal-card ar-modal-card">
+        <div class="modal-header">
+          <div class="pdp-header-left">
+            <h3 id="ar-model-title" style="font-size: 1.1rem; font-weight: 600; color: #111827; margin: 0;">Interactive 3D Preview</h3>
+          </div>
+          <button id="close-ar-modal-btn" class="modal-close-btn" aria-label="Close 3D View">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 0; position: relative; height: 500px; background: #f9fafb;">
+          <model-viewer
+            id="ar-viewer"
+            src=""
+            ios-src=""
+            alt="3D Furniture Model"
+            ar
+            ar-modes="webxr scene-viewer quick-look"
+            camera-controls
+            touch-action="pan-y"
+            auto-rotate
+            shadow-intensity="1"
+            style="width: 100%; height: 100%;"
+          >
+            <button slot="ar-button" class="btn-primary" style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 24px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,0.15);">
+              👋 View in Your Room (AR)
+            </button>
+          </model-viewer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal-overlay">
+      <div class="modal-card auth-modal-card" style="max-width: 440px;">
+        <div class="modal-header">
+          <h3>Customer Portal</h3>
+          <button id="close-auth-modal-btn" class="modal-close-btn" aria-label="Close Auth Modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 24px;">
+          <!-- Auth Form Tabs / Form logic managed by JS -->
+          <div id="auth-signed-out-view">
+            <div class="auth-tabs" style="display: flex; border-bottom: 2px solid #f3f4f6; margin-bottom: 20px;">
+              <button id="tab-login-btn" class="auth-tab-btn active" style="flex: 1; padding: 10px; font-weight: 600; border: none; background: none; cursor: pointer; border-bottom: 2px solid #111827; margin-bottom: -2px;">Sign In</button>
+              <button id="tab-register-btn" class="auth-tab-btn" style="flex: 1; padding: 10px; font-weight: 600; border: none; background: none; cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;">Register</button>
+            </div>
+
+            <!-- Sign In Form -->
+            <form id="auth-login-form">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Email Address</label>
+                <input type="email" id="login-email" required placeholder="you@example.com" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
+              </div>
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Password</label>
+                <input type="password" id="login-password" required placeholder="••••••••" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
+              </div>
+              <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; border-radius: 10px; font-weight: 600;">Sign In</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="auth-register-form" style="display: none;">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Full Name</label>
+                <input type="text" id="reg-name" required placeholder="Juan Dela Cruz" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
+              </div>
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Email Address</label>
+                <input type="email" id="reg-email" required placeholder="you@example.com" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
+              </div>
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #374151;">Password</label>
+                <input type="password" id="reg-password" required placeholder="At least 6 characters" minlength="6" style="width: 100%; padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; box-sizing: border-box;" />
+              </div>
+              <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; border-radius: 10px; font-weight: 600;">Create Account</button>
+            </form>
+
+            <div style="margin-top: 20px; text-align: center;">
+              <div style="position: relative; margin: 16px 0;">
+                <hr style="border: none; border-top: 1px solid #f3f4f6;" />
+                <span style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #fff; padding: 0 10px; font-size: 0.75rem; color: #9ca3af;">OR</span>
+              </div>
+              <button id="google-signin-btn" type="button" class="btn-secondary" style="width: 100%; padding: 10px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px solid #e5e7eb;">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                Continue with Google
+              </button>
+            </div>
+          </div>
+
+          <!-- Signed In Profile View -->
+          <div id="auth-signed-in-view" style="display: none; text-align: center;">
+            <div style="width: 64px; height: 64px; border-radius: 50%; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 1.5rem; font-weight: 700;">
+              <span id="user-avatar-initial">U</span>
+            </div>
+            <h3 id="user-display-name" style="margin-bottom: 4px; font-size: 1.15rem; color: #111827;">User Name</h3>
+            <p id="user-display-email" style="color: #6b7280; font-size: 0.9rem; margin-bottom: 24px;">user@example.com</p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <a href="orders.html" class="btn-primary" style="text-decoration: none; padding: 12px; border-radius: 10px; font-weight: 600;">View My Orders</a>
+              <button id="signout-btn" type="button" class="btn-secondary" style="padding: 12px; border-radius: 10px; font-weight: 600; color: #ef4444; border-color: #fee2e2;">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Chat Floating Button & Drawer -->
+    <button id="support-chat-fab" class="support-chat-fab" aria-label="Open Live Chat Support">
+      <svg class="chat-icon-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <span id="chat-unread-badge" class="chat-unread-badge" style="display: none;">0</span>
+    </button>
+
+    <div id="support-chat-drawer" class="support-chat-drawer" style="display: none;">
+      <div class="chat-drawer-container">
+        <div class="chat-drawer-header">
+          <div class="chat-header-info">
+            <button type="button" id="chat-back-btn" class="chat-back-btn" style="display: none;">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <div class="chat-avatar-ring">
+              <span class="chat-status-dot"></span>
+              <img src="assets/lanicalogo.jpg" alt="Lanica Support" />
+            </div>
+            <div>
+              <h4 id="chat-header-title">LANICA SUPPORT</h4>
+              <small id="chat-header-status">Online · Replies in 5m</small>
+            </div>
+          </div>
+          <button type="button" id="close-chat-btn" class="chat-close-btn close-support-drawer" aria-label="Close Chat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div id="customer-chat-channel-bar" class="chat-channel-bar" style="display: none;"></div>
+
+        <div id="chat-messages-area" class="chat-messages-body">
+          <div class="chat-welcome-card">
+            <p>👋 <strong>Kumusta!</strong> Welcome to Lanica Live Support. You can ask us about order status, custom dimensions, wood finishes, or questions about our AR app!</p>
+          </div>
+        </div>
+
+        <div id="chat-attachment-preview" class="chat-attachment-preview" style="display: none;">
+          <span id="chat-attachment-name">attachment.jpg</span>
+          <button type="button" id="chat-cancel-attachment">&times;</button>
+        </div>
+
+        <form id="chat-input-form" class="chat-input-container">
+          <label for="chat-file-input" class="chat-attach-btn" title="Attach photo or swatch">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            <input type="file" id="chat-file-input" accept="image/*" style="display: none;" />
+          </label>
+          <input type="text" id="chat-text-input" placeholder="Type a message..." autocomplete="off" />
+          <button type="submit" id="chat-send-btn" class="chat-send-btn" aria-label="Send Message">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script type="module" src="wishlist.js"></script>
+  </body>
+</html>

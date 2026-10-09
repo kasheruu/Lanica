@@ -84,6 +84,13 @@
         </svg>
         Orders
       </a>
+      <a href="#" class="nav-item" id="nav-transactions" data-section="transactions">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+          <line x1="1" y1="10" x2="23" y2="10"></line>
+        </svg>
+        Transactions
+      </a>
       <a href="#" class="nav-item" id="nav-users" data-section="users">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -92,6 +99,16 @@
           <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
         </svg>
         Users
+      </a>
+      <a href="#" class="nav-item" id="nav-audit-logs" data-section="audit-logs">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        Audit Logs
       </a>
       <a href="index.html" class="nav-item">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -286,12 +303,13 @@
       <header class="admin-header">
         <div>
           <h1>Furniture & Production Analytics</h1>
-          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time Made-to-Order production pipeline, sales performance, cash collections, and material demand.</p>
+          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time Made-to-Order production pipeline, sales performance, and category breakdown.</p>
         </div>
         <button id="export-analytics-pdf-btn" class="btn-primary" type="button">Export PDF</button>
       </header>
 
       <div id="analytics-export-area">
+        <!-- Top Metrics Cards -->
         <div class="stats-grid stats-grid-modern">
           <div class="stat-card">
             <h3>Catalog Listings</h3>
@@ -308,67 +326,10 @@
             <p class="stat-value" id="total-value" style="color: #0f1115;">₱0.00</p>
             <span style="font-size: 0.78rem; color: #6b7280;">Cumulative gross volume</span>
           </div>
-          <div class="stat-card">
-            <h3>Cashflow Collected</h3>
-            <p class="stat-value" id="analytics-cash-collected" style="color: #059669;">₱0.00</p>
-            <span style="font-size: 0.78rem; color: #6b7280;" id="analytics-balance-due">₱0.00 balance due</span>
-          </div>
         </div>
 
-        <div class="analytics-grid analytics-grid-modern">
-          <div class="analytics-card">
-            <h3>Production & Order Health</h3>
-            <div class="analytics-kpis">
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Total Orders</span>
-                <strong id="analytics-total-units">0</strong>
-              </div>
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">In Workshop</span>
-                <strong id="analytics-out-of-stock" style="color: #2563eb;">0</strong>
-              </div>
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Avg Order Value</span>
-                <strong id="analytics-avg-price">₱0.00</strong>
-              </div>
-              <div class="analytics-kpi">
-                <span class="analytics-kpi-label">Completed / Shipped</span>
-                <strong id="analytics-avg-stock" style="color: #059669;">0</strong>
-              </div>
-            </div>
-          </div>
-
-          <!-- Inventory Breakdown by Category (Donut Chart) -->
-          <div class="analytics-card">
-            <h3>Category Breakdown</h3>
-            <div id="analytics-category-donut-container" class="donut-chart-container">
-              <div id="analytics-category-donut" class="donut-chart"></div>
-              <div id="analytics-category-legend" class="donut-legend"></div>
-            </div>
-          </div>
-
-          <!-- Popular Materials & Demand -->
-          <div class="analytics-card analytics-card-wide">
-            <h3>Customer Material Preferences</h3>
-            <div id="analytics-material-bars" class="analytics-bars"></div>
-          </div>
-
-          <!-- Made-to-Order Production Watchlist (Replaces Critical Stock Level Alerts) -->
-          <div class="analytics-card analytics-card-wide">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-              <div>
-                <h3 style="margin: 0;">Active Made-to-Order Production Watchlist</h3>
-                <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Real-time queue of custom furniture orders crafting in workshop (14–21 days lead time)</p>
-              </div>
-              <span id="analytics-mto-count-badge" style="font-size: 0.8rem; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
-                0 Orders in Queue
-              </span>
-            </div>
-            <div id="analytics-low-stock-list" class="analytics-mto-watchlist"></div>
-          </div>
-        </div>
-
-        <div class="analytics-card revenue-analytics-card" style="margin-bottom: 16px">
+        <!-- TOP CHART VISUALIZATIONS SECTION -->
+        <div class="analytics-card revenue-analytics-card" style="margin-bottom: 24px;">
           <div class="orders-analytics-header">
             <div>
               <h3 style="margin: 0">Revenue & Payment Collections</h3>
@@ -401,6 +362,54 @@
             </div>
           </div>
           <div id="orders-revenue-graph" class="orders-revenue-graph"></div>
+        </div>
+
+        <div class="analytics-grid analytics-grid-modern">
+          <!-- Inventory Breakdown by Category (Donut Chart Visualization) -->
+          <div class="analytics-card">
+            <h3>Category Breakdown</h3>
+            <div id="analytics-category-donut-container" class="donut-chart-container">
+              <div id="analytics-category-donut" class="donut-chart"></div>
+              <div id="analytics-category-legend" class="donut-legend"></div>
+            </div>
+          </div>
+
+          <!-- Production & Order Health -->
+          <div class="analytics-card">
+            <h3>Production & Order Health</h3>
+            <div class="analytics-kpis">
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Total Orders</span>
+                <strong id="analytics-total-units">0</strong>
+              </div>
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">In Workshop</span>
+                <strong id="analytics-out-of-stock" style="color: #2563eb;">0</strong>
+              </div>
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Avg Order Value</span>
+                <strong id="analytics-avg-price">₱0.00</strong>
+              </div>
+              <div class="analytics-kpi">
+                <span class="analytics-kpi-label">Completed / Shipped</span>
+                <strong id="analytics-avg-stock" style="color: #059669;">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Made-to-Order Production Watchlist -->
+          <div class="analytics-card analytics-card-wide">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h3 style="margin: 0;">Active Made-to-Order Production Watchlist</h3>
+                <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Real-time queue of custom furniture orders crafting in workshop (14–21 days lead time)</p>
+              </div>
+              <span id="analytics-mto-count-badge" style="font-size: 0.8rem; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
+                0 Orders in Queue
+              </span>
+            </div>
+            <div id="analytics-low-stock-list" class="analytics-mto-watchlist"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -556,6 +565,18 @@
                 <span class="label-stock-badge">0 = Made-to-Order</span>
               </div>
               <input type="number" id="product-stock" required min="0" max="99999" value="0" />
+            </div>
+          </div>
+
+          <!-- Pre-Order / Made-to-Order Settings -->
+          <div class="form-group" style="margin-top: 14px; background: #f9fafb; padding: 12px 14px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.88rem; cursor: pointer; color: #1f2937; margin: 0;">
+              <input type="checkbox" id="product-allow-preorder" checked style="width: 16px; height: 16px; cursor: pointer; accent-color: #2563eb;" />
+              Allow Pre-order / Made-to-Order when stock is 0
+            </label>
+            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px;">
+              <label for="product-lead-time" style="font-size: 0.8rem; font-weight: 500; color: #4b5563;">Estimated Production Lead Time</label>
+              <input type="text" id="product-lead-time" placeholder="e.g. 14-21 Business Days" value="14-21 Business Days" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.84rem; outline: none; background: #fff;" />
             </div>
           </div>
 
@@ -972,9 +993,9 @@
         </div>
       </header>
 
-      <div class="admin-chat-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 650px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+      <div class="admin-chat-workspace" id="admin-chat-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 650px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
         <!-- Left: Conversations List -->
-        <div style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
+        <div id="admin-chat-sidebar" class="admin-chat-sidebar" style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
           <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #fff;">
             <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Active Conversations</h3>
             <span style="font-size: 0.78rem; color: #6b7280;">Real-time customer inquiries & workshop chats</span>
@@ -1018,9 +1039,14 @@
         <div id="admin-active-chat-box" style="display: flex; flex-direction: column; height: 650px;">
           <!-- Active Conversation Header -->
           <div id="admin-chat-active-header" style="padding: 14px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #fff;">
-            <div>
-              <h3 id="admin-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827;">Select a conversation</h3>
-              <span id="admin-chat-customer-email" style="font-size: 0.8rem; color: #6b7280;">Choose a customer from the left panel</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" id="admin-chat-mobile-back" class="admin-chat-back-btn" style="display: none; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: #374151;">
+                ← Back
+              </button>
+              <div>
+                <h3 id="admin-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827;">Select a conversation</h3>
+                <span id="admin-chat-customer-email" style="font-size: 0.8rem; color: #6b7280;">Choose a customer from the left panel</span>
+              </div>
             </div>
           </div>
 
@@ -1187,8 +1213,10 @@
 
     <div id="users-section" class="admin-section is-hidden">
       <header class="admin-header">
-        <h1>User Management</h1>
-        <p class="admin-subtitle">Manage account roles and account status from Firestore users data.</p>
+        <div>
+          <h1>User Management</h1>
+          <p class="admin-subtitle">Manage customer accounts, admin & staff roles, and access statuses.</p>
+        </div>
       </header>
 
       <div class="stats-grid orders-stats">
@@ -1197,35 +1225,54 @@
           <p class="stat-value" id="users-total">0</p>
         </div>
         <div class="stat-card">
+          <h3>Customers</h3>
+          <p class="stat-value" id="users-customers" style="color: #2563eb;">0</p>
+        </div>
+        <div class="stat-card">
           <h3>Admins</h3>
-          <p class="stat-value" id="users-admins">0</p>
+          <p class="stat-value" id="users-admins" style="color: #7c3aed;">0</p>
         </div>
         <div class="stat-card">
           <h3>Staff</h3>
-          <p class="stat-value" id="users-staff">0</p>
+          <p class="stat-value" id="users-staff" style="color: #d97706;">0</p>
         </div>
-        <div class="stat-card">
-          <h3>Inactive</h3>
-          <p class="stat-value" id="users-inactive">0</p>
+      </div>
+
+      <!-- User Management Sub-Tabs for Separation of Concerns -->
+      <div class="orders-controls-bar" style="margin-bottom: 16px;">
+        <div class="orders-tabs-wrapper">
+          <div id="user-management-tabs" class="orders-tabs">
+            <button type="button" class="tab-btn active" id="tab-user-customers" data-user-tab="customers">
+              <span>👤 Customer Accounts</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-user-staff" data-user-tab="staff">
+              <span>🛡️ Admin & Staff Accounts</span>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="table-container orders-toolbar">
-        <div class="orders-toolbar-inner">
-          <label for="users-role-filter" class="orders-filter-label">Filter</label>
+        <div class="orders-toolbar-inner" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 240px; max-width: 340px; position: relative; display: flex; align-items: center;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 10px; pointer-events: none;">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="users-search-input" placeholder="Search user name, email, or UID..." style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit;" autocomplete="off" />
+          </div>
+          <label for="users-role-filter" class="orders-filter-label">Status Filter</label>
           <select id="users-role-filter" class="orders-filter-select">
-            <option value="all">All users</option>
-            <option value="admin">Admins</option>
-            <option value="staff">Staff</option>
-            <option value="customer">Customers</option>
-            <option value="inactive">Inactive</option>
+            <option value="all">All Statuses</option>
+            <option value="active">Active Accounts</option>
+            <option value="inactive">Inactive Accounts</option>
           </select>
         </div>
       </div>
 
       <div class="table-container">
         <table class="inventory-table orders-table">
-          <thead>
+          <thead id="users-table-thead">
             <tr>
               <th>Name</th>
               <th>Email</th>
@@ -1243,7 +1290,176 @@
         </table>
       </div>
     </div>
+
+    <!-- Transaction History Section (Decoupled Financial Audit Trail) -->
+    <div id="transactions-section" class="admin-section is-hidden">
+      <header class="admin-header">
+        <div>
+          <h1>Transaction History & Receipts</h1>
+          <p class="admin-subtitle">
+            Decoupled system transaction ledger: track upfront downpayments, settled balances, refunds, and payment gateway reference numbers.
+          </p>
+        </div>
+      </header>
+
+      <div class="table-container" style="background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; margin-top: 20px;">
+        <table class="admin-table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 0.78rem; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em;">
+              <th style="padding: 14px 18px;">Transaction ID / Ref</th>
+              <th style="padding: 14px 18px;">Date / Time</th>
+              <th style="padding: 14px 18px;">Order Reference</th>
+              <th style="padding: 14px 18px;">Customer</th>
+              <th style="padding: 14px 18px;">Payment Type</th>
+              <th style="padding: 14px 18px;">Amount</th>
+              <th style="padding: 14px 18px;">Gateway / Method</th>
+              <th style="padding: 14px 18px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="admin-transactions-table-body">
+            <tr>
+              <td colspan="8" style="text-align: center; padding: 32px; color: #9ca3af;">
+                Loading financial transaction records...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div id="admin-transactions-pagination-container"></div>
+      </div>
+    </div>
+
+    <!-- Audit Trail / Activity Logs Section -->
+    <div id="audit-logs-section" class="admin-section is-hidden">
+      <header class="admin-header">
+        <div>
+          <h1>System Audit Trail</h1>
+          <p class="admin-subtitle">
+            Comprehensive history of inventory adjustments, order status updates, security logins, and user management activities.
+          </p>
+        </div>
+      </header>
+
+      <!-- Audit Log Controls (Search & Filters) -->
+      <div class="user-directory-card" style="margin-bottom: 20px; padding: 18px 20px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb;">
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; flex: 1; min-width: 280px;">
+            <!-- Real-Time Search -->
+            <div style="position: relative; flex: 1; min-width: 220px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="text"
+                id="audit-log-search"
+                placeholder="Search user, email, or activity details..."
+                style="width: 100%; padding: 9px 12px 9px 36px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.86rem; outline: none;"
+              />
+            </div>
+            <!-- Role Filter -->
+            <select id="audit-log-role-filter" style="padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.86rem; background: #fff; cursor: pointer;">
+              <option value="all">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="staff">Staff</option>
+              <option value="customer">Customer</option>
+              <option value="system">System</option>
+            </select>
+            <!-- Action Filter -->
+            <select id="audit-log-action-filter" style="padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.86rem; background: #fff; cursor: pointer;">
+              <option value="all">All Action Types</option>
+              <option value="AUTH_LOGIN">AUTH_LOGIN</option>
+              <option value="AUTH_LOGOUT">AUTH_LOGOUT</option>
+              <option value="PRODUCT_UPDATE">PRODUCT_UPDATE</option>
+              <option value="PRODUCT_CREATE">PRODUCT_CREATE</option>
+              <option value="PRODUCT_DELETE">PRODUCT_DELETE</option>
+              <option value="STOCK_ADJUSTMENT">STOCK_ADJUSTMENT</option>
+              <option value="ORDER_STATUS_UPDATE">ORDER_STATUS_UPDATE</option>
+              <option value="ORDER_DELETE">ORDER_DELETE</option>
+              <option value="USER_MANAGEMENT">USER_MANAGEMENT</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btn-refresh-audit-logs" class="btn-secondary" style="padding: 8px 14px; font-size: 0.84rem; border-radius: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff;">
+              🔄 Refresh Logs
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Logs Table -->
+      <div class="table-container" style="background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+        <table class="admin-table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 0.78rem; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em;">
+              <th style="padding: 14px 18px;">Date / Time</th>
+              <th style="padding: 14px 18px;">User & Role</th>
+              <th style="padding: 14px 18px;">Event / Action</th>
+              <th style="padding: 14px 18px;">Details & Changes</th>
+              <th style="padding: 14px 18px;">Client Info</th>
+            </tr>
+          </thead>
+          <tbody id="audit-logs-table-body">
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 32px; color: #9ca3af;">
+                Loading audit trail records...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <!-- Reusable Pagination Footer -->
+        <div id="audit-logs-pagination-container"></div>
+      </div>
+    </div>
   </main>
+
+  <!-- Role & Permissions Assignment Modal -->
+  <div id="user-role-modal" class="user-modal-backdrop">
+    <div class="user-modal-card">
+      <div class="user-modal-header">
+        <h3 id="role-modal-title">Edit Staff Permissions</h3>
+        <button type="button" class="user-modal-close" id="role-modal-close-btn">&times;</button>
+      </div>
+      <form id="user-role-form" style="display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="role-modal-user-id" />
+        <div>
+          <label style="display: block; font-size: 0.825rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Staff Name / Email</label>
+          <input type="text" id="role-modal-user-name" readonly style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 0.875rem; color: #334155;" />
+        </div>
+        <div>
+          <label for="role-modal-select" style="display: block; font-size: 0.825rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Assign Security Role</label>
+          <select id="role-modal-select" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.875rem; background: #ffffff;">
+            <option value="staff">Staff (Standard)</option>
+            <option value="artisan">Artisan / Workshop Lead</option>
+            <option value="inventory_manager">Inventory Manager</option>
+            <option value="admin">Administrator</option>
+            <option value="super_admin">Super Admin</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.825rem; font-weight: 600; color: #475569; margin-bottom: 8px;">Permission Scope</label>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #334155; cursor: pointer;">
+              <input type="checkbox" id="perm-orders" checked /> Manage Orders
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #334155; cursor: pointer;">
+              <input type="checkbox" id="perm-inventory" checked /> Inventory Control
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #334155; cursor: pointer;">
+              <input type="checkbox" id="perm-analytics" /> View Analytics
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #334155; cursor: pointer;">
+              <input type="checkbox" id="perm-users" /> Manage Users
+            </label>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px;">
+          <button type="button" id="role-modal-cancel-btn" style="padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; color: #475569; font-weight: 600; cursor: pointer;">Cancel</button>
+          <button type="submit" style="padding: 8px 20px; border: none; border-radius: 8px; background: #2563eb; color: #ffffff; font-weight: 600; cursor: pointer;">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </body>
 
 </html>

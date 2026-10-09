@@ -598,16 +598,29 @@ export function subscribeToAllChats(callback, errorCallback) {
   };
 }
 
+import { compressAndResizeImage } from "./imageOptimizationService.js";
+
 /**
  * Uploads an image or document attachment to Firebase Storage (lanica_chats/{orderId}/{fileName})
  */
 export async function uploadChatAttachment(file, orderId) {
   if (!file) throw new Error("No file provided.");
-  const safeName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+
+  let uploadFile = file;
+  if (file.type && file.type.startsWith("image/")) {
+    uploadFile = await compressAndResizeImage(file, 800, 800, 100 * 1024);
+  }
+
+  const safeName = `${Date.now()}_${uploadFile.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
   const path = `lanica_chats/${orderId || "general"}/${safeName}`;
   const fileRef = storageRef(storage, path);
 
-  const snapshot = await uploadBytes(fileRef, file);
+  const metadata = {
+    cacheControl: "public, max-age=31536000, immutable",
+    contentType: uploadFile.type || "application/octet-stream",
+  };
+
+  const snapshot = await uploadBytes(fileRef, uploadFile, metadata);
   const downloadUrl = await getDownloadURL(snapshot.ref);
   return downloadUrl;
 }

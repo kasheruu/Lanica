@@ -884,3 +884,219 @@ body {
   }
 }
 
+/* Shared Table Pagination Footer */
+.table-pagination-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background-color: var(--clr-white);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 0.88rem;
+  color: var(--clr-text-muted);
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom-left-radius: var(--border-radius-lg);
+  border-bottom-right-radius: var(--border-radius-lg);
+}
+
+.table-pagination-footer .pagination-info {
+  font-weight: 500;
+  color: var(--clr-black);
+}
+
+.table-pagination-footer .pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.table-pagination-footer .pagination-per-page {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-pagination-footer .pagination-per-page select {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--clr-white);
+  font-size: 0.85rem;
+  color: var(--clr-black);
+  cursor: pointer;
+  outline: none;
+}
+
+.table-pagination-footer .pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-pagination-footer .pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--clr-white);
+  color: var(--clr-black);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.table-pagination-footer .pagination-btn:hover:not(:disabled) {
+  background: var(--clr-yellow);
+  border-color: var(--clr-yellow);
+  color: var(--clr-black);
+}
+
+.table-pagination-footer .pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.table-pagination-footer .pagination-page-indicator {
+  font-size: 0.85rem;
+  color: var(--clr-text-muted);
+}
+
+.table-pagination-footer .pagination-pages-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.table-pagination-footer .pagination-num-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.table-pagination-footer .pagination-num-btn:hover:not(.active) {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.table-pagination-footer .pagination-num-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  font-weight: 600;
+}
+
+.table-pagination-footer .pagination-ellipsis {
+  padding: 0 4px;
+  font-size: 0.85rem;
+  color: #9ca3af;
+  user-select: none;
+}
+
+/* Jump to Page Input */
+.table-pagination-footer .pagination-jump {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 0.825rem;
+  color: #64748b;
+}
+
+.table-pagination-footer .pagination-jump-input {
+  width: 48px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+}
+
+.table-pagination-footer .pagination-jump-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.table-pagination-footer .pagination-jump-btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.table-pagination-footer .pagination-jump-btn:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+/* Skeleton Loading Shimmer */
+@keyframes skeletonShimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton-cell {
+  height: 18px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  background-image: linear-gradient(90deg, #f1f5f9 0px, #e2e8f0 40px, #f1f5f9 80px);
+  background-size: 600px 100%;
+  animation: skeletonShimmer 1.4s infinite ease-out;
+}
+
+/* Reverse Chat Infinite Scroll Loading Indicator */
+.chat-reverse-loading-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #64748b;
+  background: rgba(241, 245, 249, 0.9);
+  backdrop-filter: blur(4px);
+  border-radius: 20px;
+  margin: 6px auto 12px auto;
+  width: fit-content;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.chat-spinner-icon {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: chatSpin 0.7s linear infinite;
+}
+
+@keyframes chatSpin {
+  to { transform: rotate(360deg); }
+}
+
+

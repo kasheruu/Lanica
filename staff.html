@@ -193,9 +193,9 @@
 
       <!-- Live Chat & Customer Inquiries Workspace for Staff -->
       <div id="staff-chats-section" class="is-hidden" style="margin-top: 16px;">
-        <div class="admin-chat-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 650px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+        <div class="admin-chat-workspace" id="staff-chat-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 650px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
           <!-- Left: Conversations List -->
-          <div style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
+          <div id="staff-chat-sidebar" class="admin-chat-sidebar" style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
             <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #fff;">
               <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Customer Inquiries</h3>
               <span style="font-size: 0.78rem; color: #6b7280;">Real-time support & workshop consultations</span>
@@ -238,9 +238,14 @@
           <!-- Right: Active Chat Conversation -->
           <div id="staff-active-chat-box" style="display: flex; flex-direction: column; height: 650px;">
             <div id="staff-chat-active-header" style="padding: 14px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #fff;">
-              <div>
-                <h3 id="staff-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827;">Select a conversation</h3>
-                <span id="staff-chat-customer-email" style="font-size: 0.8rem; color: #6b7280;">Choose a customer to consult on dimensions/materials</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" id="staff-chat-mobile-back" class="admin-chat-back-btn" style="display: none; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: #374151;">
+                  ← Back
+                </button>
+                <div>
+                  <h3 id="staff-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827;">Select a conversation</h3>
+                  <span id="staff-chat-customer-email" style="font-size: 0.8rem; color: #6b7280;">Choose a customer to consult on dimensions/materials</span>
+                </div>
               </div>
             </div>
 

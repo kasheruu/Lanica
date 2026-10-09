@@ -29,7 +29,13 @@ import {
   placeOrderAtomic,
   getAvailableStock,
   parsePrice,
+  fetchWishlist,
+  toggleWishlist,
+  isItemInWishlist,
+  getLocalWishlist,
 } from "./cartService.js";
+
+import { getCachedModelUrl } from "./modelCacheService.js";
 
 import {
   getCustomerOrders,
@@ -57,6 +63,7 @@ let allProductsList = [];
 let activeCategory = "all";
 let searchQuery = "";
 let currentSort = "default";
+let catalogCurrentBatch = 1;
 
 // Helper: Escape HTML
 function escapeHtml(text) {
@@ -195,6 +202,7 @@ async function initProductsApp() {
     setupCartSubscription(currentUser.uid);
     updateAuthUi(currentUser);
     liveChatController?.initUserChat(currentUser);
+    fetchWishlist(currentUser?.uid).then((wl) => updateWishlistBadges(wl));
   } catch (err) {
     console.error("Failed to initialize auth:", err);
   }
@@ -205,6 +213,7 @@ async function initProductsApp() {
       setupCartSubscription(user.uid);
       updateAuthUi(user);
       liveChatController?.initUserChat(user);
+      fetchWishlist(user.uid).then((wl) => updateWishlistBadges(wl));
     }
   });
 
@@ -438,10 +447,32 @@ function initCardSlideshows(root = document) {
   });
 }
 
+function updateWishlistBadges(wishlist) {
+  const list = wishlist || getLocalWishlist();
+  const count = list.length;
+  const badge = document.getElementById("wishlist-badge");
+  const pillCount = document.getElementById("wishlist-pill-count");
+
+  if (badge) {
+    badge.textContent = count;
+    badge.style.display = count > 0 ? "flex" : "none";
+  }
+  if (pillCount) {
+    pillCount.textContent = count;
+  }
+}
+
 // Filter and Sort Products
 function renderFilteredProducts() {
   const container = getProductsContainer();
   if (!container) return;
+
+  // Check URL query parameter for category=wishlist and redirect to dedicated wishlist page
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get("category") === "wishlist") {
+    window.location.replace("wishlist.html");
+    return;
+  }
 
   let filtered = allProductsList.filter((product) => {
     const nameStr = (product.name || "").toLowerCase();
@@ -484,10 +515,14 @@ function renderFilteredProducts() {
   container.innerHTML = "";
   let delay = 0.05;
 
-  filtered.forEach((product) => {
+  const batchSize = 12;
+  const visibleProducts = filtered.slice(0, catalogCurrentBatch * batchSize);
+
+  visibleProducts.forEach((product) => {
     const thumbnails = getProductThumbnails(product);
     const hasMultipleThumbs = thumbnails.length >= 2;
     const priceFormatted = parseFloat(product.price || 0).toLocaleString();
+    const isFav = isItemInWishlist(product.id);
 
     const imageSectionHTML = hasMultipleThumbs
       ? `
@@ -497,7 +532,7 @@ function renderFilteredProducts() {
               .map(
                 (src, i) => `
               <div class="card-slideshow-slide ${i === 0 ? "active" : ""}">
-                <img src="${src}" alt="${escapeHtml(product.name)} - View ${i + 1}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+                <img src="${src}" alt="${escapeHtml(product.name)} - View ${i + 1}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
               </div>
             `
               )
@@ -522,19 +557,19 @@ function renderFilteredProducts() {
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
             <span>3D</span>
           </button>
-          <button type="button" class="btn-wishlist-heart" data-product-id="${product.id}" title="Wishlist">
+          <button type="button" class="btn-wishlist-heart ${isFav ? 'active' : ''}" data-product-id="${product.id}" title="Wishlist">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
           </button>
         </div>
       `
       : `
         <div class="product-image-container">
-          <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+          <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
           <button class="btn-ar-view" data-product-id="${product.id}" title="View in 3D / AR">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
             <span>3D</span>
           </button>
-          <button type="button" class="btn-wishlist-heart" data-product-id="${product.id}" title="Wishlist">
+          <button type="button" class="btn-wishlist-heart ${isFav ? 'active' : ''}" data-product-id="${product.id}" title="Wishlist">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
           </button>
         </div>
@@ -557,6 +592,26 @@ function renderFilteredProducts() {
     delay += 0.05;
   });
 
+  if (filtered.length > visibleProducts.length) {
+    const remaining = filtered.length - visibleProducts.length;
+    const loadMoreHTML = `
+      <div class="catalog-load-more-wrapper" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 28px 0;">
+        <button type="button" id="btn-catalog-load-more" class="btn-primary" style="padding: 12px 28px; font-weight: 600; border-radius: 30px;">
+          Load More Furniture (${remaining} remaining)
+        </button>
+      </div>
+    `;
+    container.insertAdjacentHTML("beforeend", loadMoreHTML);
+
+    const loadMoreBtn = document.getElementById("btn-catalog-load-more");
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener("click", () => {
+        catalogCurrentBatch += 1;
+        renderFilteredProducts();
+      });
+    }
+  }
+
   bindProductCardButtons();
   initCardSlideshows(container);
   initAnimations();
@@ -571,6 +626,7 @@ function setupCatalogFilters() {
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       searchQuery = e.target.value.toLowerCase().trim();
+      catalogCurrentBatch = 1;
       renderFilteredProducts();
     });
   }
@@ -578,6 +634,7 @@ function setupCatalogFilters() {
   if (sortSelect) {
     sortSelect.addEventListener("change", (e) => {
       currentSort = e.target.value;
+      catalogCurrentBatch = 1;
       renderFilteredProducts();
     });
   }
@@ -587,6 +644,7 @@ function setupCatalogFilters() {
       categoryButtons.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       activeCategory = btn.getAttribute("data-category") || "all";
+      catalogCurrentBatch = 1;
       renderFilteredProducts();
     });
   });
@@ -613,11 +671,14 @@ function bindProductCardButtons() {
   });
 
   document.querySelectorAll(".btn-wishlist-heart").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      btn.classList.toggle("active");
-      const isFav = btn.classList.contains("active");
-      showToast(isFav ? "Saved to wishlist!" : "Removed from wishlist", "success");
+      const productId = btn.getAttribute("data-product-id");
+      if (!productId) return;
+      const res = await toggleWishlist(productId, currentUser?.uid);
+      btn.classList.toggle("active", res.isFav);
+      updateWishlistBadges(res.wishlist);
+      showToast(res.isFav ? "Saved to wishlist!" : "Removed from wishlist", "success");
     });
   });
 }
@@ -860,22 +921,41 @@ function updateVariantStockUI() {
     if (currentSelectedQty < 1) currentSelectedQty = 1;
     if (currentSelectedQty > available) currentSelectedQty = available;
   } else {
-    if (statusEl) {
-      statusEl.innerHTML = `Made to Order (Lead Time: 14–21 Days)`;
-      statusEl.className = "pdp-stock-chip mto";
-    }
-    if (leadBadge) {
-      leadBadge.textContent = "MTO (~21-28 days)";
-      leadBadge.style.background = "#e0f2fe";
-      leadBadge.style.color = "#0369a1";
-    }
-    if (addBtn) {
-      addBtn.disabled = false;
-      const ctaSpan = addBtn.querySelector("span:first-child");
-      if (ctaSpan) ctaSpan.textContent = "PLACE MADE-TO-ORDER";
-    }
+    const allowsPreorder = currentModalProduct.allowPreorder !== false && currentModalProduct.isMadeToOrder !== false;
+    const lead = currentModalProduct.leadTime || currentModalProduct.estimated_lead_time || "14–21 Days";
 
-    if (currentSelectedQty < 1) currentSelectedQty = 1;
+    if (allowsPreorder) {
+      if (statusEl) {
+        statusEl.innerHTML = `Made to Order / Pre-order Available (Lead Time: ${lead})`;
+        statusEl.className = "pdp-stock-chip mto";
+      }
+      if (leadBadge) {
+        leadBadge.textContent = `Pre-Order (${lead})`;
+        leadBadge.style.background = "#fef3c7";
+        leadBadge.style.color = "#92400e";
+      }
+      if (addBtn) {
+        addBtn.disabled = false;
+        const ctaSpan = addBtn.querySelector("span:first-child");
+        if (ctaSpan) ctaSpan.textContent = "PRE-ORDER NOW";
+      }
+      if (currentSelectedQty < 1) currentSelectedQty = 1;
+    } else {
+      if (statusEl) {
+        statusEl.innerHTML = `Out of Stock (Currently Unavailable)`;
+        statusEl.className = "pdp-stock-chip out";
+      }
+      if (leadBadge) {
+        leadBadge.textContent = "Out of Stock";
+        leadBadge.style.background = "#fef2f2";
+        leadBadge.style.color = "#dc2626";
+      }
+      if (addBtn) {
+        addBtn.disabled = true;
+        const ctaSpan = addBtn.querySelector("span:first-child");
+        if (ctaSpan) ctaSpan.textContent = "CURRENTLY UNAVAILABLE";
+      }
+    }
   }
 
   const qtyValEl = document.getElementById("pv-qty-val");

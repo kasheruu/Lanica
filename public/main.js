@@ -29,7 +29,11 @@ import {
   placeOrderAtomic,
   getAvailableStock,
   parsePrice,
+  fetchWishlist,
+  getLocalWishlist,
 } from "./cartService.js";
+
+import { getCachedModelUrl } from "./modelCacheService.js";
 
 import {
   getCustomerOrders,
@@ -59,6 +63,30 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.innerText = text || "";
   return div.innerHTML;
+}
+
+function updateWishlistBadges(wishlist) {
+  const list = wishlist || getLocalWishlist();
+  const count = list.length;
+  const badge = document.getElementById("wishlist-badge");
+  if (badge) {
+    badge.textContent = count;
+    badge.style.display = count > 0 ? "flex" : "none";
+  }
+}
+
+function updateAuthNavVisibility(user) {
+  const cartBtn = document.getElementById("cart-toggle-btn");
+  const myOrdersLinks = document.querySelectorAll(".nav-my-orders-link, a[href='orders.html']");
+
+  if (cartBtn) {
+    cartBtn.style.display = user ? "inline-flex" : "none";
+  }
+  myOrdersLinks.forEach((link) => {
+    if (link.closest(".nav-links")) {
+      link.style.display = user ? "inline-block" : "none";
+    }
+  });
 }
 
 // Helper: Toast Notifications
@@ -103,18 +131,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupCartSubscription(currentUser.uid);
     updateAuthUi(currentUser);
     liveChatController?.initUserChat(currentUser);
+    fetchWishlist(currentUser.uid).then((wl) => updateWishlistBadges(wl));
   } catch (err) {
     console.error("Failed to initialize auth:", err);
   }
 
   onAuthStateChanged(auth, (user) => {
+    updateAuthNavVisibility(user);
     if (user) {
       currentUser = user;
       setupCartSubscription(user.uid);
       updateAuthUi(user);
       liveChatController?.initUserChat(user);
+      fetchWishlist(user.uid).then((wl) => updateWishlistBadges(wl));
+    } else {
+      updateWishlistBadges();
     }
   });
+
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get("auth") === "required") {
+    const authModal = document.getElementById("auth-modal");
+    if (authModal) {
+      authModal.classList.add("active");
+      document.body.style.overflow = "hidden";
+    }
+  }
 
   // 3. Load Products from Firebase
   await loadProductsCatalog();
@@ -313,7 +355,7 @@ async function loadProductsCatalog() {
                   .map(
                     (src, i) => `
                   <div class="card-slideshow-slide ${i === 0 ? "active" : ""}">
-                    <img src="${src}" alt="${escapeHtml(product.name)} - View ${i + 1}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+                    <img src="${src}" alt="${escapeHtml(product.name)} - View ${i + 1}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
                   </div>
                 `
                   )
@@ -345,7 +387,7 @@ async function loadProductsCatalog() {
           `
           : `
             <div class="product-image-container">
-              <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
+              <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
               <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D / AR">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 <span>3D</span>
