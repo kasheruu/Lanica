@@ -938,6 +938,13 @@
   font-weight: 600;
 }
 
+.order-status-slot-reserved,
+.order-status-slot\ reserved,
+[class*="order-status-slot"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .order-status-pending {
   background: #fef7e0;
   color: #b06000;
@@ -3214,7 +3221,306 @@
   }
 }
 
+/* Custom Admin Confirmation & Alert Modal */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  padding: 20px;
+  animation: adminFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
+.admin-confirm-card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.05);
+  width: 100%;
+  max-width: 450px;
+  padding: 24px 26px;
+  animation: adminScaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 
+.admin-confirm-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
 
+.admin-confirm-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+.admin-confirm-icon-box.success {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.admin-confirm-icon-box.danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.admin-confirm-icon-box.warning {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.admin-confirm-icon-box.primary,
+.admin-confirm-icon-box.info {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.admin-confirm-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.admin-confirm-message {
+  margin: 6px 0 0 0;
+  font-size: 0.88rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.admin-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.admin-btn-modal-cancel {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-btn-modal-cancel:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.admin-btn-modal-confirm {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-btn-modal-confirm.success {
+  background: #059669;
+}
+.admin-btn-modal-confirm.success:hover {
+  background: #047857;
+}
+
+.admin-btn-modal-confirm.danger {
+  background: #dc2626;
+}
+.admin-btn-modal-confirm.danger:hover {
+  background: #b91c1c;
+}
+
+.admin-btn-modal-confirm.primary,
+.admin-btn-modal-confirm.info {
+  background: #2563eb;
+}
+.admin-btn-modal-confirm.primary:hover,
+.admin-btn-modal-confirm.info:hover {
+  background: #1d4ed8;
+}
+
+/* Toast Container & Notification */
+#admin-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 100005;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.admin-toast-card {
+  pointer-events: auto;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 12px 18px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 440px;
+  border-left: 4px solid #2563eb;
+  animation: adminToastSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.admin-toast-card.success {
+  border-left-color: #059669;
+}
+.admin-toast-card.danger,
+.admin-toast-card.error {
+  border-left-color: #dc2626;
+}
+.admin-toast-card.warning {
+  border-left-color: #d97706;
+}
+
+.admin-toast-content {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.admin-toast-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.admin-toast-close:hover {
+  color: #475569;
+}
+
+@keyframes adminFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes adminScaleUp {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes adminToastSlideIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Lanica Official Financial Document Modal & Print Styles */
+#lanica-receipt-modal.active {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.receipt-tab-btn {
+  transition: all 0.15s ease-in-out;
+}
+
+.receipt-tab-btn:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.receipt-tab-btn.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+@media print {
+  /* Hide all dashboard chrome, navigation, headers, and backgrounds */
+  body * {
+    visibility: hidden !important;
+  }
+  
+  body, html {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #000000 !important;
+  }
+
+  /* Expose only the receipt modal printable canvas */
+  #lanica-receipt-modal,
+  #lanica-receipt-modal * {
+    visibility: visible !important;
+  }
+
+  #lanica-receipt-modal {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    display: block !important;
+    overflow: visible !important;
+    z-index: 999999 !important;
+  }
+
+  #lanica-receipt-modal .user-modal-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  #lanica-receipt-modal .modal-no-print {
+    display: none !important;
+  }
+
+  #lanica-printable-area {
+    padding: 10mm 15mm !important;
+    overflow: visible !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+  }
+
+  #lanica-printable-area table {
+    page-break-inside: avoid;
+  }
+}
 

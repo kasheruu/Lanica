@@ -4945,7 +4945,23 @@ html, body {
    Design Tokens: #121212 dark container, #FFD700 gold border, rounded white QR card
    ========================================================================== */
 #paymongo-qr-modal.modal-overlay {
-  z-index: 10005;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 10005 !important;
+}
+
+#paymongo-qr-modal:not(.active) {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#paymongo-qr-modal.active {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 .paymongo-qr-card {
@@ -5029,15 +5045,24 @@ html, body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #d1d5db;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: all 0.2s ease;
   padding: 0;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 20;
+}
+
+.paymongo-qr-close svg,
+.paymongo-btn-verify svg,
+.paymongo-btn-save svg {
+  pointer-events: none !important;
 }
 
 .paymongo-qr-close:hover {

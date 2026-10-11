@@ -161,149 +161,250 @@ export async function downloadPaymongoQrCode(qrImageUrl, orderId) {
   }
 }
 
+// Expose global actions on window for inline handlers & fail-safe access
+if (typeof window !== "undefined") {
+  window.lanicaClosePaymongoModal = () => closePaymongoQrModal(true);
+  window.lanicaVerifyPaymongoPayment = () => handleManualVerification();
+  window.lanicaSavePaymongoQr = () => {
+    if (currentQrImageUrl && currentOrderId) {
+      downloadPaymongoQrCode(currentQrImageUrl, currentOrderId);
+    }
+  };
+  window.openPaymongoQrModal = openPaymongoQrModal;
+  window.closePaymongoQrModal = closePaymongoQrModal;
+}
+
+// Global document-level event delegation (guarantees clicks work across all pages and re-renders)
+if (typeof document !== "undefined" && !window.__lanicaPaymongoDelegated) {
+  window.__lanicaPaymongoDelegated = true;
+  document.addEventListener("click", (e) => {
+    // 1. Close Button
+    const closeBtn = e.target.closest("#paymongo-modal-close-btn, .paymongo-qr-close");
+    if (closeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      closePaymongoQrModal(true);
+      return;
+    }
+
+    // 2. Verify Button
+    const verifyBtn = e.target.closest("#paymongo-verify-btn, .paymongo-btn-verify");
+    if (verifyBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleManualVerification();
+      return;
+    }
+
+    // 3. Save QR Button
+    const saveBtn = e.target.closest("#paymongo-save-qr-btn, .paymongo-btn-save");
+    if (saveBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (currentQrImageUrl && currentOrderId) {
+        downloadPaymongoQrCode(currentQrImageUrl, currentOrderId);
+      }
+      return;
+    }
+
+    // 4. Modal Backdrop click (clicking outside the card)
+    const modalEl = document.getElementById("paymongo-qr-modal");
+    if (modalEl && modalEl.classList.contains("active") && e.target === modalEl) {
+      e.preventDefault();
+      closePaymongoQrModal(true);
+      return;
+    }
+  });
+
+  // Escape key closes modal
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" || e.keyCode === 27) {
+      const modalEl = document.getElementById("paymongo-qr-modal");
+      if (modalEl && modalEl.classList.contains("active")) {
+        closePaymongoQrModal(true);
+      }
+    }
+  });
+}
+
 /**
- * Injects or ensures the PayMongo QR Ph Modal DOM exists
+ * Wires or re-wires event listeners directly onto modal elements
  */
-function ensurePaymongoModalDom() {
-  let modal = document.getElementById("paymongo-qr-modal");
-  if (modal) return modal;
+function wirePaymongoModalEvents(modal) {
+  if (!modal) return;
 
-  const modalHtml = `
-    <div id="paymongo-qr-modal" class="modal-overlay" style="display: none;">
-      <div class="modal-card paymongo-qr-card">
-        <!-- Header -->
-        <div class="paymongo-qr-header">
-          <div class="paymongo-qr-header-left">
-            <div class="paymongo-qr-icon-badge">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7"></rect>
-                <rect x="14" y="3" width="7" height="7"></rect>
-                <rect x="14" y="14" width="7" height="7"></rect>
-                <rect x="3" y="14" width="7" height="7"></rect>
-              </svg>
-            </div>
-            <div>
-              <h3 class="paymongo-qr-title">LIVE PAYMONGO QR PH</h3>
-              <p class="paymongo-qr-sub">GCash • Maya • GoTyme • Banks</p>
-            </div>
-          </div>
-          <button type="button" id="paymongo-modal-close-btn" class="paymongo-qr-close" aria-label="Close QR Modal">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Body -->
-        <div class="paymongo-qr-body">
-          <!-- Metric Pill -->
-          <div class="paymongo-metric-pill">
-            <div class="paymongo-metric-info">
-              <span class="paymongo-metric-sub">30% Downpayment Due</span>
-              <span id="paymongo-order-ref" class="paymongo-metric-order">Order #---</span>
-            </div>
-            <div id="paymongo-amount-display" class="paymongo-metric-amount">₱0</div>
-          </div>
-
-          <!-- White QR Container -->
-          <div class="paymongo-white-qr-container">
-            <div class="paymongo-qrph-branding">
-              <span>QR</span> PH
-            </div>
-            <div class="paymongo-qr-image-frame">
-              <img id="paymongo-qr-img" src="" alt="Live PayMongo QR Ph" style="display: none;" />
-              <div id="paymongo-qr-spinner" class="paymongo-loading-spinner"></div>
-            </div>
-            <div class="paymongo-qr-instructions">
-              SCAN OR UPLOAD QR PH VIA YOUR BANK / WALLET APP
-            </div>
-          </div>
-
-          <!-- Info Panel -->
-          <div class="paymongo-info-panel">
-            <div class="paymongo-info-title">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-              </svg>
-              Supported QR Ph Wallets & Banks
-            </div>
-            <div class="paymongo-wallets-list">
-              <span class="paymongo-wallet-tag">GCash</span>
-              <span class="paymongo-wallet-tag">Maya</span>
-              <span class="paymongo-wallet-tag">ShopeePay</span>
-              <span class="paymongo-wallet-tag">GrabPay</span>
-              <span class="paymongo-wallet-tag">StarPay</span>
-              <span class="paymongo-wallet-tag">GoTyme</span>
-              <span class="paymongo-wallet-tag">BDO</span>
-              <span class="paymongo-wallet-tag">BPI</span>
-              <span class="paymongo-wallet-tag">UnionBank</span>
-              <span class="paymongo-wallet-tag">RCBC</span>
-              <span class="paymongo-wallet-tag">SeaBank</span>
-            </div>
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="paymongo-btn-grid">
-            <button type="button" id="paymongo-save-qr-btn" class="paymongo-btn-save">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-              SAVE QR
-            </button>
-            <button type="button" id="paymongo-verify-btn" class="paymongo-btn-verify">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              VERIFY & SUBMIT
-            </button>
-          </div>
-
-          <div id="paymongo-status-toast" class="paymongo-status-toast polling">
-            Awaiting payment detection...
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.insertAdjacentHTML("beforeend", modalHtml);
-  modal = document.getElementById("paymongo-qr-modal");
-
-  // Wire static close button
-  const closeBtn = document.getElementById("paymongo-modal-close-btn");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", closePaymongoQrModal);
+  const closeBtn = modal.querySelector("#paymongo-modal-close-btn, .paymongo-qr-close");
+  if (closeBtn && !closeBtn._lanicaWired) {
+    closeBtn._lanicaWired = true;
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closePaymongoQrModal(true);
+    });
   }
 
-  // Wire static save button
-  const saveBtn = document.getElementById("paymongo-save-qr-btn");
-  if (saveBtn) {
-    saveBtn.addEventListener("click", () => {
+  const saveBtn = modal.querySelector("#paymongo-save-qr-btn, .paymongo-btn-save");
+  if (saveBtn && !saveBtn._lanicaWired) {
+    saveBtn._lanicaWired = true;
+    saveBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       if (currentQrImageUrl && currentOrderId) {
         downloadPaymongoQrCode(currentQrImageUrl, currentOrderId);
       }
     });
   }
 
-  // Wire manual verify button
-  const verifyBtn = document.getElementById("paymongo-verify-btn");
-  if (verifyBtn) {
-    verifyBtn.addEventListener("click", handleManualVerification);
+  const verifyBtn = modal.querySelector("#paymongo-verify-btn, .paymongo-btn-verify");
+  if (verifyBtn && !verifyBtn._lanicaWired) {
+    verifyBtn._lanicaWired = true;
+    verifyBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleManualVerification();
+    });
   }
 
+  if (!modal._lanicaBackdropWired) {
+    modal._lanicaBackdropWired = true;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        e.preventDefault();
+        closePaymongoQrModal(true);
+      }
+    });
+  }
+}
+
+/**
+ * Injects or ensures the PayMongo QR Ph Modal DOM exists
+ */
+function ensurePaymongoModalDom() {
+  let modal = document.getElementById("paymongo-qr-modal");
+  if (!modal) {
+    const modalHtml = `
+      <div id="paymongo-qr-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card paymongo-qr-card">
+          <!-- Header -->
+          <div class="paymongo-qr-header">
+            <div class="paymongo-qr-header-left">
+              <div class="paymongo-qr-icon-badge">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+              </div>
+              <div>
+                <h3 class="paymongo-qr-title">LIVE PAYMONGO QR PH</h3>
+                <p class="paymongo-qr-sub">GCash • Maya • GoTyme • Banks</p>
+              </div>
+            </div>
+            <button type="button" id="paymongo-modal-close-btn" class="paymongo-qr-close" aria-label="Close QR Modal" onclick="window.lanicaClosePaymongoModal && window.lanicaClosePaymongoModal()">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="paymongo-qr-body">
+            <!-- Metric Pill -->
+            <div class="paymongo-metric-pill">
+              <div class="paymongo-metric-info">
+                <span class="paymongo-metric-sub">30% Downpayment Due</span>
+                <span id="paymongo-order-ref" class="paymongo-metric-order">Order #---</span>
+              </div>
+              <div id="paymongo-amount-display" class="paymongo-metric-amount">₱0</div>
+            </div>
+
+            <!-- White QR Container -->
+            <div class="paymongo-white-qr-container">
+              <div class="paymongo-qrph-branding">
+                <span>QR</span> PH
+              </div>
+              <div class="paymongo-qr-image-frame">
+                <img id="paymongo-qr-img" src="" alt="Live PayMongo QR Ph" style="display: none;" />
+                <div id="paymongo-qr-spinner" class="paymongo-loading-spinner"></div>
+              </div>
+              <div class="paymongo-qr-instructions">
+                SCAN OR UPLOAD QR PH VIA YOUR BANK / WALLET APP
+              </div>
+            </div>
+
+            <!-- Info Panel -->
+            <div class="paymongo-info-panel">
+              <div class="paymongo-info-title">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Supported QR Ph Wallets & Banks
+              </div>
+              <div class="paymongo-wallets-list">
+                <span class="paymongo-wallet-tag">GCash</span>
+                <span class="paymongo-wallet-tag">Maya</span>
+                <span class="paymongo-wallet-tag">ShopeePay</span>
+                <span class="paymongo-wallet-tag">GrabPay</span>
+                <span class="paymongo-wallet-tag">StarPay</span>
+                <span class="paymongo-wallet-tag">GoTyme</span>
+                <span class="paymongo-wallet-tag">BDO</span>
+                <span class="paymongo-wallet-tag">BPI</span>
+                <span class="paymongo-wallet-tag">UnionBank</span>
+                <span class="paymongo-wallet-tag">RCBC</span>
+                <span class="paymongo-wallet-tag">SeaBank</span>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="paymongo-btn-grid">
+              <button type="button" id="paymongo-save-qr-btn" class="paymongo-btn-save" onclick="window.lanicaSavePaymongoQr && window.lanicaSavePaymongoQr()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                SAVE QR
+              </button>
+              <button type="button" id="paymongo-verify-btn" class="paymongo-btn-verify" onclick="window.lanicaVerifyPaymongoPayment && window.lanicaVerifyPaymongoPayment()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                VERIFY & SUBMIT
+              </button>
+            </div>
+
+            <div id="paymongo-status-toast" class="paymongo-status-toast polling">
+              Awaiting payment detection...
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
+    modal = document.getElementById("paymongo-qr-modal");
+  }
+
+  wirePaymongoModalEvents(modal);
   return modal;
 }
 
 /**
  * Handles manual verification click on the modal
  */
-async function handleManualVerification() {
-  if (!currentPaymentIntentId || !currentOrderId) return;
+export async function handleManualVerification() {
+  if (!currentPaymentIntentId || !currentOrderId) {
+    console.warn("PayMongo verify clicked without active intent or order ID:", { currentPaymentIntentId, currentOrderId });
+    const toast = document.getElementById("paymongo-status-toast");
+    if (toast) {
+      toast.className = "paymongo-status-toast error";
+      toast.textContent = "Payment session is still initializing. Please wait a moment and try again.";
+    }
+    return;
+  }
   const verifyBtn = document.getElementById("paymongo-verify-btn");
   const toast = document.getElementById("paymongo-status-toast");
 
@@ -326,7 +427,7 @@ async function handleManualVerification() {
     });
 
     if (result.isPaid) {
-      handlePaymentSuccessful();
+      await handlePaymentSuccessful();
     } else {
       if (toast) {
         toast.className = "paymongo-status-toast error";
@@ -335,7 +436,7 @@ async function handleManualVerification() {
       if (verifyBtn) {
         verifyBtn.disabled = false;
         verifyBtn.innerHTML = `
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
           VERIFY & SUBMIT
@@ -351,7 +452,7 @@ async function handleManualVerification() {
     if (verifyBtn) {
       verifyBtn.disabled = false;
       verifyBtn.innerHTML = `
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
         VERIFY & SUBMIT
@@ -473,10 +574,14 @@ export function closePaymongoQrModal(isDismissedByUser = true) {
   if (modal) {
     modal.classList.remove("active");
     modal.style.display = "none";
+    modal.style.visibility = "hidden";
+    modal.style.opacity = "0";
+    modal.style.pointerEvents = "none";
   }
   const wasVerified = isPaymentVerified;
+  const isDismissed = typeof isDismissedByUser === "boolean" ? isDismissedByUser : true;
   if (typeof modalOnCloseCallback === "function") {
-    modalOnCloseCallback({ wasPaid: wasVerified, isDismissed: isDismissedByUser });
+    modalOnCloseCallback({ wasPaid: wasVerified, isDismissed: isDismissed });
   }
 }
 
@@ -526,10 +631,14 @@ export async function openPaymongoQrModal({
   }
   if (saveBtn) saveBtn.disabled = true;
 
-  // Show modal
+  // Show modal with explicit visibility and flex display
   modal.style.display = "flex";
+  modal.style.visibility = "visible";
+  modal.style.opacity = "1";
+  modal.style.pointerEvents = "auto";
   void modal.offsetWidth;
   modal.classList.add("active");
+  wirePaymongoModalEvents(modal);
 
   try {
     // Generate QR Ph via Backend

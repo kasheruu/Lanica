@@ -33,6 +33,7 @@ import {
   uploadChatAttachment,
   markOrderMessagesAsRead,
 } from "./chatService.js";
+import { recordAuditLog } from "./auditService.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb2kDAVp9N_afxgOw5hSzDIvQ3UAIZVNU",
@@ -1043,6 +1044,7 @@ async function hydrateCustomerNamesForOrders(orders) {
 function normalizeOrderStatus(raw) {
   if (raw == null) return "placed";
   const s = String(raw).toLowerCase().trim();
+  if (s === "slot reserved" || s === "slot_reserved") return "slot reserved";
   if (s === "pending") return "placed";
   if (s === "accepted") return "downpayment confirmed";
   if (s === "processing" || s === "packed") return "in production";
@@ -1141,7 +1143,7 @@ function renderOrders() {
         : "—";
 
     const updateOptions = [];
-    if (st === "placed") updateOptions.push("downpayment confirmed");
+    if (st === "placed" || st === "slot reserved") updateOptions.push("downpayment confirmed");
     if (st === "downpayment confirmed") updateOptions.push("in production");
     if (st === "in production") updateOptions.push("quality checked");
     if (st === "quality checked") updateOptions.push("shipped");
@@ -1597,11 +1599,46 @@ async function updateOrderStatus(orderId, newStatus) {
       updateData.manualOverrideApplied = true;
     }
 
+    if (currentOrder && currentOrder.paymentStatus === "awaiting_counter_downpayment" && (newStatus === "in production" || newStatus === "downpayment confirmed")) {
+      updateData.paymentStatus = "downpayment_paid";
+      updateData.downpaymentPaid = Number(currentOrder.downpaymentRequired ?? Math.round(Number(currentOrder.totalAmount || currentOrder.total || 0) * 0.30));
+      updateData.downpaymentPaidAt = Timestamp.now();
+    }
+
     await updateDoc(orderRef, updateData);
 
-    console.log(
-      `Order ${orderId} updated to ${newStatus} with delivery estimate: ${deliveryEstimate.minDate} - ${deliveryEstimate.maxDate}`
-    );
+    if (updateData.paymentStatus === "downpayment_paid") {
+      await recordAuditLog({
+        action: "DOWNPAYMENT_RECEIVED",
+        targetType: "order",
+        targetId: orderId,
+        description: `Staff confirmed 30% Downpayment (₱${Number(updateData.downpaymentPaid || 0).toLocaleString()}) received via Counter Cash for Order #${orderId.slice(0, 8)}`,
+        diff: {
+          before: {
+            orderStatus: currentOrder?.orderStatus || currentOrder?.status,
+            paymentStatus: currentOrder?.paymentStatus,
+          },
+          after: {
+            orderStatus: newStatus,
+            paymentStatus: "downpayment_paid",
+            downpaymentPaid: updateData.downpaymentPaid,
+          },
+        },
+        performedBy: currentUser,
+      });
+    } else {
+      await recordAuditLog({
+        action: "ORDER_STATUS_CHANGED",
+        targetType: "order",
+        targetId: orderId,
+        description: `Staff updated status for order #${orderId.slice(0, 8)} from "${currentOrder?.status || 'unknown'}" to "${newStatus}"`,
+        diff: {
+          before: { status: currentOrder?.status, orderStatus: currentOrder?.orderStatus },
+          after: { status: newStatus, orderStatus: newStatus },
+        },
+        performedBy: currentUser,
+      });
+    }
   } catch (e) {
     console.error("Failed to update order:", e);
     alert("Failed to update order status.");

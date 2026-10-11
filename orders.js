@@ -376,7 +376,7 @@ function updateTabBadges(orders) {
 
   activeOrders.forEach((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (st === "Placed" || st === "Downpayment Confirmed") counts.placed++;
+    if (st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed") counts.placed++;
     else if (st === "In Production" || st === "Quality Checked") counts.inProduction++;
     else if (st === "Shipped") counts.shipped++;
     else if (st === "Delivered") counts.delivered++;
@@ -467,11 +467,33 @@ function renderCustomerTransactionsList(orders) {
 
   pagedOrders.forEach((order) => {
     const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+    const isPaidDownpayment =
+      order.paymentStatus === "downpayment_paid" ||
+      order.paymentStatus === "Paid" ||
+      order.paymentStatus === "paid" ||
+      Boolean(order.paymentDetails?.downpaymentPaid);
+
     const totalVal = Number(order.totalAmount || order.total || 0);
-    const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
-    const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
-    const payStatus = order.paymentStatus || (isDownpayment ? "Downpayment Confirmed" : "Paid");
-    const pMethod = order.paymentMethod || "COD";
+    const downpaymentDueAmount = Math.round(totalVal * 0.30);
+    const paidVal = isPaidDownpayment
+      ? Number(order.downpaymentAmount || (isDownpayment ? downpaymentDueAmount : totalVal))
+      : 0;
+    const remainingVal = isPaidDownpayment
+      ? Math.max(0, totalVal - paidVal)
+      : totalVal;
+
+    const isWalkInPending =
+      (order.paymentMethod === "walk_in_cash" || order.paymentType === "walk_in_cash") &&
+      order.paymentStatus === "awaiting_counter_downpayment";
+
+    const payStatus = isPaidDownpayment
+      ? (isDownpayment ? "Downpayment Paid (PayMongo)" : "Paid in Full")
+      : isWalkInPending
+        ? "⏳ Counter Downpayment Pending"
+        : (isDownpayment ? "Downpayment Pending" : "Payment Pending");
+    const pMethod = order.paymentMethod === "walk_in_cash"
+      ? "🏢 Walk-in Workshop Cash"
+      : (order.paymentMethod || "QR Ph (PayMongo)");
     const refNum = order.orderId || order.id || "N/A";
     const dateStr = formatOrderDate(order.createdAt || order.timestamp);
 
@@ -486,7 +508,7 @@ function renderCustomerTransactionsList(orders) {
           <span style="font-size: 0.8rem; color: #94a3b8;">Issued on ${escapeHtml(dateStr)}</span>
         </div>
         <div style="text-align: right;">
-          <span class="status-badge" style="background: ${isDownpayment ? '#eff6ff' : '#ecfdf5'}; color: ${isDownpayment ? '#1d4ed8' : '#047857'}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">
+          <span class="status-badge" style="background: ${isPaidDownpayment ? '#eff6ff' : isWalkInPending ? '#fffbeb' : '#fef2f2'}; color: ${isPaidDownpayment ? '#1d4ed8' : isWalkInPending ? '#b45309' : '#dc2626'}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">
             ${escapeHtml(payStatus)}
           </span>
         </div>
@@ -608,7 +630,7 @@ function filterOrdersByTab(orders, tabStatus) {
 
   return orders.filter((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (tabStatus === "placed") return st === "Placed" || st === "Downpayment Confirmed";
+    if (tabStatus === "placed") return st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed";
     if (tabStatus === "in-production") return st === "In Production" || st === "Quality Checked";
     if (tabStatus === "shipped") return st === "Shipped";
     if (tabStatus === "delivered") return st === "Delivered";
@@ -806,9 +828,14 @@ function createOrderCardElement(order) {
     let heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
     let heroSubtitle = "Your order has been placed successfully";
 
-    if (normStatus === "Placed") {
-      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
-      heroSubtitle = "Order placed! Our workshop team is reviewing your custom order details.";
+    if (normStatus === "Placed" || normStatus === "Slot Reserved") {
+      const isReserved = normStatus === "Slot Reserved" || order.paymentStatus === "awaiting_counter_downpayment";
+      heroIconSVG = isReserved
+        ? `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`
+        : `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
+      heroSubtitle = isReserved
+        ? "Crafting slot reserved! Please settle 30% downpayment at our workshop counter within 48 hours to start crafting."
+        : "Order placed! Our workshop team is reviewing your custom order details.";
     } else if (normStatus === "Downpayment Confirmed") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>`;
       heroSubtitle = "30% Downpayment verified! Timber and materials are allocated for production.";
@@ -964,32 +991,97 @@ function createOrderCardElement(order) {
     `;
   }
 
-  // Payment Breakdown
+  // Payment Breakdown - Dynamic based on PayMongo verification (no static/mock values)
   const totalVal = Number(order.totalAmount ?? order.total ?? 0);
-  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
-  const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
-  const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
-  const isBalanceSettled = order.balanceStatus === "settled" || remainingVal <= 0;
-  const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? 30 : 100);
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || order.paymentMethod === "walk_in_cash";
+  const isPaidDownpayment =
+    order.paymentStatus === "downpayment_paid" ||
+    order.paymentStatus === "Paid" ||
+    order.paymentStatus === "paid" ||
+    Boolean(order.paymentDetails?.downpaymentPaid);
+
+  const isWalkInPending =
+    (order.paymentMethod === "walk_in_cash" || order.paymentType === "walk_in_cash") &&
+    order.paymentStatus === "awaiting_counter_downpayment";
+
+  const downpaymentDueAmount = Math.round(totalVal * 0.30);
+  const paidVal = isPaidDownpayment
+    ? Number(order.downpaymentAmount || downpaymentDueAmount)
+    : 0;
+  const remainingVal = isPaidDownpayment
+    ? Math.max(0, totalVal - paidVal)
+    : totalVal;
+  const isBalanceSettled = isPaidDownpayment && (order.balanceStatus === "settled" || remainingVal <= 0);
+
+  let deadlineStr = "48 Hours from reservation";
+  if (order.reservationExpiresAt) {
+    deadlineStr = formatOrderDate(order.reservationExpiresAt);
+  } else if (order.createdAt) {
+    const createdMs = order.createdAt?.toDate ? order.createdAt.toDate().getTime() : (order.createdAt?.seconds ? order.createdAt.seconds * 1000 : Date.now());
+    deadlineStr = formatOrderDate(new Date(createdMs + 48 * 60 * 60 * 1000));
+  }
 
   let paymentDetailsHTML = "";
   if (isDownpayment) {
     paymentDetailsHTML = `
       <div class="payment-terms-box" style="margin-top: 8px; font-size: 0.82rem; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-          <span>Upfront Downpayment (${paidPct}% Paid):</span>
-          <strong style="color: #059669;">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          <span>30% Downpayment:</span>
+          ${
+            isPaidDownpayment
+              ? `<strong style="color: #059669;">✓ ₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid via PayMongo QR Ph)</strong>`
+              : isWalkInPending
+                ? `<strong style="color: #b45309;">⏳ ₱${downpaymentDueAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Counter Downpayment Pending)</strong>`
+                : `<strong style="color: #dc2626;">⏳ ₱${downpaymentDueAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Unpaid - Action Required)</strong>`
+          }
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
           <span>Remaining Balance Due:</span>
           <strong style="color: ${remainingVal > 0 ? '#d97706' : '#059669'};">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
         </div>
+        ${
+          order.paymentIntentId
+            ? `<div style="font-size: 0.74rem; color: #64748b; margin-top: 4px; font-family: monospace;">
+                PayMongo Ref: ${escapeHtml(order.paymentIntentId)}
+               </div>`
+            : ""
+        }
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
           <span style="font-size: 0.78rem; color: #64748b;">Balance Status:</span>
-          <span style="font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; ${isBalanceSettled ? 'background: #dcfce7; color: #15803d;' : 'background: #fef3c7; color: #b45309;'}">
-            ${isBalanceSettled ? "✓ Settled" : "⏳ Pending Collection"}
+          <span style="font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; ${
+            isBalanceSettled
+              ? 'background: #dcfce7; color: #15803d;'
+              : isPaidDownpayment
+                ? 'background: #fef3c7; color: #b45309;'
+                : isWalkInPending
+                  ? 'background: #fef3c7; color: #b45309;'
+                  : 'background: #fee2e2; color: #b91c1c;'
+          }">
+            ${
+              isBalanceSettled
+                ? "✓ Settled"
+                : isPaidDownpayment
+                  ? "⏳ Pending Final Collection"
+                  : isWalkInPending
+                    ? "⏳ Counter Downpayment Pending"
+                    : "❌ Downpayment Unpaid"
+            }
           </span>
         </div>
+        ${
+          isWalkInPending
+            ? `<div class="walk-in-counter-notice" style="margin-top: 10px; font-size: 0.82rem; background: #fffbeb; border: 1.5px solid #fef08a; padding: 12px 14px; border-radius: 8px; color: #92400e;">
+                <div style="font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                  <span>⚠️</span> <span>Custom Crafting Notice: Settle 30% downpayment at workshop to begin crafting.</span>
+                </div>
+                <div style="display: grid; gap: 5px; font-size: 0.79rem; line-height: 1.4;">
+                  <div>📍 <strong>Workshop Address:</strong> Lanica Woodworking & Upholstery Hub, San Jose, Antipolo / Marikina Showroom</div>
+                  <div>📞 <strong>Contact Hotline:</strong> <a href="tel:09498136985" style="color: #b45309; font-weight: 700; text-decoration: underline;">09498136985</a></div>
+                  <div>⏳ <strong>48-Hour Reservation Deadline:</strong> ${escapeHtml(deadlineStr)}</div>
+                </div>
+              </div>`
+            : ""
+        }
       </div>
     `;
   }
@@ -1001,10 +1093,14 @@ function createOrderCardElement(order) {
     : "";
 
   const needsDownpayment =
-    normStatus === "Placed" &&
+    (normStatus === "Placed" || normStatus === "Slot Reserved" || isWalkInPending) &&
     order.paymentStatus !== "downpayment_paid" &&
     order.paymentStatus !== "Paid" &&
     order.paymentStatus !== "paid";
+
+  const displayPaymentMethod = order.paymentMethod === "walk_in_cash"
+    ? "🏢 Walk-in Workshop Cash (Counter)"
+    : (paymentMethod || "QR Ph (PayMongo)");
 
   card.innerHTML = `
     <div class="order-card-header">
@@ -1029,7 +1125,7 @@ function createOrderCardElement(order) {
       <div class="payment-method-info">
         <div>
           <span>Payment Method:</span>
-          <strong style="color: var(--clr-black);">${escapeHtml(paymentMethod)}</strong>
+          <strong style="color: var(--clr-black);">${escapeHtml(displayPaymentMethod)}</strong>
         </div>
         ${paymentDetailsHTML}
         ${landmarkHTML}
@@ -1047,8 +1143,8 @@ function createOrderCardElement(order) {
         </button>
         ${needsDownpayment ? `
         <button type="button" class="btn-pay-downpayment-qr" data-order-id="${orderId}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: #121212; color: #FFD700; font-weight: 700; font-size: 0.82rem; border: 1.5px solid #FFD700; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-          <span>Pay 30% QR Ph</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>${isWalkInPending ? "Pay Online via QR Ph" : `Pay 30% Downpayment (₱${downpaymentDueAmount.toLocaleString()})`}</span>
         </button>
         ` : ""}
         ${cancelButtonHTML}
@@ -1062,7 +1158,8 @@ function createOrderCardElement(order) {
       openPaymongoQrModal({
         orderId: orderId,
         totalAmount: totalVal,
-        onSuccess: () => {
+        onSuccess: (confirmedOrderId) => {
+          showToast(`PayMongo 30% Downpayment Verified for Order #${confirmedOrderId}!`, "success");
           setTimeout(() => window.location.reload(), 1500);
         },
       });

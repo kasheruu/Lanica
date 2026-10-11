@@ -52,11 +52,18 @@ export function initAuthModalController() {
     });
   }
 
+  // Prevent accidental closure when typing or filling in the sign-in / registration form.
+  // Instead of closing on outside backdrop click, trigger a locked-backdrop shake animation on the card
+  // to protect the user's input progress and prevent accidental dismissal.
   if (authModal) {
     authModal.addEventListener("click", (e) => {
       if (e.target === authModal) {
-        authModal.classList.remove("active");
-        document.body.style.overflow = "";
+        const card = authModal.querySelector(".modal-card, .auth-modal-card");
+        if (card) {
+          card.classList.remove("modal-shake");
+          void card.offsetWidth; // Force DOM reflow to restart shake animation
+          card.classList.add("modal-shake");
+        }
       }
     });
   }

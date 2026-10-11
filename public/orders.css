@@ -1099,4 +1099,37 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* PayMongo QR Ph Modal Rules for Orders page */
+#paymongo-qr-modal.modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 10005 !important;
+}
+
+#paymongo-qr-modal:not(.active) {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#paymongo-qr-modal.active {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.paymongo-qr-close {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  z-index: 20 !important;
+}
+
+.paymongo-qr-close svg,
+.paymongo-btn-verify svg,
+.paymongo-btn-save svg {
+  pointer-events: none !important;
+}
+
 

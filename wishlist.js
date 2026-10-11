@@ -939,129 +939,125 @@ async function handlePlaceOrderSubmit() {
       nearestLandmark: nearestLandmarkVal,
     };
 
-    const isOnlineQr =
-      selectedPaymentMethod === "qr_code" ||
-      String(selectedPaymentMethod).toLowerCase().includes("qr");
+    // Step 1: Draft Order ID & Payment Gate initialization
+    const draftOrderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    if (isOnlineQr) {
-      // Step 1: Draft Order ID & Payment Gate initialization (No Firestore insertion yet!)
-      const draftOrderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (selectedPaymentMethod === "walk_in_cash") {
+      // WALK-IN WORKSHOP CASH DOWNPAYMENT PIPELINE:
+      // Direct reservation without PayMongo modal. Settle within 48 hours at counter.
+      const downpaymentRequired = Math.round(totalAmount * 0.30);
+      const remainingBalance = totalAmount - downpaymentRequired;
 
-      // Close checkout modal so user can interact with the Live PayMongo QR Ph Modal
+      const orderResult = await placeOrderAtomic({
+        orderId: draftOrderId,
+        userId: currentUser.uid,
+        cartItems: currentCartItems,
+        totalAmount: totalAmount,
+        paymentMethod: "walk_in_cash",
+        paymentOption: "downpayment",
+        address: addressWithLandmark,
+        customNotes: customComments,
+        paymentDetails: {
+          customSketchUrl: customSketchUrl || null,
+          customComments: customComments,
+          selectedTerm: "downpayment",
+          accountName: targetAddress.recipientName,
+          submittedAt: new Date().toISOString(),
+          downpaymentPaid: false,
+          paymentStatus: "awaiting_counter_downpayment",
+          downpaymentRequired: downpaymentRequired,
+        },
+      });
+
+      // Post confirmation to live chat
+      try {
+        await sendChatMessage({
+          orderId: draftOrderId,
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
+          senderRole: "customer",
+          text: `Hello! I have reserved Order #${draftOrderId} (Walk-in Workshop Cash). 30% Downpayment: ₱${downpaymentRequired.toLocaleString()}. Reservation valid for 48 hours.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
+          attachmentUrl: customSketchUrl || null,
+        });
+      } catch (chatErr) {
+        console.warn("Could not post auto chat confirmation:", chatErr);
+      }
+
       document.getElementById("checkout-modal")?.classList.remove("active");
       submitBtn.disabled = false;
       submitBtn.textContent = "Place Order Now";
 
-      // Step 2 & 3: Trigger PayMongo QR Ph Modal & Await Verification Gate
-      await openPaymongoQrModal({
-        orderId: draftOrderId,
-        totalAmount: totalAmount,
-        onConfirmPayment: async ({ paymentIntentId }) => {
-          // POST-VERIFICATION PLACEMENT GATE:
-          // Strictly execute atomic order creation only AFTER PayMongo confirms payment is succeeded!
-          const orderResult = await placeOrderAtomic({
-            orderId: draftOrderId,
-            userId: currentUser.uid,
-            cartItems: currentCartItems,
-            totalAmount: totalAmount,
-            paymentMethod: "QR Ph (PayMongo)",
-            paymentOption: selectedPaymentTerm,
-            address: addressWithLandmark,
-            customNotes: customComments,
-            paymentDetails: {
-              paymentSlipUrl: paymentSlipUrl || null,
-              customSketchUrl: customSketchUrl || null,
-              customComments: customComments,
-              selectedTerm: selectedPaymentTerm,
-              accountName: targetAddress.recipientName,
-              submittedAt: new Date().toISOString(),
-              downpaymentPaid: true,
-              paymentStatus: "downpayment_paid",
-              paymentIntentId: paymentIntentId,
-              downpaymentCentavos: Math.round(totalAmount * 0.30 * 100),
-              downpaymentAmount: Math.round(totalAmount * 0.30),
-              verifiedAt: new Date().toISOString(),
-            },
-          });
-
-          // Post confirmation to live chat
-          try {
-            const termLabel = selectedPaymentTerm === "downpayment" ? "30% Downpayment" : "Full Payment";
-            await sendChatMessage({
-              orderId: draftOrderId,
-              senderId: currentUser.uid,
-              senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
-              senderRole: "customer",
-              text: `Hello! I have placed Order #${draftOrderId} (${termLabel} Verified via PayMongo QR Ph). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
-              attachmentUrl: paymentSlipUrl || customSketchUrl || null,
-            });
-          } catch (chatErr) {
-            console.warn("Could not post auto chat confirmation:", chatErr);
-          }
-
-          return orderResult;
-        },
-        onSuccess: (confirmedOrderId) => {
-          showToast(`Payment Verified! Order #${confirmedOrderId} Placed Successfully.`, "success");
-          setTimeout(() => {
-            window.location.href = `orders.html?orderId=${encodeURIComponent(confirmedOrderId)}&payment=success`;
-          }, 1200);
-        },
-        onClose: ({ wasPaid }) => {
-          if (!wasPaid) {
-            showToast("Payment was not completed. Your order has not been placed.", "warning");
-          }
-        },
-      });
+      showToast(`Slot Reserved! Order #${draftOrderId} created. Settle 30% downpayment at our workshop within 48 hours.`, "success");
+      setTimeout(() => {
+        window.location.href = `orders.html?orderId=${encodeURIComponent(draftOrderId)}&reservation=success`;
+      }, 1200);
       return;
     }
 
-    // Walk-in (Cash) Checkout Flow:
-    submitBtn.textContent = "Finalizing Order...";
-    const result = await placeOrderAtomic({
-      userId: currentUser.uid,
-      cartItems: currentCartItems,
-      totalAmount: totalAmount,
-      paymentMethod: "Walk-in Cash",
-      paymentOption: selectedPaymentTerm,
-      address: addressWithLandmark,
-      customNotes: customComments,
-      paymentDetails: {
-        paymentSlipUrl: paymentSlipUrl || null,
-        customSketchUrl: customSketchUrl || null,
-        customComments: customComments,
-        selectedTerm: selectedPaymentTerm,
-        accountName: targetAddress.recipientName,
-        submittedAt: new Date().toISOString(),
-        walkInCash: true,
-      },
-    });
-
-    try {
-      const termLabel = selectedPaymentTerm === "downpayment" ? "30% Downpayment" : "Full Payment";
-      await sendChatMessage({
-        orderId: result.orderId,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
-        senderRole: "customer",
-        text: `Hello! I have placed Order #${result.orderId} (${termLabel} via Walk-in Cash). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
-        attachmentUrl: paymentSlipUrl || customSketchUrl || null,
-      });
-    } catch (chatErr) {
-      console.warn("Could not post auto chat confirmation:", chatErr);
-    }
-
+    // Step 2 & 3: PayMongo QR Ph Modal & Await Verification Gate
+    document.getElementById("checkout-modal")?.classList.remove("active");
     submitBtn.disabled = false;
     submitBtn.textContent = "Place Order Now";
-    document.getElementById("checkout-modal")?.classList.remove("active");
 
-    showToast(
-      `Order Placed Successfully! (ID: ${result.orderId}). Please visit the showroom for cash settlement.`,
-      "success"
-    );
-    setTimeout(() => {
-      window.location.href = "orders.html";
-    }, 1500);
+    await openPaymongoQrModal({
+      orderId: draftOrderId,
+      totalAmount: totalAmount,
+      onConfirmPayment: async ({ paymentIntentId }) => {
+        // POST-VERIFICATION PLACEMENT GATE:
+        // Strictly execute atomic order creation only AFTER PayMongo confirms payment is succeeded!
+        const orderResult = await placeOrderAtomic({
+          orderId: draftOrderId,
+          userId: currentUser.uid,
+          cartItems: currentCartItems,
+          totalAmount: totalAmount,
+          paymentMethod: "QR Ph (PayMongo)",
+          paymentOption: selectedPaymentTerm,
+          address: addressWithLandmark,
+          customNotes: customComments,
+          paymentDetails: {
+            customSketchUrl: customSketchUrl || null,
+            customComments: customComments,
+            selectedTerm: selectedPaymentTerm,
+            accountName: targetAddress.recipientName,
+            submittedAt: new Date().toISOString(),
+            downpaymentPaid: true,
+            paymentStatus: "downpayment_paid",
+            paymentIntentId: paymentIntentId,
+            downpaymentCentavos: Math.round(totalAmount * 0.30 * 100),
+            downpaymentAmount: Math.round(totalAmount * 0.30),
+            verifiedAt: new Date().toISOString(),
+          },
+        });
+
+        // Post confirmation to live chat
+        try {
+          const termLabel = selectedPaymentTerm === "downpayment" ? "30% Downpayment" : "Full Payment";
+          await sendChatMessage({
+            orderId: draftOrderId,
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
+            senderRole: "customer",
+            text: `Hello! I have placed Order #${draftOrderId} (${termLabel} Verified via PayMongo QR Ph). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
+            attachmentUrl: customSketchUrl || null,
+          });
+        } catch (chatErr) {
+          console.warn("Could not post auto chat confirmation:", chatErr);
+        }
+
+        return orderResult;
+      },
+      onSuccess: (confirmedOrderId) => {
+        showToast(`Payment Verified! Order #${confirmedOrderId} Placed Successfully.`, "success");
+        setTimeout(() => {
+          window.location.href = `orders.html?orderId=${encodeURIComponent(confirmedOrderId)}&payment=success`;
+        }, 1200);
+      },
+      onClose: ({ wasPaid }) => {
+        if (!wasPaid) {
+          showToast("Payment was not completed. Your order has not been placed.", "warning");
+        }
+      },
+    });
   } catch (err) {
     console.error("Place Order Error:", err);
     showToast(err.message || "Failed to place order.", "error");
@@ -1155,13 +1151,33 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Payment Method Selection (PayMongo QR Ph vs Walk-in Counter Cash)
   document.querySelectorAll(".payment-card").forEach((card) => {
     card.addEventListener("click", () => {
-      document.querySelectorAll(".payment-card").forEach((c) => c.classList.remove("selected"));
+      const method = card.getAttribute("data-method");
+      if (!method) return;
+      selectedPaymentMethod = method;
+      document.querySelectorAll(".payment-card").forEach((c) => {
+        c.classList.remove("selected");
+        c.style.borderColor = "#e5e7eb";
+        c.style.background = "#f9fafb";
+        const circle = c.querySelector(".payment-card-check circle");
+        if (circle) circle.setAttribute("fill", "#e2e8f0");
+      });
       card.classList.add("selected");
-      selectedPaymentMethod = card.getAttribute("data-method") || "COD";
-      updateSubmitButtonText();
-      updateProofOfPaymentBox();
+      card.style.borderColor = "var(--clr-yellow, #fcd535)";
+      card.style.background = "#fffdf0";
+      const activeCircle = card.querySelector(".payment-card-check circle");
+      if (activeCircle) activeCircle.setAttribute("fill", "#fcd535");
+
+      const submitBtn = document.getElementById("place-order-submit-btn");
+      if (submitBtn) {
+        if (selectedPaymentMethod === "walk_in_cash") {
+          submitBtn.textContent = "Reserve Slot (Pay at Workshop Counter)";
+        } else {
+          submitBtn.textContent = "Place Order & Pay 30% via QR Ph";
+        }
+      }
     });
   });
 

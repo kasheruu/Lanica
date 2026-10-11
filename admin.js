@@ -12,6 +12,7 @@ import {
   orderBy,
   runTransaction,
   Timestamp,
+  serverTimestamp,
   where,
   getDoc,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
@@ -45,6 +46,7 @@ import { compressAndResizeImage } from "./imageOptimizationService.js";
 import { loadCachedModel, attachModelToViewer } from "./modelCacheService.js";
 
 import {
+  recordAuditLog,
   logActivity,
   fetchAuditLogs,
 } from "./auditService.js";
@@ -90,6 +92,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   const role = await getUserRole(user);
+  if (currentUser) currentUser.role = role || "admin";
 
   // Debug logging
   console.log("=== ADMIN PAGE AUTH DEBUG ===");
@@ -1512,7 +1515,9 @@ onSnapshot(
     if (inventoryLoadTimer) clearTimeout(inventoryLoadTimer);
     allProducts = [];
     snapshot.forEach((doc) => {
-      allProducts.push({ id: doc.id, ...doc.data() });
+      const data = doc.data();
+      if (data.isDeleted === true || data.action === "delete") return;
+      allProducts.push({ id: doc.id, ...data });
     });
     renderCategoryDropdowns();
     renderCategoryManagerList();
@@ -1911,20 +1916,53 @@ productForm.addEventListener("submit", async (e) => {
 
     let savedProductRef = null;
     if (isEditing) {
+      const prevProduct = allProducts.find((p) => p.id === currentEditId);
       savedProductRef = doc(db, "products", currentEditId);
       await updateDoc(savedProductRef, productData);
-      logActivity(
-        "PRODUCT_UPDATE",
-        `Updated product "${productData.name}" (Stock: ${stock}, Price: ₱${productData.price.toLocaleString()}, Pre-Order: ${allowPreorder ? "Allowed" : "Disabled"})`,
-        { productId: currentEditId, category: productData.category, stock, allowPreorder }
-      );
+      await recordAuditLog({
+        action: "PRODUCT_UPDATED",
+        targetType: "product",
+        targetId: currentEditId,
+        description: `Updated product "${productData.name}" (Stock: ${stock}, Price: ₱${productData.price.toLocaleString()}, Pre-Order: ${allowPreorder ? "Allowed" : "Disabled"})`,
+        diff: {
+          before: prevProduct
+            ? {
+                name: prevProduct.name,
+                price: prevProduct.price,
+                stock: prevProduct.stock,
+                category: prevProduct.category,
+                allowPreorder: prevProduct.allowPreorder,
+              }
+            : {},
+          after: {
+            name: productData.name,
+            price: productData.price,
+            stock: productData.stock,
+            category: productData.category,
+            allowPreorder: productData.allowPreorder,
+          },
+        },
+        performedBy: currentUser,
+      });
     } else {
       savedProductRef = await addDoc(productsCollection, productData);
-      logActivity(
-        "PRODUCT_CREATE",
-        `Created product "${productData.name}" (Stock: ${stock}, Price: ₱${productData.price.toLocaleString()}, Pre-Order: ${allowPreorder ? "Allowed" : "Disabled"})`,
-        { productId: savedProductRef.id, category: productData.category, stock, allowPreorder }
-      );
+      await recordAuditLog({
+        action: "PRODUCT_CREATED",
+        targetType: "product",
+        targetId: savedProductRef.id,
+        description: `Created product "${productData.name}" (Stock: ${stock}, Price: ₱${productData.price.toLocaleString()}, Pre-Order: ${allowPreorder ? "Allowed" : "Disabled"})`,
+        diff: {
+          before: {},
+          after: {
+            name: productData.name,
+            price: productData.price,
+            stock: productData.stock,
+            category: productData.category,
+            allowPreorder: productData.allowPreorder,
+          },
+        },
+        performedBy: currentUser,
+      });
     }
 
     // Ensure regenerated products eventually store Meshy URLs uploaded to Firebase Storage.
@@ -1969,14 +2007,61 @@ productForm.addEventListener("submit", async (e) => {
   }
 });
 
-// Delete Product
+// Delete Product (Soft Delete & Immutable Audit Log)
 window.deleteProduct = async (id) => {
-  if (confirm("Are you sure you want to delete this product?")) {
-    try {
-      await deleteDoc(doc(db, "products", id));
-    } catch (error) {
-      console.error("Error deleting product: ", error);
-    }
+  const currentProd = allProducts.find((p) => p.id === id);
+  const prodName = currentProd ? currentProd.name : id;
+
+  const confirmed = await showAdminConfirmModal({
+    title: "Delete Product",
+    message: `Are you sure you want to delete <strong>${escapeHtml(prodName)}</strong>? This will remove it from the catalog.`,
+    confirmText: "Yes, Delete Product",
+    cancelText: "Cancel",
+    confirmType: "danger",
+    icon: "🗑️",
+  });
+  if (!confirmed) return;
+
+  try {
+    await updateDoc(doc(db, "products", id), {
+      isDeleted: true,
+      deletedAt: serverTimestamp(),
+      deletedBy: currentUser?.uid || "admin",
+      deletedByName: currentUser?.displayName || "Admin Staff",
+      action: "delete",
+      updatedAt: serverTimestamp(),
+    });
+
+    await recordAuditLog({
+      action: "PRODUCT_DELETED",
+      targetType: "product",
+      targetId: id,
+      description: `Soft-deleted product "${prodName}" (${id})`,
+      diff: {
+        before: currentProd
+          ? {
+              name: currentProd.name,
+              price: currentProd.price,
+              stock: currentProd.stock,
+              isDeleted: false,
+            }
+          : { isDeleted: false },
+        after: {
+          name: prodName,
+          isDeleted: true,
+          deletedBy: currentUser?.uid || "admin",
+        },
+      },
+      performedBy: currentUser,
+    });
+
+    allProducts = allProducts.filter((p) => p.id !== id);
+    applyCategoryFilter();
+    updateStats(allProducts);
+    showAdminToast(`Product "${prodName}" deleted.`, "success");
+  } catch (error) {
+    console.error("Error deleting product: ", error);
+    showAdminToast(error.message || "Could not delete product.", "error");
   }
 };
 
@@ -2915,6 +3000,11 @@ let dashRecentOrdersCurrentPage = 1;
 let dashRecentOrdersPerPage = 5;
 let adminTransCurrentPage = 1;
 let adminTransPerPage = 10;
+let adminTransSearchQuery = "";
+let adminTransTypeFilter = "all";
+let adminTransMethodFilter = "all";
+let activeReceiptOrder = null;
+let activeReceiptTab = "voucher";
 
 function showToast(message, type = "success") {
   let container = document.getElementById("toast-container");
@@ -2979,10 +3069,146 @@ function escapeHtml(str) {
 function pickFirstNonEmpty(...values) {
   for (const v of values) {
     if (v == null) continue;
+    if (typeof v === "object") continue;
     const s = String(v).trim();
-    if (s) return s;
+    if (s && s !== "[object Object]") return s;
   }
   return "";
+}
+
+function formatOrderDeliveryAddress(order) {
+  if (!order) return "No delivery address recorded";
+
+  const isPickup =
+    order.fulfillmentType === "pickup" ||
+    order.address?.pickupAtWorkshop ||
+    order.shippingAddress?.pickupAtWorkshop;
+  if (isPickup) return "Lanica Workshop (Store Pickup)";
+
+  const sources = [
+    order.shippingAddress,
+    order.deliveryAddress,
+    order.address,
+    order.customerAddress,
+  ];
+
+  for (const src of sources) {
+    if (!src) continue;
+    if (typeof src === "string") {
+      const trimmed = src.trim();
+      if (trimmed && trimmed !== "[object Object]") return trimmed;
+    } else if (typeof src === "object") {
+      if (
+        typeof src.fullAddress === "string" &&
+        src.fullAddress.trim() &&
+        src.fullAddress.trim() !== "[object Object]"
+      ) {
+        return src.fullAddress.trim();
+      }
+      if (
+        typeof src.address === "string" &&
+        src.address.trim() &&
+        src.address.trim() !== "[object Object]"
+      ) {
+        return src.address.trim();
+      }
+      const street =
+        typeof src.streetAddress === "string"
+          ? src.streetAddress.trim()
+          : typeof src.street === "string"
+          ? src.street.trim()
+          : "";
+      const city = typeof src.city === "string" ? src.city.trim() : "";
+      const province = typeof src.province === "string" ? src.province.trim() : "";
+      const postal =
+        typeof src.postalCode === "string"
+          ? src.postalCode.trim()
+          : typeof src.postal === "string"
+          ? src.postal.trim()
+          : "";
+
+      const parts = [street, city, province, postal].filter(
+        (p) => p && p !== "[object Object]"
+      );
+      if (parts.length > 0) {
+        return parts.join(", ");
+      }
+    }
+  }
+
+  if (
+    typeof order.fullAddress === "string" &&
+    order.fullAddress.trim() &&
+    order.fullAddress.trim() !== "[object Object]"
+  ) {
+    return order.fullAddress.trim();
+  }
+
+  return "No delivery address recorded";
+}
+
+function formatOrderLandmark(order) {
+  if (!order) return "";
+  const sources = [
+    order.shippingAddress,
+    order.deliveryAddress,
+    order.address,
+  ];
+  for (const src of sources) {
+    if (src && typeof src === "object") {
+      const lm = src.nearestLandmark || src.landmark;
+      if (typeof lm === "string" && lm.trim() && lm.trim() !== "[object Object]") {
+        return lm.trim();
+      }
+    }
+  }
+  if (
+    typeof order.nearestLandmark === "string" &&
+    order.nearestLandmark.trim() &&
+    order.nearestLandmark.trim() !== "[object Object]"
+  ) {
+    return order.nearestLandmark.trim();
+  }
+  if (
+    typeof order.landmark === "string" &&
+    order.landmark.trim() &&
+    order.landmark.trim() !== "[object Object]"
+  ) {
+    return order.landmark.trim();
+  }
+  return "";
+}
+
+function formatOrderRecipientPhone(order) {
+  if (!order) return "—";
+  const sources = [
+    order.shippingAddress,
+    order.deliveryAddress,
+    order.address,
+  ];
+  for (const src of sources) {
+    if (src && typeof src === "object") {
+      const p = src.phoneNumber || src.phone;
+      if (typeof p === "string" && p.trim() && p.trim() !== "[object Object]") {
+        return p.trim();
+      }
+    }
+  }
+  if (
+    typeof order.phone === "string" &&
+    order.phone.trim() &&
+    order.phone.trim() !== "[object Object]"
+  ) {
+    return order.phone.trim();
+  }
+  if (
+    typeof order.phoneNumber === "string" &&
+    order.phoneNumber.trim() &&
+    order.phoneNumber.trim() !== "[object Object]"
+  ) {
+    return order.phoneNumber.trim();
+  }
+  return "—";
 }
 
 function resolveCustomerDisplay(order) {
@@ -3149,14 +3375,165 @@ async function hydrateCustomerNamesForOrders(orders) {
 function normalizeOrderStatus(raw) {
   if (raw == null) return "placed";
   const s = String(raw).toLowerCase().trim();
+  if (s === "slot reserved" || s === "slot_reserved") return "slot reserved";
   if (s === "pending" || s === "order placed" || s === "placed") return "placed";
   if (s === "accepted" || s === "confirmed" || s === "deposit confirmed" || s === "downpayment confirmed") return "downpayment confirmed";
   if (s === "processing" || s === "packed" || s === "crafting" || s === "fabrication" || s === "in production") return "in production";
   if (s === "inspected" || s === "qc passed" || s === "quality check" || s === "quality checked") return "quality checked";
   if (s === "dispatched" || s === "out for delivery" || s === "shipped" || s === "shipping" || s === "in transit") return "shipped";
   if (s === "completed" || s === "received" || s === "arrived" || s === "delivered") return "delivered";
-  if (s === "declined" || s === "cancelled" || s === "canceled") return "cancelled";
+  if (s === "declined") return "declined";
+  if (s === "cancelled" || s === "canceled") return "cancelled";
   return "placed";
+}
+
+function getOrderCanonicalStatus(order) {
+  if (!order) return "Placed";
+  const rawStatus = order.status;
+  const rawOrderStatus = order.orderStatus;
+
+  const normStatus = rawStatus ? normalizeOrderStatus(rawStatus) : null;
+  const normOrderStatus = rawOrderStatus ? normalizeOrderStatus(rawOrderStatus) : null;
+
+  let chosen = "placed";
+  if (normStatus && normStatus !== "placed") chosen = normStatus;
+  else if (normOrderStatus && normOrderStatus !== "placed") chosen = normOrderStatus;
+  else chosen = normStatus || normOrderStatus || "placed";
+
+  return chosen
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function formatOrderDate(val) {
+  if (!val) return "—";
+  let d = null;
+  if (val.toDate && typeof val.toDate === "function") d = val.toDate();
+  else if (val.seconds) d = new Date(val.seconds * 1000);
+  else d = new Date(val);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function parseItemPrice(val) {
+  if (typeof val === "number") return Number.isFinite(val) ? val : 0;
+  if (!val) return 0;
+  const cleaned = String(val).replace(/[^0-9.]/g, "");
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function showAdminToast(message, type = "info", duration = 3500) {
+  let container = document.getElementById("admin-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "admin-toast-container";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `admin-toast-card ${type}`;
+
+  const iconMap = {
+    success: "✓",
+    error: "✕",
+    danger: "✕",
+    warning: "⚠️",
+    info: "ℹ️",
+  };
+  const icon = iconMap[type] || "ℹ️";
+
+  toast.innerHTML = `
+    <span style="font-size: 1.15rem; flex-shrink: 0;">${icon}</span>
+    <div class="admin-toast-content">${escapeHtml(message)}</div>
+    <button type="button" class="admin-toast-close" aria-label="Close">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector(".admin-toast-close");
+  const dismiss = () => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(30px)";
+    setTimeout(() => {
+      if (toast.parentElement) toast.remove();
+    }, 200);
+  };
+
+  if (closeBtn) closeBtn.addEventListener("click", dismiss);
+  container.appendChild(toast);
+
+  if (duration > 0) {
+    setTimeout(dismiss, duration);
+  }
+}
+
+function showAdminConfirmModal({
+  title = "Confirmation",
+  message = "Are you sure you want to proceed?",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  confirmType = "primary",
+  icon = "ℹ️",
+}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "admin-modal-overlay";
+
+    overlay.innerHTML = `
+      <div class="admin-confirm-card" role="dialog" aria-modal="true">
+        <div class="admin-confirm-header">
+          <div class="admin-confirm-icon-box ${confirmType}">
+            ${icon}
+          </div>
+          <div style="flex: 1;">
+            <h3 class="admin-confirm-title">${escapeHtml(title)}</h3>
+            <div class="admin-confirm-message">${message}</div>
+          </div>
+        </div>
+        <div class="admin-confirm-actions">
+          <button type="button" class="admin-btn-modal-cancel">${escapeHtml(cancelText)}</button>
+          <button type="button" class="admin-btn-modal-confirm ${confirmType}">${escapeHtml(confirmText)}</button>
+        </div>
+      </div>
+    `;
+
+    let cleanedUp = false;
+    const cleanup = (result) => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      overlay.style.opacity = "0";
+      setTimeout(() => {
+        if (overlay.parentElement) overlay.remove();
+      }, 160);
+      resolve(result);
+    };
+
+    const cancelBtn = overlay.querySelector(".admin-btn-modal-cancel");
+    const confirmBtn = overlay.querySelector(".admin-btn-modal-confirm");
+
+    if (cancelBtn) cancelBtn.addEventListener("click", () => cleanup(false));
+    if (confirmBtn) confirmBtn.addEventListener("click", () => cleanup(true));
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) cleanup(false);
+    });
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        document.removeEventListener("keydown", onKey);
+        cleanup(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+
+    document.body.appendChild(overlay);
+  });
 }
 
 function normalizeOrderAction(raw) {
@@ -3623,57 +4000,294 @@ function showAdminSection(name) {
   window.location.hash = name || "dashboard";
 }
 
+function formatTransactionMethod(method) {
+  const m = String(method || "").toLowerCase();
+  if (m.includes("walk_in") || m.includes("cash") || m.includes("counter")) {
+    return "🏢 Cash (Counter)";
+  }
+  if (m.includes("qr") || m.includes("paymongo")) {
+    return "📱 QR Ph (PayMongo)";
+  }
+  if (m.includes("bpi") || m.includes("bank")) {
+    return "🏦 BPI / Bank Transfer";
+  }
+  return "💳 " + (method ? String(method).toUpperCase() : "Online / Counter");
+}
+
+function formatFormalDate(val, uppercase = false) {
+  if (!val) return "—";
+  let d = null;
+  if (val.toDate && typeof val.toDate === "function") d = val.toDate();
+  else if (val.seconds) d = new Date(val.seconds * 1000);
+  else d = new Date(val);
+  if (isNaN(d.getTime())) return "—";
+  const str = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  return uppercase ? str.toUpperCase() : str;
+}
+
+function buildTransactionsLedger(orders) {
+  const ledger = [];
+  const list = Array.isArray(orders) ? orders : (allOrders || []);
+
+  list.forEach((order) => {
+    if (!order || order.isDeleted === true) return;
+
+    const totalVal = Number(order.totalAmount || order.total || 0);
+    const isAwaitingCounter = order.paymentStatus === "awaiting_counter_downpayment";
+    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounter;
+    
+    // Initial Payment (30% Downpayment or Full Payment)
+    const initialPaid = isAwaitingCounter
+      ? Number(order.downpaymentPaid || 0)
+      : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
+
+    let initialStatus = order.paymentStatus;
+    if (!initialStatus || initialStatus === "pending") {
+      initialStatus = isDownpayment
+        ? (Number(order.downpaymentPaid) > 0 || order.paymentStatus === "Downpayment Confirmed" ? "Downpayment Verified" : "Awaiting Verification")
+        : "Paid Verified";
+    }
+
+    const initialMethod = order.paymentMethod || order.paymentType || "walk_in_cash";
+    const orderRef = order.orderId || order.id || "N/A";
+    const customer = resolveCustomerDisplay(order);
+    const initialDate = order.createdAt;
+
+    ledger.push({
+      id: order.paymentRef || order.paymentIntentId || ("TX-DP-" + String(order.id).slice(0, 8).toUpperCase()),
+      orderId: order.id,
+      orderRef,
+      rawDate: initialDate,
+      dateStr: formatOrderDate(initialDate),
+      customer,
+      typeLabel: isDownpayment ? "30% Downpayment" : "Full Payment",
+      typeKey: isDownpayment ? "downpayment" : "full",
+      amount: initialPaid,
+      method: initialMethod,
+      status: initialStatus,
+      rawOrder: order,
+      badgeColor: isDownpayment ? "#eff6ff" : "#ecfdf5",
+      badgeTextColor: isDownpayment ? "#1d4ed8" : "#047857"
+    });
+
+    // Balance Settlement Payment (70% Completion)
+    const remainingBalance = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - initialPaid) : 0));
+    const isBalanceSettled = order.balanceStatus === "settled" || order.isBalanceSettled === true || (order.status === "Delivered" && remainingBalance <= 0 && isDownpayment);
+
+    if (isBalanceSettled && isDownpayment && totalVal > initialPaid) {
+      const balanceAmount = Number(order.remainingBalanceSettled || (totalVal - initialPaid));
+      const balanceDate = order.balanceSettledAt || order.deliveredAt || order.updatedAt || initialDate;
+      const balanceMethod = order.balancePaymentMethod || order.paymentMethod || "walk_in_cash";
+
+      ledger.push({
+        id: order.balancePaymentRef || ("TX-BAL-" + String(order.id).slice(0, 8).toUpperCase()),
+        orderId: order.id,
+        orderRef,
+        rawDate: balanceDate,
+        dateStr: formatOrderDate(balanceDate),
+        customer,
+        typeLabel: "70% Balance Settlement",
+        typeKey: "balance",
+        amount: balanceAmount,
+        method: balanceMethod,
+        status: "Balance Settled",
+        rawOrder: order,
+        badgeColor: "#f5f3ff",
+        badgeTextColor: "#6d28d9"
+      });
+    }
+
+    // Refund Reversal Record (if refunded)
+    const isRefunded = order.refundStatus === "completed" || order.status === "Refund Complete" || order.status === "Refunded";
+    if (isRefunded) {
+      const refundAmount = Number(order.refundAmount || initialPaid);
+      const refundDate = order.refundCompletedAt || order.updatedAt || initialDate;
+
+      ledger.push({
+        id: ("TX-REF-" + String(order.id).slice(0, 8).toUpperCase()),
+        orderId: order.id,
+        orderRef,
+        rawDate: refundDate,
+        dateStr: formatOrderDate(refundDate),
+        customer,
+        typeLabel: "Refund / Reversal",
+        typeKey: "refund",
+        amount: -refundAmount,
+        method: order.paymentMethod || "walk_in_cash",
+        status: "Refund Processed",
+        rawOrder: order,
+        badgeColor: "#fef2f2",
+        badgeTextColor: "#dc2626"
+      });
+    }
+  });
+
+  // Sort descending by date (newest first)
+  ledger.sort((a, b) => {
+    const tA = a.rawDate?.toDate?.()?.getTime?.() || (a.rawDate?.seconds ? a.rawDate.seconds * 1000 : new Date(a.rawDate || 0).getTime());
+    const tB = b.rawDate?.toDate?.()?.getTime?.() || (b.rawDate?.seconds ? b.rawDate.seconds * 1000 : new Date(b.rawDate || 0).getTime());
+    return tB - tA;
+  });
+
+  return ledger;
+}
+
+function updateTransactionKpis(ledger) {
+  let totalCollected = 0;
+  let downpaymentsTotal = 0;
+  let balancesTotal = 0;
+
+  ledger.forEach((tx) => {
+    if (tx.typeKey === "downpayment") {
+      downpaymentsTotal += Number(tx.amount || 0);
+      totalCollected += Number(tx.amount || 0);
+    } else if (tx.typeKey === "full") {
+      totalCollected += Number(tx.amount || 0);
+    } else if (tx.typeKey === "balance") {
+      balancesTotal += Number(tx.amount || 0);
+      totalCollected += Number(tx.amount || 0);
+    } else if (tx.typeKey === "refund") {
+      totalCollected += Number(tx.amount || 0); // negative
+    }
+  });
+
+  const totalCollEl = document.getElementById("trans-stat-total-collected");
+  const dpEl = document.getElementById("trans-stat-downpayments");
+  const balEl = document.getElementById("trans-stat-balances");
+  const countEl = document.getElementById("trans-stat-count");
+
+  if (totalCollEl) totalCollEl.textContent = `₱${Math.max(0, totalCollected).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (dpEl) dpEl.textContent = `₱${downpaymentsTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (balEl) balEl.textContent = `₱${balancesTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (countEl) countEl.textContent = ledger.length.toLocaleString();
+}
+
+function setupAdminTransactionsControls() {
+  const searchInput = document.getElementById("admin-trans-search");
+  const typeFilter = document.getElementById("admin-trans-type-filter");
+  const methodFilter = document.getElementById("admin-trans-method-filter");
+  const refreshBtn = document.getElementById("btn-refresh-transactions");
+
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = "true";
+    searchInput.addEventListener("input", (e) => {
+      adminTransSearchQuery = e.target.value.trim().toLowerCase();
+      adminTransCurrentPage = 1;
+      renderAdminTransactionsList(allOrders);
+    });
+  }
+
+  if (typeFilter && !typeFilter.dataset.bound) {
+    typeFilter.dataset.bound = "true";
+    typeFilter.addEventListener("change", (e) => {
+      adminTransTypeFilter = e.target.value;
+      adminTransCurrentPage = 1;
+      renderAdminTransactionsList(allOrders);
+    });
+  }
+
+  if (methodFilter && !methodFilter.dataset.bound) {
+    methodFilter.dataset.bound = "true";
+    methodFilter.addEventListener("change", (e) => {
+      adminTransMethodFilter = e.target.value;
+      adminTransCurrentPage = 1;
+      renderAdminTransactionsList(allOrders);
+    });
+  }
+
+  if (refreshBtn && !refreshBtn.dataset.bound) {
+    refreshBtn.dataset.bound = "true";
+    refreshBtn.addEventListener("click", () => {
+      renderAdminTransactionsList(allOrders);
+      showToast("Financial ledger refreshed successfully!");
+    });
+  }
+
+  initLanicaReceiptModalListeners();
+}
+
 function renderAdminTransactionsList(orders) {
+  setupAdminTransactionsControls();
+
   const tbody = document.getElementById("admin-transactions-table-body");
   const pagContainer = document.getElementById("admin-transactions-pagination-container");
   if (!tbody) return;
 
-  const validOrders = Array.isArray(orders) ? orders : allOrders;
-  if (!validOrders || validOrders.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 32px; color: #9ca3af;">No transaction records found.</td></tr>`;
+  const allLedger = buildTransactionsLedger(orders);
+  updateTransactionKpis(allLedger);
+
+  // Filter ledger based on user criteria
+  const filteredLedger = allLedger.filter((tx) => {
+    if (adminTransSearchQuery) {
+      const q = adminTransSearchQuery;
+      const matchId = String(tx.id || "").toLowerCase().includes(q);
+      const matchRef = String(tx.orderRef || "").toLowerCase().includes(q);
+      const matchCust = String(tx.customer || "").toLowerCase().includes(q);
+      const matchEmail = String(tx.rawOrder?.userEmail || "").toLowerCase().includes(q);
+      const matchPhone = String(formatOrderRecipientPhone(tx.rawOrder)).toLowerCase().includes(q);
+      if (!matchId && !matchRef && !matchCust && !matchEmail && !matchPhone) return false;
+    }
+
+    if (adminTransTypeFilter !== "all" && tx.typeKey !== adminTransTypeFilter) {
+      return false;
+    }
+
+    if (adminTransMethodFilter !== "all") {
+      const m = String(tx.method || "").toLowerCase();
+      if (adminTransMethodFilter === "qr" && !m.includes("qr") && !m.includes("paymongo")) return false;
+      if (adminTransMethodFilter === "cash" && !m.includes("cash") && !m.includes("walk_in") && !m.includes("counter")) return false;
+      if (adminTransMethodFilter === "bpi" && !m.includes("bpi") && !m.includes("bank")) return false;
+    }
+
+    return true;
+  });
+
+  if (filteredLedger.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 36px; color: #9ca3af; font-size: 0.9rem;">No financial transaction records match your filter criteria.</td></tr>`;
     if (pagContainer) pagContainer.innerHTML = "";
     return;
   }
 
-  const totalItems = validOrders.length;
+  const totalItems = filteredLedger.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / adminTransPerPage));
   if (adminTransCurrentPage > totalPages) adminTransCurrentPage = totalPages;
   if (adminTransCurrentPage < 1) adminTransCurrentPage = 1;
 
   const startIndex = (adminTransCurrentPage - 1) * adminTransPerPage;
-  const pagedOrders = validOrders.slice(startIndex, startIndex + adminTransPerPage);
+  const pagedLedger = filteredLedger.slice(startIndex, startIndex + adminTransPerPage);
 
   tbody.innerHTML = "";
-  pagedOrders.forEach((order) => {
-    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
-    const totalVal = Number(order.totalAmount || order.total || 0);
-    const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
-    const payStatus = order.paymentStatus || (isDownpayment ? "Downpayment Confirmed" : "Paid");
-    const pMethod = order.paymentMethod || "COD";
-    const refNum = order.orderId || order.id || "N/A";
-
-    let dateStr = "Recently";
-    if (order.createdAt && typeof order.createdAt.toDate === "function") {
-      dateStr = order.createdAt.toDate().toLocaleString();
-    } else if (order.createdAt && order.createdAt.seconds) {
-      dateStr = new Date(order.createdAt.seconds * 1000).toLocaleString();
-    }
-
-    const customer = order.customerName || order.shippingAddress?.recipientName || order.userEmail || "Customer";
+  pagedLedger.forEach((tx) => {
+    const isNegative = tx.amount < 0;
+    const absAmount = Math.abs(Number(tx.amount || 0));
+    const amountFormatted = (isNegative ? "-₱" : "₱") + absAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const tr = document.createElement("tr");
     tr.style.borderBottom = "1px solid #f1f5f9";
     tr.innerHTML = `
-      <td style="padding: 14px 18px;"><strong>TX-${escapeHtml(String(refNum).slice(0, 10))}</strong></td>
-      <td style="padding: 14px 18px; font-size: 0.82rem; color: #64748b;">${escapeHtml(dateStr)}</td>
-      <td style="padding: 14px 18px; font-weight: 600; color: #0f172a;">${escapeHtml(refNum)}</td>
-      <td style="padding: 14px 18px; font-weight: 500;">${escapeHtml(customer)}</td>
-      <td style="padding: 14px 18px;"><span style="font-size: 0.8rem; background: #f1f5f9; padding: 4px 8px; border-radius: 6px;">${isDownpayment ? "30% Downpayment" : "Full Payment"}</span></td>
-      <td style="padding: 14px 18px; font-weight: 700; color: #059669;">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      <td style="padding: 14px 18px; font-weight: 500; color: #334155;">💳 ${escapeHtml(pMethod)}</td>
-      <td style="padding: 14px 18px;"><span class="status-badge" style="background: ${isDownpayment ? '#eff6ff' : '#ecfdf5'}; color: ${isDownpayment ? '#1d4ed8' : '#047857'}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;">${escapeHtml(payStatus)}</span></td>
+      <td style="padding: 14px 18px;"><strong>${escapeHtml(tx.id)}</strong></td>
+      <td style="padding: 14px 18px; font-size: 0.82rem; color: #64748b;">${escapeHtml(tx.dateStr)}</td>
+      <td style="padding: 14px 18px; font-weight: 600; color: #0f172a;">${escapeHtml(tx.orderRef)}</td>
+      <td style="padding: 14px 18px; font-weight: 500;">${escapeHtml(tx.customer)}</td>
+      <td style="padding: 14px 18px;"><span style="font-size: 0.8rem; background: #f1f5f9; padding: 4px 8px; border-radius: 6px; font-weight: 500;">${escapeHtml(tx.typeLabel)}</span></td>
+      <td style="padding: 14px 18px; font-weight: 700; color: ${isNegative ? '#dc2626' : '#059669'};">${amountFormatted}</td>
+      <td style="padding: 14px 18px; font-weight: 500; color: #334155;">${escapeHtml(formatTransactionMethod(tx.method))}</td>
+      <td style="padding: 14px 18px;"><span class="status-badge" style="background: ${tx.badgeColor}; color: ${tx.badgeTextColor}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;">${escapeHtml(tx.status)}</span></td>
+      <td style="padding: 14px 18px; text-align: center;">
+        <button type="button" class="btn-view-lanica-receipt" data-order-id="${escapeHtml(tx.orderId)}" data-tx-type="${escapeHtml(tx.typeKey)}" style="display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font-size: 0.78rem; font-weight: 600; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer;">
+          🧾 View Receipt
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
+  });
+
+  // Attach click listener for Receipt button
+  tbody.querySelectorAll(".btn-view-lanica-receipt").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const orderId = btn.dataset.orderId;
+      openLanicaReceiptModal(orderId, "voucher");
+    });
   });
 
   if (pagContainer && typeof renderPagination === "function") {
@@ -3687,16 +4301,400 @@ function renderAdminTransactionsList(orders) {
       urlParamPrefix: "adminTrans",
       onPageChange: (newPage) => {
         adminTransCurrentPage = newPage;
-        renderAdminTransactionsList(validOrders);
+        renderAdminTransactionsList(orders);
       },
       onPageSizeChange: (newSize) => {
         adminTransPerPage = newSize;
         adminTransCurrentPage = 1;
-        renderAdminTransactionsList(validOrders);
+        renderAdminTransactionsList(orders);
       },
     });
   }
 }
+
+/**
+ * Initializes and wires up the official Lanica receipt/voucher modal events.
+ */
+function initLanicaReceiptModalListeners() {
+  const modal = document.getElementById("lanica-receipt-modal");
+  const closeBtn = document.getElementById("btn-close-lanica-modal");
+  const printBtn = document.getElementById("btn-print-lanica-doc");
+  const tabVoucher = document.getElementById("tab-btn-voucher");
+  const tabQuotation = document.getElementById("tab-btn-quotation");
+
+  if (closeBtn && !closeBtn.dataset.bound) {
+    closeBtn.dataset.bound = "true";
+    closeBtn.addEventListener("click", () => {
+      if (modal) {
+        modal.classList.remove("active");
+        modal.style.display = "none";
+      }
+    });
+  }
+
+  if (modal && !modal.dataset.bound) {
+    modal.dataset.bound = "true";
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        modal.classList.remove("active");
+        modal.style.display = "none";
+      }
+    });
+  }
+
+  if (printBtn && !printBtn.dataset.bound) {
+    printBtn.dataset.bound = "true";
+    printBtn.addEventListener("click", () => {
+      window.print();
+    });
+  }
+
+  if (tabVoucher && !tabVoucher.dataset.bound) {
+    tabVoucher.dataset.bound = "true";
+    tabVoucher.addEventListener("click", () => {
+      activeReceiptTab = "voucher";
+      renderLanicaDocumentContent();
+    });
+  }
+
+  if (tabQuotation && !tabQuotation.dataset.bound) {
+    tabQuotation.dataset.bound = "true";
+    tabQuotation.addEventListener("click", () => {
+      activeReceiptTab = "quotation";
+      renderLanicaDocumentContent();
+    });
+  }
+}
+
+/**
+ * Opens the high-fidelity Lanica document modal for a specific order.
+ */
+function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
+  const order = (allOrders || []).find((o) => o.id === orderId) || (currentSelectedOrder && currentSelectedOrder.id === orderId ? currentSelectedOrder : null);
+  if (!order) {
+    showToast("Unable to load order details for receipt generation.", "error");
+    return;
+  }
+
+  activeReceiptOrder = order;
+  activeReceiptTab = defaultTab || "voucher";
+
+  renderLanicaDocumentContent();
+
+  const modal = document.getElementById("lanica-receipt-modal");
+  if (modal) {
+    modal.classList.add("active");
+    modal.style.display = "flex";
+  }
+}
+
+/**
+ * Renders the authentic Lanica business documents (Payment Request Voucher or Official Quotation).
+ */
+function renderLanicaDocumentContent() {
+  const area = document.getElementById("lanica-printable-area");
+  const tabVoucher = document.getElementById("tab-btn-voucher");
+  const tabQuotation = document.getElementById("tab-btn-quotation");
+  if (!area || !activeReceiptOrder) return;
+
+  const order = activeReceiptOrder;
+
+  // Toggle Tab Button Active Visuals
+  if (tabVoucher && tabQuotation) {
+    if (activeReceiptTab === "voucher") {
+      tabVoucher.classList.add("active");
+      tabQuotation.classList.remove("active");
+      tabVoucher.style.background = "#2563eb";
+      tabVoucher.style.color = "#ffffff";
+      tabQuotation.style.background = "transparent";
+      tabQuotation.style.color = "#94a3b8";
+    } else {
+      tabQuotation.classList.add("active");
+      tabVoucher.classList.remove("active");
+      tabQuotation.style.background = "#2563eb";
+      tabQuotation.style.color = "#ffffff";
+      tabVoucher.style.background = "transparent";
+      tabVoucher.style.color = "#94a3b8";
+    }
+  }
+
+  // Financial calculations
+  const totalVal = Number(order.totalAmount || order.total || 0);
+  const isAwaitingCounter = order.paymentStatus === "awaiting_counter_downpayment";
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounter;
+  const paidVal = isAwaitingCounter
+    ? Number(order.downpaymentPaid || 0)
+    : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+  const remainingVal = Number(order.remainingBalance ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+  const isPartial = isDownpayment && remainingVal > 0;
+
+  const deliveryCharge = Number(order.deliveryFee ?? order.shippingFee ?? order.shippingAddress?.shippingCost ?? 1000);
+  const discountDf = Number(order.discountedDeliveryFee ?? order.discountDf ?? 0);
+  const itemsSubtotal = Math.max(0, totalVal - deliveryCharge);
+  const totalPlusDf = itemsSubtotal + deliveryCharge;
+  const grandTotal = totalVal;
+
+  const customerName = resolveCustomerDisplay(order);
+  const customerAddress = formatOrderDeliveryAddress(order);
+  const customerPhone = formatOrderRecipientPhone(order);
+  const quotationNumber = String(order.orderId || order.id || "0122").slice(0, 10).toUpperCase();
+
+  const purchaseDate = formatFormalDate(order.createdAt, false);
+  const purchaseDateUpper = formatFormalDate(order.createdAt, true);
+  const deliveryDate = formatFormalDate(order.targetDeliveryDate || order.estimatedDeliveryDate || order.deliveredAt, true);
+
+  const proofUrl = pickFirstNonEmpty(order.proofUrl, order.paymentProof, order.paymentProofUrl, "");
+  const methodDisplay = formatTransactionMethod(order.paymentMethod || order.paymentType);
+
+  // Common Header Template matching uploaded documents
+  const headerHtml = `
+    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; margin-bottom: 8px;">
+      <img src="assets/lanicalogo.jpg" alt="Lanica Logo" style="width: 76px; height: 76px; object-fit: contain; border: 1.5px solid #000; padding: 2px;" onerror="this.onerror=null;this.src='assets/product_sofa.png';" />
+      <div style="text-align: center; flex: 1;">
+        <div style="font-size: 0.95rem; font-weight: 800; letter-spacing: 0.05em; color: #000; text-transform: uppercase;">LANICA'S SOFA SALA SET CALAMBA BRANCH</div>
+        <div style="font-size: 0.8rem; font-weight: 600; color: #1f2937; margin-top: 3px; text-transform: uppercase;">MILAN PRESTIGE BLDG. BRGY. HALANG NATIONAL HIGHWAY CALAMBA CITY LAGUNA</div>
+        <div style="font-size: 0.8rem; font-weight: 700; color: #000; margin-top: 2px;">CONTACT NO#: 0993-287-4937</div>
+      </div>
+    </div>
+    <div style="height: 4px; background: #000; width: 100%; margin-bottom: 22px;"></div>
+  `;
+
+  if (activeReceiptTab === "voucher") {
+    // ==========================================
+    // DOCUMENT 2: PAYMENT REQUEST VOUCHER (Image 2)
+    // ==========================================
+    const firstItem = (order.items && order.items[0]) || null;
+    const firstItemName = firstItem ? (firstItem.name || firstItem.title || "SEMI ELEGANT") : "SEMI ELEGANT";
+    const particulars = `PAYMENT FOR ${escapeHtml(firstItemName.toUpperCase())} SOFA SET`;
+    const staffSignatory = escapeHtml(order.assignedStaffName || "Joanna (Staff)");
+    const signDate = purchaseDate;
+
+    area.innerHTML = `
+      <div style="max-width: 760px; margin: 0 auto; color: #000;">
+        ${headerHtml}
+
+        <div style="font-size: 1.25rem; font-weight: 800; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 20px;">
+          PAYMENT REQUEST VOUCHER
+        </div>
+
+        <div style="font-size: 0.9rem; font-weight: 700; color: #000; margin-bottom: 8px;">1. Payment Request Form / Voucher</div>
+        
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 0.86rem; margin-bottom: 28px;">
+          <tbody>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; width: 38%; text-transform: uppercase;">DOCUMENT DATE:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 600; text-transform: uppercase;">${escapeHtml(purchaseDateUpper)}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PAYEE NAME:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 800; text-transform: uppercase;">LANICA'S BED AND SOFA BED TRADING</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PAYMENT METHOD:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${escapeHtml(order.paymentMethod === "walk_in_cash" ? "CASH (COUNTER)" : (order.paymentMethod === "bpi" ? "BPI" : "QR PH / PAYMONGO"))}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">LOCATION:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 600; text-transform: uppercase;">MILAN PRESTIGE BUILDING, BRGY. HALANG CALAMBA LAGUNA</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PARTICULARS/DESCRIPTION:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${particulars}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">TOTAL CONTRACT/ BILLING AMOUNT</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700;">₱ ${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">
+                AMOUNT PAID (Partial ${isPartial ? '<strong>[ ☑ ]</strong>' : '[ ☐ ]'} Full ${!isPartial ? '<strong>[ ☑ ]</strong>' : '[ ☐ ]'})
+              </td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700;">₱ ${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 800; color: #dc2626; text-transform: uppercase;">REMAINING BALANCE:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 800; color: #dc2626; font-size: 0.95rem;">₱ ${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="font-size: 0.9rem; font-weight: 700; color: #000; margin-bottom: 8px;">2. APPROVAL &amp; CHECK/PAYMENT RELEASE SIGNATORIES</div>
+        <div style="border-top: 2px solid #000; padding-top: 14px; margin-bottom: 24px;">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; font-size: 0.78rem;">
+            <div>
+              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">PREPARED BY</div>
+              <div style="margin: 22px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 600; font-family: cursive; font-size: 0.95rem; color: #1e293b;">${staffSignatory}</div>
+              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+            </div>
+            <div>
+              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECKED BY</div>
+              <div style="margin: 22px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 600; font-family: cursive; font-size: 0.95rem; color: #1e293b;">Artisan Lead</div>
+              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+            </div>
+            <div>
+              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">APPROVED AND CHECK<br/>SIGNATORY</div>
+              <div style="margin: 12px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 800; color: #000; font-size: 0.76rem;">SUPERVISOR</div>
+              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+            </div>
+            <div>
+              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECK PAYMENT<br/>RECIVE</div>
+              <div style="margin: 12px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 800; color: #000; font-size: 0.76rem;">OWNER/REPRESENTATIVE</div>
+              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+            </div>
+          </div>
+        </div>
+
+        ${proofUrl ? `
+          <div style="margin-top: 18px; border: 1.5px dashed #64748b; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #334155; margin-bottom: 10px;">ATTACHED PAYMENT VERIFICATION SCREENSHOT / ADVICE:</div>
+            <img src="${proofUrl}" alt="Proof of Payment" style="max-height: 260px; max-width: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin: 0 auto; display: block;" onerror="this.onerror=null;this.parentElement.style.display='none';" />
+          </div>
+        ` : `
+          <div style="margin-top: 18px; border: 1.5px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
+            <div style="font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: #059669;">PAYMENT RECONCILED &amp; VERIFIED VIA ${escapeHtml(methodDisplay)}</div>
+            <div style="font-size: 0.76rem; color: #64748b; margin-top: 3px;">Lanica Financial Ledger Ref: <strong>TX-${escapeHtml(String(quotationNumber).slice(0, 10))}</strong> &bull; Reconciled on ${escapeHtml(purchaseDate)}</div>
+          </div>
+        `}
+      </div>
+    `;
+  } else {
+    // ==========================================
+    // DOCUMENT 1: OFFICIAL QUOTATION (Image 1)
+    // ==========================================
+    const items = (order.items && order.items.length > 0) ? order.items : [{
+      name: "SEMI ELEGANT LTYPE FULLBACKREST",
+      quantity: 1,
+      price: itemsSubtotal,
+      material: "Pure Goodlumber / Uratex 4in",
+      color: "Gamusa Bailey Mustang",
+      customNotes: "With 1 arm sa kanan, with flesh lining"
+    }];
+
+    const itemsRowsHtml = items.map((item, idx) => {
+      const itemQty = Number(item.quantity || 1);
+      const itemPrice = parseItemPrice(item.price);
+      const itemTotal = itemPrice * itemQty;
+      const itemName = String(item.name || item.title || "SEMI ELEGANT LTYPE FULLBACKREST").toUpperCase();
+      const itemColor = String(item.color || item.fabricColor || "GAMUSA BAILEY MUSTANG").toUpperCase();
+      const itemSpecs = item.customNotes || item.specs || "With 1 arm sa kanan, with flesh lining";
+
+      return `
+        <tr style="vertical-align: top; border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 10px 8px; font-weight: 700; width: 36px;">${idx + 1}</td>
+          <td style="padding: 10px 8px;">
+            <div style="font-weight: 800; font-size: 0.95rem; text-transform: uppercase; color: #000;">${escapeHtml(itemName)}</div>
+            <div style="font-weight: 700; font-size: 0.82rem; margin-top: 3px;">STANDARD SIZE</div>
+            <div style="font-size: 0.82rem; margin-top: 2px;">${escapeHtml(itemSpecs)}</div>
+            <div style="font-weight: 700; font-size: 0.82rem; margin-top: 6px;">COLOR: ${escapeHtml(itemColor)}</div>
+            
+            <div style="margin-top: 8px; font-size: 0.8rem;">
+              <div style="font-weight: 700; text-transform: uppercase;">FREEBIES:</div>
+              <div style="padding-left: 4px; line-height: 1.4;">
+                ✓ 5 PILLOWS<br/>
+                ✓ FOOTSTOOL (CLASS A FOAM)<br/>
+                ✓ FOOTINGS
+              </div>
+            </div>
+
+            <div style="margin-top: 8px; font-size: 0.8rem;">
+              <div style="font-weight: 700; text-transform: uppercase;">MATERIALS:</div>
+              <div style="padding-left: 4px; line-height: 1.4;">
+                ✓ PURE GOODLUMBER WOOD FRAME<br/>
+                ✓ PURE 4 INCHES URATEX FOAM
+              </div>
+            </div>
+
+            <div style="margin-top: 10px; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; color: #000;">
+              6 MONTHS WARRANTY FOAM SEAT ONLY
+            </div>
+          </td>
+          <td style="padding: 10px 8px; text-align: center; font-weight: 700; width: 60px;">${itemQty}</td>
+          <td style="padding: 10px 8px; text-align: right; font-weight: 700; width: 110px;">₱ ${itemPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="padding: 10px 8px; text-align: right; font-weight: 700; width: 110px;">₱ ${itemTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        </tr>
+      `;
+    }).join("");
+
+    area.innerHTML = `
+      <div style="max-width: 760px; margin: 0 auto; color: #000;">
+        ${headerHtml}
+
+        <!-- Customer & Quotation Meta Grid -->
+        <div style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 22px; font-size: 0.86rem; line-height: 1.5;">
+          <div style="flex: 1;">
+            <div><strong>NAME:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerName)}</span></div>
+            <div><strong>ADDRESS:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerAddress)}</span></div>
+            <div><strong>CONTACT#:</strong> <span>${escapeHtml(customerPhone)}</span></div>
+          </div>
+          <div style="min-width: 280px; text-align: right;">
+            <div><strong>QUOTATION#</strong> <span>${escapeHtml(quotationNumber)}</span></div>
+            <div><strong>DATE OF PURCHASE:</strong> <span>${escapeHtml(purchaseDate)}</span></div>
+            <div><strong>DATE OF DELIVERY:</strong> <span style="text-transform: uppercase;">${escapeHtml(deliveryDate)}</span></div>
+          </div>
+        </div>
+
+        <!-- Items Breakdown Table -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 0.86rem;">
+          <thead>
+            <tr style="border-top: 2px solid #000; border-bottom: 2px solid #000; text-align: left; font-size: 0.85rem;">
+              <th style="padding: 8px 8px; width: 36px;">#</th>
+              <th style="padding: 8px 8px;">Description</th>
+              <th style="padding: 8px 8px; text-align: center; width: 60px;">QTY</th>
+              <th style="padding: 8px 8px; text-align: right; width: 110px;">PRICE</th>
+              <th style="padding: 8px 8px; text-align: right; width: 110px;">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRowsHtml}
+            <tr style="border-top: 2px solid #000;">
+              <td style="padding: 8px 8px;"></td>
+              <td style="padding: 8px 8px; font-weight: 800; color: #dc2626; text-transform: uppercase;">DELIVERY CHARGE</td>
+              <td style="padding: 8px 8px; text-align: center; font-weight: 700;">1</td>
+              <td style="padding: 8px 8px; text-align: right; font-weight: 700; color: #dc2626;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td style="padding: 8px 8px; text-align: right; font-weight: 700; color: #dc2626;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Right Aligned Financial Totals -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 28px;">
+          <div style="width: 320px; font-size: 0.88rem; line-height: 1.6;">
+            <div style="display: flex; justify-content: space-between; font-weight: 800; color: #0891b2;">
+              <span>TOTAL PURCHASED</span>
+              <span>₱ ${itemsSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-weight: 800; color: #dc2626;">
+              <span>DELIVERY CHARGE</span>
+              <span>₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-weight: 800; border-top: 1.5px solid #000; padding-top: 4px; margin-top: 4px;">
+              <span>TOTAL:</span>
+              <span>₱ ${totalPlusDf.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            ${discountDf > 0 ? `
+              <div style="display: flex; justify-content: space-between; font-weight: 700; border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1; padding: 3px 0; margin: 4px 0;">
+                <span>Discounted DF:</span>
+                <span style="color: #dc2626; font-weight: 800;">LESS ₱ ${discountDf.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            ` : ''}
+            <div style="border: 2px solid #dc2626; padding: 7px 12px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 1.05rem; font-weight: 900; color: #dc2626;">
+              <span>GRAND TOTAL:</span>
+              <span>₱ ${grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quotation Footer Terms -->
+        <div style="font-size: 0.82rem; color: #1e293b; margin-top: 36px;">
+          <p style="margin: 0 0 14px;">We hope you find our offer to be in line with your requirement.</p>
+          <div><strong>TERMS &amp; CONDITIONS:</strong></div>
+          <div style="margin-top: 4px;">❖ Attached to the next page</div>
+        </div>
+      </div>
+    `;
+  }
+}
+
 
 // Global Kebab Menu Click & Outside Dismiss Handler
 document.addEventListener("click", (e) => {
@@ -3818,6 +4816,30 @@ let allAuditLogsData = [];
 let auditLogsCurrentPage = 1;
 const AUDIT_LOGS_PER_PAGE = 15;
 
+function formatAuditLogTimestamp(log) {
+  if (log.clientFormattedDate && typeof log.clientFormattedDate === "string") {
+    return log.clientFormattedDate;
+  }
+  let dateObj = null;
+  if (log.timestamp?.toDate) {
+    dateObj = log.timestamp.toDate();
+  } else if (log.createdAt) {
+    dateObj = new Date(log.createdAt);
+  } else {
+    dateObj = new Date();
+  }
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  let hours = dateObj.getHours();
+  const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+  const seconds = String(dateObj.getSeconds()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  const hoursStr = String(hours).padStart(2, "0");
+  return `${year}-${month}-${day} ${hoursStr}:${minutes}:${seconds} ${ampm}`;
+}
+
 async function renderAuditLogsSection() {
   const tableBody = document.getElementById("audit-logs-table-body");
   const searchInput = document.getElementById("audit-log-search");
@@ -3857,6 +4879,22 @@ async function renderAuditLogsSection() {
     });
   }
 
+  // Delegated event listener for State Diff inspection toggle (Strictly Read-Only)
+  if (!tableBody.dataset.diffBound) {
+    tableBody.dataset.diffBound = "true";
+    tableBody.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-toggle-diff");
+      if (!btn) return;
+      const targetId = btn.getAttribute("data-target");
+      const panel = document.getElementById(targetId);
+      if (!panel) return;
+      const isHidden = panel.style.display === "none";
+      panel.style.display = isHidden ? "block" : "none";
+      const span = btn.querySelector("span");
+      if (span) span.textContent = isHidden ? "Hide State Diff" : "Inspect State Diff";
+    });
+  }
+
   allAuditLogsData = await fetchAuditLogs(300);
   applyAuditLogsFilters();
 }
@@ -3869,20 +4907,41 @@ function applyAuditLogsFilters() {
   const actionVal = (document.getElementById("audit-log-action-filter")?.value || "all");
 
   let filtered = allAuditLogsData.filter((log) => {
-    if (roleVal !== "all" && (log.userRole || "").toLowerCase() !== roleVal) return false;
-    if (actionVal !== "all" && (log.actionType || log.action || "") !== actionVal) return false;
+    const logRole = (log.performedBy?.role || log.userRole || "").toLowerCase();
+    if (roleVal !== "all" && logRole !== roleVal) return false;
+
+    const logAction = (log.action || log.actionType || "").toUpperCase();
+    if (actionVal !== "all") {
+      if (actionVal === "deletions") {
+        if (!logAction.includes("DELETE") && !logAction.includes("DELETED")) return false;
+      } else if (actionVal === "payments") {
+        if (!logAction.includes("DOWNPAYMENT") && !logAction.includes("PAYMENT")) return false;
+      } else if (actionVal === "status") {
+        if (!logAction.includes("STATUS") && !logAction.includes("ACCEPTED")) return false;
+      } else {
+        if (logAction !== actionVal.toUpperCase()) return false;
+      }
+    }
+
     if (searchVal) {
-      const uName = (log.userName || "").toLowerCase();
-      const uEmail = (log.userEmail || "").toLowerCase();
-      const act = (log.actionType || log.action || "").toLowerCase();
-      const det = (log.details || "").toLowerCase();
-      return uName.includes(searchVal) || uEmail.includes(searchVal) || act.includes(searchVal) || det.includes(searchVal);
+      const uName = (log.performedBy?.displayName || log.userName || "").toLowerCase();
+      const uEmail = (log.performedBy?.email || log.userEmail || "").toLowerCase();
+      const targetId = (log.targetId || "").toLowerCase();
+      const act = logAction.toLowerCase();
+      const det = (log.description || log.details || "").toLowerCase();
+      return (
+        uName.includes(searchVal) ||
+        uEmail.includes(searchVal) ||
+        targetId.includes(searchVal) ||
+        act.includes(searchVal) ||
+        det.includes(searchVal)
+      );
     }
     return true;
   });
 
   if (filtered.length === 0) {
-    renderTableEmptyState(tableBody, 5, "No audit trail records found matching your filters.");
+    renderTableEmptyState(tableBody, 5, "No immutable audit logs found matching your filters.");
     if (pagContainer) pagContainer.innerHTML = "";
     return;
   }
@@ -3894,42 +4953,131 @@ function applyAuditLogsFilters() {
   const pageLogs = filtered.slice(startIdx, startIdx + AUDIT_LOGS_PER_PAGE);
 
   tableBody.innerHTML = "";
-  pageLogs.forEach((log) => {
+  pageLogs.forEach((log, idx) => {
     const tr = document.createElement("tr");
     tr.style.cssText = "border-bottom: 1px solid #f3f4f6; font-size: 0.85rem;";
 
-    const timeVal = log.timestamp?.toDate ? log.timestamp.toDate() : (log.createdAt ? new Date(log.createdAt) : new Date());
-    const dateStr = timeVal.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const dateStr = formatAuditLogTimestamp(log);
 
-    const role = (log.userRole || "USER").toUpperCase();
+    const who = log.performedBy || {
+      displayName: log.userName || "System Automated",
+      email: log.userEmail || "",
+      role: log.userRole || "staff",
+    };
+    const roleName = String(who.role || "staff").toUpperCase();
     let roleBg = "#f3f4f6";
     let roleColor = "#4b5563";
-    if (role === "ADMIN") { roleBg = "#fef3c7"; roleColor = "#92400e"; }
-    else if (role === "STAFF") { roleBg = "#e0f2fe"; roleColor = "#0369a1"; }
-    else if (role === "CUSTOMER") { roleBg = "#f3e8ff"; roleColor = "#6b21a8"; }
+    if (roleName === "ADMIN") {
+      roleBg = "#fef3c7";
+      roleColor = "#92400e";
+    } else if (roleName === "STAFF") {
+      roleBg = "#e0f2fe";
+      roleColor = "#0369a1";
+    } else if (roleName === "SYSTEM") {
+      roleBg = "#f1f5f9";
+      roleColor = "#475569";
+    }
 
-    const actType = log.actionType || log.action || "EVENT";
-    let actBg = "#ecfdf5";
-    let actColor = "#047857";
-    if (actType.startsWith("AUTH_")) { actBg = "#eff6ff"; actColor = "#1d4ed8"; }
-    else if (actType.includes("DELETE") || actType.includes("SUSPEND")) { actBg = "#fef2f2"; actColor = "#dc2626"; }
-    else if (actType.includes("UPDATE") || actType.includes("ORDER")) { actBg = "#fef3c7"; actColor = "#b45309"; }
+    // Color-coded action badge specification:
+    // 🔴 Red: ORDER_DELETED, PRODUCT_DELETED
+    // 🟢 Green: DOWNPAYMENT_RECEIVED, ORDER_ACCEPTED
+    // 🔵 Blue: ORDER_STATUS_CHANGED, PRODUCT_UPDATED
+    // 🟣 Purple / Other: PRODUCT_CREATED, SETTINGS_CHANGED
+    const actType = String(log.action || log.actionType || "EVENT").toUpperCase();
+    let actBg = "#f3f4f6";
+    let actColor = "#374151";
+    let actBorder = "#e5e7eb";
+
+    if (actType === "ORDER_DELETED" || actType === "PRODUCT_DELETED" || actType.includes("DELETE")) {
+      actBg = "#fef2f2";
+      actColor = "#dc2626";
+      actBorder = "#fecaca";
+    } else if (
+      actType === "DOWNPAYMENT_RECEIVED" ||
+      actType === "ORDER_ACCEPTED" ||
+      actType.includes("RECEIVED") ||
+      actType.includes("ACCEPTED")
+    ) {
+      actBg = "#ecfdf5";
+      actColor = "#059669";
+      actBorder = "#a7f3d0";
+    } else if (
+      actType === "ORDER_STATUS_CHANGED" ||
+      actType === "PRODUCT_UPDATED" ||
+      actType.includes("STATUS") ||
+      actType.includes("UPDATE")
+    ) {
+      actBg = "#eff6ff";
+      actColor = "#2563eb";
+      actBorder = "#bfdbfe";
+    } else if (actType === "PRODUCT_CREATED" || actType === "SETTINGS_CHANGED") {
+      actBg = "#faf5ff";
+      actColor = "#7c3aed";
+      actBorder = "#e9d5ff";
+    }
+
+    const refId = log.targetId ? `#${escapeHtml(log.targetId)}` : "—";
+    const targetType = log.targetType
+      ? `<span style="font-size:0.68rem; color:#6b7280; text-transform:uppercase; display:block; font-weight:600;">${escapeHtml(log.targetType)}</span>`
+      : "";
+
+    const hasDiff =
+      log.diff &&
+      typeof log.diff === "object" &&
+      ((log.diff.before && Object.keys(log.diff.before).length > 0) ||
+        (log.diff.after && Object.keys(log.diff.after).length > 0));
+
+    const safeLogId = escapeHtml(log.id || `log-${idx}-${Date.now()}`);
 
     tr.innerHTML = `
-      <td style="padding: 12px 18px; color: #4b5563; font-size: 0.8rem; white-space: nowrap;">${dateStr}</td>
-      <td style="padding: 12px 18px;">
-        <strong style="color: #111827; display: block; font-size: 0.84rem;">${escapeHtml(log.userName || "System")}</strong>
-        <span style="font-size: 0.74rem; color: #6b7280; display: block;">${escapeHtml(log.userEmail || "")}</span>
-        <span style="display: inline-block; margin-top: 2px; font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${roleBg}; color: ${roleColor};">${role}</span>
+      <td style="padding: 12px 18px; color: #4b5563; font-size: 0.8rem; white-space: nowrap; vertical-align: top;">
+        <span style="font-family: monospace; font-weight: 500;">${escapeHtml(dateStr)}</span>
       </td>
-      <td style="padding: 12px 18px;">
-        <span style="display: inline-block; font-size: 0.74rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: ${actBg}; color: ${actColor}; letter-spacing: 0.02em;">${escapeHtml(actType)}</span>
+      <td style="padding: 12px 18px; vertical-align: top;">
+        <strong style="color: #111827; display: block; font-size: 0.84rem;">${escapeHtml(who.displayName || "Admin Staff")}</strong>
+        <span style="font-size: 0.74rem; color: #6b7280; display: block;">${escapeHtml(who.email || "")}</span>
+        <span style="display: inline-block; margin-top: 4px; font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${roleBg}; color: ${roleColor};">${roleName}</span>
       </td>
-      <td style="padding: 12px 18px; color: #374151; max-width: 380px; word-break: break-word;">
-        ${escapeHtml(log.details || "—")}
+      <td style="padding: 12px 18px; vertical-align: top;">
+        <span style="display: inline-block; font-size: 0.74rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: ${actBg}; color: ${actColor}; border: 1px solid ${actBorder}; letter-spacing: 0.02em;">
+          ${escapeHtml(actType)}
+        </span>
       </td>
-      <td style="padding: 12px 18px; color: #9ca3af; font-size: 0.74rem; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-        ${escapeHtml(log.userAgent || "Web Browser")}
+      <td style="padding: 12px 18px; vertical-align: top;">
+        ${targetType}
+        <span style="font-size: 0.78rem; font-family: monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; color: #1f2937; display: inline-block; word-break: break-all;">
+          ${refId}
+        </span>
+      </td>
+      <td style="padding: 12px 18px; vertical-align: top; color: #374151;">
+        <div style="font-size: 0.84rem; color: #1f2937; margin-bottom: 6px; line-height: 1.45;">
+          ${escapeHtml(log.description || log.details || "—")}
+        </div>
+        ${
+          hasDiff
+            ? `
+          <button type="button" class="btn-toggle-diff" data-target="diff-panel-${safeLogId}" style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 3px 8px; font-size: 0.72rem; font-weight: 600; color: #2563eb; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
+            🔍 <span>Inspect State Diff</span>
+          </button>
+          <div id="diff-panel-${safeLogId}" class="diff-container" style="display: none; margin-top: 8px; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 0.74rem; overflow-x: auto;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+              <div>
+                <div style="font-weight: 700; color: #dc2626; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                  <span>◀</span> Before State Snapshot
+                </div>
+                <pre style="margin: 0; background: #fff; padding: 8px; border: 1px solid #fecaca; border-radius: 4px; color: #991b1b; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto;">${escapeHtml(JSON.stringify(log.diff.before || {}, null, 2))}</pre>
+              </div>
+              <div>
+                <div style="font-weight: 700; color: #16a34a; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                  <span>▶</span> After State Snapshot
+                </div>
+                <pre style="margin: 0; background: #fff; padding: 8px; border: 1px solid #bbf7d0; border-radius: 4px; color: #166534; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto;">${escapeHtml(JSON.stringify(log.diff.after || {}, null, 2))}</pre>
+              </div>
+            </div>
+          </div>
+        `
+            : ""
+        }
       </td>
     `;
     tableBody.appendChild(tr);
@@ -4345,13 +5493,28 @@ function setupUserManagementControls() {
       };
 
       try {
+        const targetUser = allUsers.find((x) => String(x.id) === String(docId));
+        const prevRole = targetUser?.role || "unknown";
+        const prevPermissions = targetUser?.permissions || {};
+
         await updateDoc(doc(db, "users", docId), {
           role: newRole,
           permissions: permissionsPayload,
           updatedAt: new Date().toISOString(),
         });
 
-        const targetUser = allUsers.find((x) => String(x.id) === String(docId));
+        await recordAuditLog({
+          action: "SETTINGS_CHANGED",
+          targetType: "user",
+          targetId: docId,
+          description: `Updated security role to "${newRole}" and updated permissions for ${targetUser?.name || targetUser?.email || docId}`,
+          diff: {
+            before: { role: prevRole, permissions: prevPermissions },
+            after: { role: newRole, permissions: permissionsPayload },
+          },
+          performedBy: currentUser,
+        });
+
         if (targetUser) {
           targetUser.role = newRole;
           targetUser.permissions = permissionsPayload;
@@ -4504,7 +5667,7 @@ if (usersListEl) {
 }
 
 function updateOrderStats(orders) {
-  const counts = { placed: 0, "downpayment confirmed": 0, "in production": 0, "quality checked": 0, shipped: 0, delivered: 0, refund_requested: 0 };
+  const counts = { placed: 0, "slot reserved": 0, "downpayment confirmed": 0, "in production": 0, "quality checked": 0, shipped: 0, delivered: 0, refund_requested: 0 };
   orders.forEach((o) => {
     if (o.refundStatus === "refund_requested" || o.status === "cancellation_pending_review") {
       counts.refund_requested++;
@@ -4516,7 +5679,7 @@ function updateOrderStats(orders) {
     const el = document.getElementById(id);
     if (el) el.textContent = String(n);
   };
-  set("orders-pending", counts.placed);
+  set("orders-pending", counts.placed + counts["slot reserved"]);
   set("orders-processing", counts["in production"]);
   set("orders-shipped", counts["quality checked"]);
   set("orders-delivered", counts.delivered);
@@ -4538,6 +5701,11 @@ function applyOrdersFilter() {
       rows = allOrders.filter(
         (o) => o.refundStatus === "refund_completed" || o.status === "refunded"
       );
+    } else if (ordersFilterValue === "placed") {
+      rows = activeOrders.filter((o) => {
+        const st = normalizeOrderStatus(o.status);
+        return st === "placed" || st === "slot reserved";
+      });
     } else {
       rows = activeOrders.filter((o) => normalizeOrderStatus(o.status) === ordersFilterValue);
     }
@@ -4728,7 +5896,7 @@ function syncBatchDeleteUi() {
 async function handleBatchDeleteDeclined() {
   const selectedIds = Array.from(selectedDeclinedOrderIds);
   if (selectedIds.length === 0) {
-    alert("Select at least one declined order to delete.");
+    showAdminToast("Select at least one order to delete.", "warning");
     return;
   }
 
@@ -4736,40 +5904,71 @@ async function handleBatchDeleteDeclined() {
     .map((id) => allOrders.find((o) => o.id === id))
     .filter((o) => !!o);
 
-  const validTargets = selectedOrders.filter(
-    (o) =>
-      normalizeOrderStatus(o.status) === "declined" && normalizeOrderAction(o.action) !== "delete"
-  );
+  const validTargets = selectedOrders.filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return (
+      (st === "declined" || st === "cancelled" || st === "delivered") &&
+      normalizeOrderAction(o.action) !== "delete" &&
+      !o.isDeleted
+    );
+  });
 
   if (validTargets.length === 0) {
-    alert("No valid declined orders selected.");
+    showAdminToast("No valid deletable orders selected.", "warning");
     selectedDeclinedOrderIds.clear();
     syncBatchDeleteUi();
     applyOrdersFilter();
     return;
   }
 
-  if (validTargets.length !== selectedIds.length) {
-    alert("Some selected orders are no longer declined and will be skipped.");
-  }
-
-  if (!confirm(`Delete ${validTargets.length} declined order(s)?`)) return;
+  const confirmed = await showAdminConfirmModal({
+    title: "Batch Delete Orders",
+    message: `Are you sure you want to permanently delete <strong>${validTargets.length}</strong> selected order(s)?<br><br><span style="color:#dc2626;">This action cannot be undone.</span>`,
+    confirmText: `Delete ${validTargets.length} Orders`,
+    cancelText: "Cancel",
+    confirmType: "danger",
+    icon: "🗑️",
+  });
+  if (!confirmed) return;
 
   if (batchDeleteDeclinedBtn) {
     batchDeleteDeclinedBtn.disabled = true;
     batchDeleteDeclinedBtn.textContent = "Deleting...";
   }
 
-  const now = Timestamp.now();
   const results = await Promise.allSettled(
-    validTargets.map((o) =>
-      updateDoc(doc(db, "orders", o.id), {
+    validTargets.map(async (o) => {
+      await updateDoc(doc(db, "orders", o.id), {
+        isDeleted: true,
+        deletedBy: currentUser?.uid || "admin",
+        deletedByEmail: currentUser?.email || "",
+        deletedByName: currentUser?.displayName || "Admin Staff",
+        deletedAt: serverTimestamp(),
         action: "delete",
-        deletedAt: now,
-        deletedByUid: currentUser ? currentUser.uid : null,
-        updatedAt: now,
-      })
-    )
+        updatedAt: serverTimestamp(),
+      });
+
+      await recordAuditLog({
+        action: "ORDER_DELETED",
+        targetType: "order",
+        targetId: o.id,
+        description: `Soft-deleted order #${o.id.slice(0, 8)} (${o.orderNumber || o.id}) via batch deletion`,
+        diff: {
+          before: {
+            status: o.status,
+            paymentStatus: o.paymentStatus,
+            isDeleted: false,
+          },
+          after: {
+            status: o.status,
+            paymentStatus: o.paymentStatus,
+            isDeleted: true,
+            deletedBy: currentUser?.uid || "admin",
+          },
+        },
+        performedBy: currentUser,
+      });
+    })
   );
 
   let success = 0;
@@ -4777,18 +5976,21 @@ async function handleBatchDeleteDeclined() {
   results.forEach((r, idx) => {
     if (r.status === "fulfilled") {
       success += 1;
-      selectedDeclinedOrderIds.delete(validTargets[idx].id);
+      const delId = validTargets[idx].id;
+      selectedDeclinedOrderIds.delete(delId);
+      allOrders = allOrders.filter((o) => o.id !== delId);
     } else {
       failed += 1;
       console.error("Batch delete failed for order:", validTargets[idx].id, r.reason);
     }
   });
 
+  applyOrdersFilter();
   syncBatchDeleteUi();
   if (failed > 0) {
-    alert(`Deleted ${success} order(s). Failed to delete ${failed} order(s).`);
+    showAdminToast(`Deleted ${success} order(s). ${failed} failed.`, "warning");
   } else {
-    alert(`Deleted ${success} declined order(s).`);
+    showAdminToast(`Successfully deleted ${success} order(s).`, "success");
   }
 }
 
@@ -4866,7 +6068,9 @@ onSnapshot(
   (snapshot) => {
     allOrders = [];
     snapshot.forEach((d) => {
-      allOrders.push({ id: d.id, ...d.data() });
+      const data = d.data();
+      if (data.action === "delete" || data.isDeleted === true) return;
+      allOrders.push({ id: d.id, ...data });
     });
     allOrders.sort((a, b) => orderTimestampMs(b) - orderTimestampMs(a));
     applyOrdersFilter();
@@ -4877,7 +6081,9 @@ onSnapshot(
     onSnapshot(ORDERS_COLLECTION, (snapshot) => {
       allOrders = [];
       snapshot.forEach((d) => {
-        allOrders.push({ id: d.id, ...d.data() });
+        const data = d.data();
+        if (data.action === "delete" || data.isDeleted === true) return;
+        allOrders.push({ id: d.id, ...data });
       });
       allOrders.sort((a, b) => orderTimestampMs(b) - orderTimestampMs(a));
       applyOrdersFilter();
@@ -4947,38 +6153,47 @@ function renderOrdersList(orders) {
     const customer = resolveCustomerDisplay(order);
 
     // Fulfillment calculation & badge
-    const isPickup = order.fulfillmentType === "pickup" || order.address?.pickupAtWorkshop;
-    const addressObj = order.address || order.shippingAddress || order.deliveryAddress || {};
-    const fullAddr = addressObj.fullAddress || addressObj.address || addressObj.street || "";
+    const isPickup =
+      order.fulfillmentType === "pickup" ||
+      order.address?.pickupAtWorkshop ||
+      order.shippingAddress?.pickupAtWorkshop;
+    const fullAddr = formatOrderDeliveryAddress(order);
     const fulfillmentBadgeHtml = isPickup
       ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop">🏪 Store Pickup</span>`
       : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}">🚚 Delivery</span>`;
 
-    const nearestLandmark = order.shippingAddress?.nearestLandmark || addressObj.nearestLandmark || order.nearestLandmark || addressObj.landmark || "";
+    const nearestLandmark = isPickup ? "" : formatOrderLandmark(order);
     const landmarkBadgeHtml = nearestLandmark
       ? `<div style="font-size:0.73rem; color:#d97706; font-weight:500; margin-top:2px; max-width:170px; line-height:1.2; white-space:normal;" title="Landmark / Instructions: ${escapeHtml(nearestLandmark)}">📌 ${escapeHtml(nearestLandmark)}</div>`
       : "";
 
-    const addressDisplayHtml = !isPickup && fullAddr
+    const addressDisplayHtml = !isPickup && fullAddr && fullAddr !== "No delivery address recorded"
       ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>${landmarkBadgeHtml}`
       : isPickup
         ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px;">Lanica Workshop</div>`
         : ``;
 
     // Financial Breakdown calculation
+    const isAwaitingCounterDownpayment = order.paymentStatus === "awaiting_counter_downpayment";
     const totalVal = Number(order.totalAmount ?? order.total ?? 0);
-    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
-    const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounterDownpayment;
+    const paidVal = isAwaitingCounterDownpayment
+      ? Number(order.downpaymentPaid || 0)
+      : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
     const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
     const isBalanceSettled = order.balanceStatus === "settled" || remainingVal <= 0;
-    const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? 30 : 100);
+    const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? (isAwaitingCounterDownpayment ? 0 : 30) : 100);
+
+    const balanceBadgeHtml = isAwaitingCounterDownpayment
+      ? `<span class="balance-badge pending" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">⏳ Counter DP Pending</span>`
+      : `<span class="balance-badge ${isBalanceSettled ? "settled" : "pending"}">${isBalanceSettled ? "✓ Settled" : "⏳ Pending"}</span>`;
 
     const financialBreakdownHtml = `
       <div class="financial-breakdown-card">
         <div>Total: <strong class="fin-total">₱${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
         <div>Upfront: <span class="fin-paid">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> <small style="color:#6b7280;">(${paidPct}%)</small></div>
         <div>Due: <span class="fin-due">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-        <span class="balance-badge ${isBalanceSettled ? "settled" : "pending"}">${isBalanceSettled ? "✓ Settled" : "⏳ Pending"}</span>
+        ${balanceBadgeHtml}
       </div>
     `;
 
@@ -5011,7 +6226,7 @@ function renderOrdersList(orders) {
     tr.innerHTML = `
       <td class="${isBatchDeleteMode ? "" : "is-hidden"}">
         ${
-          isBatchDeleteMode && st === "declined"
+          isBatchDeleteMode && (st === "declined" || st === "cancelled")
             ? `<input type="checkbox" class="declined-order-checkbox" data-order-id="${escapeHtml(order.id)}" ${
                 selectedDeclinedOrderIds.has(order.id) ? "checked" : ""
               } aria-label="Select declined order ${escapeHtml(order.id)}" />`
@@ -5035,8 +6250,8 @@ function renderOrdersList(orders) {
       <td>${financialBreakdownHtml}</td>
       <td>${statusColumnHtml}</td>
       <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""}>
-          <option value="">Unassigned</option>
+        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; border: 1.5px solid ${!order.assignedToUid ? '#f59e0b' : '#cbd5e1'}; background: ${!order.assignedToUid ? '#fffbeb' : '#ffffff'}; color: ${!order.assignedToUid ? '#b45309' : '#1e293b'}; font-weight: ${!order.assignedToUid ? '600' : '400'}; cursor: pointer;">
+          <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>⚠️ Unassigned (Assign Staff)</option>
           ${staffMembers
             .map((s) => {
               const sel = order.assignedToUid === s.uid ? "selected" : "";
@@ -5061,6 +6276,15 @@ function renderOrdersList(orders) {
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: #fef2f2; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
                     💸 Review Refund
+                  </button>`
+                : ""
+            }
+            ${
+              isAwaitingCounterDownpayment
+                ? `<button type="button" class="kebab-menu-item btn-receive-counter-downpayment" data-order-id="${escapeHtml(
+                    order.id
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: #ecfdf5; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    💰 Receive Counter Downpayment
                   </button>`
                 : ""
             }
@@ -5218,6 +6442,27 @@ async function handleOrderStatusChange(orderId, newStatus) {
   const next = normalizeOrderStatus(newStatus);
   if (prev === next) return;
 
+  // Enterprise Workflow Rule: Order cannot proceed into production or fulfillment without an assigned artisan/staff member
+  const requiresStaffAssignment = ["in production", "quality checked", "shipped", "delivered"].includes(next);
+  if (requiresStaffAssignment && !current.assignedToUid) {
+    showAdminToast(
+      `⚠️ Assignment Required: Please assign a staff artisan or team member to Order #${orderId.slice(0, 8)} before advancing to "${next.charAt(0).toUpperCase() + next.slice(1)}".`,
+      "warning"
+    );
+    const assignSelect = ordersListEl?.querySelector(`.order-assign-select[data-order-id="${orderId}"]`);
+    if (assignSelect) {
+      assignSelect.focus();
+      assignSelect.style.outline = "2px solid #f59e0b";
+      assignSelect.style.boxShadow = "0 0 0 3px rgba(245, 158, 11, 0.25)";
+      setTimeout(() => {
+        assignSelect.style.outline = "";
+        assignSelect.style.boxShadow = "";
+      }, 3500);
+    }
+    applyOrdersFilter();
+    return;
+  }
+
   const items = Array.isArray(current.items) ? current.items : [];
 
   const shouldDeductStock =
@@ -5254,7 +6499,7 @@ async function handleOrderStatusChange(orderId, newStatus) {
       });
     } catch (e) {
       console.error(e);
-      alert(e.message || "Could not update inventory for this order.");
+      showAdminToast(e.message || "Could not update inventory for this order.", "error");
       applyOrdersFilter();
       return;
     }
@@ -5265,11 +6510,23 @@ async function handleOrderStatusChange(orderId, newStatus) {
     await updateDoc(orderRef, {
       status: next,
       orderStatus: next,
-      updatedAt: Timestamp.now(),
+      updatedAt: serverTimestamp(),
     });
+    await recordAuditLog({
+      action: "ORDER_STATUS_CHANGED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Updated status for order #${orderId.slice(0, 8)} (${current.orderNumber || orderId}) from "${prev}" to "${next}"`,
+      diff: {
+        before: { status: current.status, orderStatus: current.orderStatus || prev },
+        after: { status: next, orderStatus: next },
+      },
+      performedBy: currentUser,
+    });
+    showAdminToast(`Order status updated to ${next.charAt(0).toUpperCase() + next.slice(1)}.`, "success");
   } catch (e) {
     console.error(e);
-    alert("Failed to update order status.");
+    showAdminToast("Failed to update order status.", "error");
     applyOrdersFilter();
   }
 }
@@ -5284,9 +6541,19 @@ async function handleOrderAccept(orderId) {
 
   const items = Array.isArray(current.items) ? current.items : [];
   if (items.length === 0) {
-    alert("This order has no items.");
+    showAdminToast("This order has no items.", "warning");
     return;
   }
+
+  const confirmed = await showAdminConfirmModal({
+    title: "Confirm Downpayment & Order",
+    message: `Accept and confirm downpayment for Order <strong>#${orderId.slice(0, 8)}</strong>?`,
+    confirmText: "Confirm Order",
+    cancelText: "Cancel",
+    confirmType: "success",
+    icon: "✓",
+  });
+  if (!confirmed) return;
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -5300,15 +6567,27 @@ async function handleOrderAccept(orderId) {
         status: "downpayment confirmed",
         orderStatus: "downpayment confirmed",
         stockDeducted: !!oData.stockDeducted,
-        acceptedAt: Timestamp.now(),
+        acceptedAt: serverTimestamp(),
         acceptedByUid: currentUser ? currentUser.uid : null,
-        updatedAt: Timestamp.now(),
+        updatedAt: serverTimestamp(),
       });
     });
+    await recordAuditLog({
+      action: "ORDER_ACCEPTED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Accepted order #${orderId.slice(0, 8)} (${current.orderNumber || orderId}) and confirmed reservation downpayment`,
+      diff: {
+        before: { status: current.status, orderStatus: current.orderStatus || prev },
+        after: { status: "downpayment confirmed", orderStatus: "downpayment confirmed" },
+      },
+      performedBy: currentUser,
+    });
     console.log(`Accepted order ${orderId} -> downpayment confirmed`);
+    showAdminToast(`Order #${orderId.slice(0, 8)} downpayment confirmed!`, "success");
   } catch (e) {
     console.error("Order accept error:", e);
-    alert(e.message || "Could not accept order.");
+    showAdminToast(e.message || "Could not accept order.", "error");
   }
 }
 
@@ -5320,61 +6599,151 @@ async function handleOrderDecline(orderId) {
   const prev = normalizeOrderStatus(current.status);
   if (prev !== "placed" && prev !== "pending") return;
 
-  if (!confirm("Decline this order?")) return;
+  const confirmed = await showAdminConfirmModal({
+    title: "Decline Order",
+    message: `Are you sure you want to decline Order <strong>#${orderId.slice(0, 8)}</strong>?`,
+    confirmText: "Yes, Decline Order",
+    cancelText: "Cancel",
+    confirmType: "danger",
+    icon: "✕",
+  });
+  if (!confirmed) return;
 
   try {
     await updateDoc(orderRef, {
       status: "declined",
       orderStatus: "declined",
-      declinedAt: Timestamp.now(),
+      declinedAt: serverTimestamp(),
       declinedByUid: currentUser ? currentUser.uid : null,
-      updatedAt: Timestamp.now(),
+      updatedAt: serverTimestamp(),
+    });
+    await recordAuditLog({
+      action: "ORDER_STATUS_CHANGED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Declined order #${orderId.slice(0, 8)} (${current.orderNumber || orderId})`,
+      diff: {
+        before: { status: current.status, orderStatus: current.orderStatus || prev },
+        after: { status: "declined", orderStatus: "declined" },
+      },
+      performedBy: currentUser,
     });
     console.log(`Declined order ${orderId}`);
+    showAdminToast(`Order #${orderId.slice(0, 8)} has been declined.`, "info");
   } catch (e) {
     console.error("Order decline error:", e);
-    alert(e.message || "Could not decline order.");
+    showAdminToast(e.message || "Could not decline order.", "error");
   }
 }
 
-async function handleDeclinedOrderDelete(orderId) {
+async function handleDeleteOrder(orderId) {
   const current = allOrders.find((o) => o.id === orderId);
   if (!current) return;
 
   const st = normalizeOrderStatus(current.status);
-  if (st !== "declined") return;
+  if (st !== "declined" && st !== "cancelled" && st !== "delivered") {
+    showAdminToast("Only cancelled, declined, or delivered orders can be deleted.", "warning");
+    return;
+  }
 
-  if (!confirm("Delete this declined order permanently?")) return;
+  const confirmed = await showAdminConfirmModal({
+    title: "Delete Order",
+    message: `Are you sure you want to delete Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br><span style="color:#6b7280;">This record will be safely archived and hidden from customer and admin tables.</span>`,
+    confirmText: "Yes, Delete Order",
+    cancelText: "Cancel",
+    confirmType: "danger",
+    icon: "🗑️",
+  });
+  if (!confirmed) return;
 
   try {
-    // Use soft delete so declined orders can be removed from the UI
-    // even when Firestore hard-delete permissions are restricted.
     await updateDoc(doc(db, "orders", orderId), {
+      isDeleted: true,
+      deletedBy: currentUser?.uid || "admin",
+      deletedByEmail: currentUser?.email || "",
+      deletedByName: currentUser?.displayName || "Admin Staff",
+      deletedAt: serverTimestamp(),
       action: "delete",
-      deletedAt: Timestamp.now(),
-      deletedByUid: currentUser ? currentUser.uid : null,
-      updatedAt: Timestamp.now(),
+      updatedAt: serverTimestamp(),
     });
+
+    await recordAuditLog({
+      action: "ORDER_DELETED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Soft-deleted order #${orderId.slice(0, 8)} (${current.orderNumber || orderId}) with status "${st}"`,
+      diff: {
+        before: {
+          status: current.status,
+          paymentStatus: current.paymentStatus,
+          isDeleted: false,
+        },
+        after: {
+          status: current.status,
+          paymentStatus: current.paymentStatus,
+          isDeleted: true,
+          deletedBy: currentUser?.uid || "admin",
+        },
+      },
+      performedBy: currentUser,
+    });
+
+    allOrders = allOrders.filter((o) => o.id !== orderId);
+    selectedDeclinedOrderIds.delete(orderId);
+    applyOrdersFilter();
+    syncBatchDeleteUi();
+    showAdminToast(`Order #${orderId.slice(0, 8)} has been deleted.`, "success");
   } catch (e) {
-    console.error(e);
-    alert(e.message || "Could not delete this order.");
+    console.error("Order delete error:", e);
+    showAdminToast(e.message || "Could not delete this order.", "error");
   }
 }
 
+const handleDeclinedOrderDelete = handleDeleteOrder;
+
 async function handleOrderAssign(orderId, staffUid) {
   const orderRef = doc(db, "orders", orderId);
+  const current = allOrders.find((o) => o.id === orderId);
   const staff = staffMembers.find((s) => s.uid === staffUid);
-  const staffName = staff ? staff.displayName : (staffUid ? "Staff Member" : null);
+
+  if (!staffUid || !staff) {
+    showAdminToast("Please select a valid staff member to assign.", "warning");
+    applyOrdersFilter();
+    return;
+  }
+
+  const staffName = staff.displayName || staff.name || "Staff Member";
+  const prevAssignedName = current?.assignedToName || (current?.assignedToUid ? "Previous Staff" : "Unassigned");
+
   try {
     await updateDoc(orderRef, {
-      assignedToUid: staffUid || null,
+      assignedToUid: staffUid,
       assignedToName: staffName,
-      updatedAt: Timestamp.now(),
+      updatedAt: serverTimestamp(),
     });
-    console.log(`Assigned order ${orderId} to ${staffName || "Unassigned"}`);
+
+    if (current) {
+      current.assignedToUid = staffUid;
+      current.assignedToName = staffName;
+    }
+
+    await recordAuditLog({
+      action: "SETTINGS_CHANGED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Assigned Order #${orderId.slice(0, 8)} to artisan/staff: ${staffName} (previously ${prevAssignedName})`,
+      diff: {
+        before: { assignedToUid: current?.assignedToUid || null, assignedToName: prevAssignedName },
+        after: { assignedToUid: staffUid, assignedToName: staffName },
+      },
+      performedBy: currentUser,
+    });
+
+    showAdminToast(`Assigned Order #${orderId.slice(0, 8)} to ${staffName}.`, "success");
+    applyOrdersFilter();
   } catch (e) {
     console.error("Order assignment failed:", e);
-    alert("Failed to assign staff member: " + (e.message || ""));
+    showAdminToast("Failed to assign staff member: " + (e.message || ""), "error");
     applyOrdersFilter();
   }
 }
@@ -5410,6 +6779,10 @@ if (ordersListEl) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) showOrderSummaryModal(id);
     }
+    if (actionBtn.classList.contains("btn-receive-counter-downpayment")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      if (id) handleReceiveCounterDownpayment(id);
+    }
     if (actionBtn.classList.contains("btn-advance-status")) {
       const id = actionBtn.getAttribute("data-order-id");
       const nextStatus = actionBtn.getAttribute("data-next-status");
@@ -5433,7 +6806,7 @@ if (ordersListEl) {
     }
     if (actionBtn.classList.contains("btn-delete-order")) {
       const id = actionBtn.getAttribute("data-order-id");
-      if (id) handleDeclinedOrderDelete(id);
+      if (id) handleDeleteOrder(id);
     }
   });
 }
@@ -5446,15 +6819,14 @@ function showOrderSummaryModal(orderId) {
   modal.className = "modal active";
   modal.style.cssText = "position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;";
 
-  const shippingAddrObj = order.shippingAddress || order.address || {};
-  const recipientName = pickFirstNonEmpty(shippingAddrObj.fullName, shippingAddrObj.recipientName, order.customerName, "—");
-  const phone = pickFirstNonEmpty(shippingAddrObj.phoneNumber, shippingAddrObj.phone, order.phone, "—");
-  const street = pickFirstNonEmpty(shippingAddrObj.streetAddress, shippingAddrObj.street, order.address, "");
-  const city = pickFirstNonEmpty(shippingAddrObj.city, "");
-  const province = pickFirstNonEmpty(shippingAddrObj.province, "");
-  const postal = pickFirstNonEmpty(shippingAddrObj.postalCode, "");
-  const fullAddress = [street, city, province, postal].filter(Boolean).join(", ") || "No delivery address recorded";
-  const landmark = pickFirstNonEmpty(shippingAddrObj.nearestLandmark, shippingAddrObj.landmark, order.landmark, "");
+  const isPickup =
+    order.fulfillmentType === "pickup" ||
+    order.address?.pickupAtWorkshop ||
+    order.shippingAddress?.pickupAtWorkshop;
+  const customerName = resolveCustomerDisplay(order);
+  const phone = formatOrderRecipientPhone(order);
+  const fullAddress = formatOrderDeliveryAddress(order);
+  const landmark = isPickup ? "" : formatOrderLandmark(order);
 
   const proofUrl = pickFirstNonEmpty(order.proofUrl, order.paymentProof, order.paymentProofUrl, "");
 
@@ -5468,15 +6840,19 @@ function showOrderSummaryModal(orderId) {
           <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">Variant / Material: <strong>${escapeHtml(item.material || "Standard")}</strong> &bull; Qty: <strong>${item.quantity || 1}</strong></div>
           ${item.customNotes ? `<div style="font-size: 0.76rem; color: #b45309; background: #fffbeb; border: 1px solid #fef3c7; padding: 4px 8px; border-radius: 6px; margin-top: 4px; line-height: 1.3;"><strong>Custom Specs:</strong> ${escapeHtml(item.customNotes)}</div>` : ""}
         </div>
-        <strong style="color: #0f172a; font-size: 0.92rem;">₱${((parsePrice(item.price)) * Number(item.quantity || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+        <strong style="color: #0f172a; font-size: 0.92rem;">₱${((parseItemPrice(item.price)) * Number(item.quantity || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
       </div>
     `
     )
     .join("");
 
   const totalVal = Number(order.totalAmount || order.total || 0);
-  const paidVal = Number(order.downpaymentAmount ?? totalVal);
-  const remainingVal = Number(order.remainingBalance ?? 0);
+  const isAwaitingCounterDownpayment = order.paymentStatus === "awaiting_counter_downpayment";
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounterDownpayment;
+  const paidVal = isAwaitingCounterDownpayment
+    ? Number(order.downpaymentPaid || 0)
+    : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+  const remainingVal = Number(order.remainingBalance ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
   const canonicalStatus = getOrderCanonicalStatus(order);
 
   modal.innerHTML = `
@@ -5515,7 +6891,16 @@ function showOrderSummaryModal(orderId) {
         <div style="display: flex; justify-content: space-between; color: ${remainingVal > 0 ? "#dc2626" : "#64748b"};"><span>Balance Remaining:</span><strong>₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
       </div>
 
-      <div style="margin-top: 20px; text-align: right;">
+      <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+        ${
+          order.paymentStatus === "awaiting_counter_downpayment"
+            ? `<button type="button" class="btn-summary-receive-counter-downpayment" data-order-id="${escapeHtml(
+                order.id
+              )}" style="padding: 10px 18px; cursor: pointer; border-radius: 8px; background: #059669; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                💰 Receive Counter Downpayment
+              </button>`
+            : ""
+        }
         <button type="button" class="btn-close-modal btn-primary" style="padding: 10px 24px; cursor: pointer; border-radius: 8px; background: #0f172a; color: white; border: none; font-weight: 600;">Close Summary</button>
       </div>
     </div>
@@ -5523,12 +6908,77 @@ function showOrderSummaryModal(orderId) {
 
   document.body.appendChild(modal);
 
+  const receiveBtn = modal.querySelector(".btn-summary-receive-counter-downpayment");
+  if (receiveBtn) {
+    receiveBtn.addEventListener("click", () => {
+      modal.remove();
+      handleReceiveCounterDownpayment(order.id);
+    });
+  }
+
   modal.querySelectorAll(".btn-close-modal").forEach((btn) => {
     btn.addEventListener("click", () => modal.remove());
   });
   modal.addEventListener("click", (e) => {
     if (e.target === modal) modal.remove();
   });
+}
+
+async function handleReceiveCounterDownpayment(orderId) {
+  const orderRef = doc(db, "orders", orderId);
+  const current = allOrders.find((o) => o.id === orderId);
+  if (!current) return;
+
+  const totalAmount = Number(current.totalAmount || current.total || 0);
+  const downpaymentRequired = Number(current.downpaymentRequired ?? Math.round(totalAmount * 0.30));
+
+  const confirmed = await showAdminConfirmModal({
+    title: "Receive Counter Downpayment",
+    message: `Confirm receipt of 30% counter cash downpayment of <strong>₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> for Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br>The order status will immediately advance to <strong>Crafting / In Production</strong>.`,
+    confirmText: "Yes, Confirm Receipt",
+    cancelText: "Cancel",
+    confirmType: "success",
+    icon: "💰",
+  });
+  if (!confirmed) return;
+
+  try {
+    await updateDoc(orderRef, {
+      paymentStatus: "downpayment_paid",
+      downpaymentPaid: downpaymentRequired,
+      orderStatus: "crafting",
+      status: "In Production",
+      downpaymentPaidAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await recordAuditLog({
+      action: "DOWNPAYMENT_RECEIVED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Marked 30% Downpayment (₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) received via Counter Cash for Order #${orderId.slice(0, 8)}`,
+      diff: {
+        before: {
+          orderStatus: current.orderStatus || current.status || "slot_reserved",
+          paymentStatus: current.paymentStatus || "awaiting_counter_downpayment",
+          downpaymentPaid: current.downpaymentPaid || 0,
+        },
+        after: {
+          orderStatus: "crafting",
+          paymentStatus: "downpayment_paid",
+          downpaymentPaid: downpaymentRequired,
+          status: "In Production",
+        },
+      },
+      performedBy: currentUser,
+    });
+
+    console.log(`Received counter downpayment for order ${orderId} -> crafting`);
+    showAdminToast(`Counter downpayment of ₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} recorded! Order moved to crafting.`, "success");
+  } catch (e) {
+    console.error("Counter downpayment confirmation error:", e);
+    showAdminToast(e.message || "Could not record counter downpayment.", "error");
+  }
 }
 
 // Refund Modal & Balance Settlement Logic
@@ -5601,7 +7051,7 @@ if (refundFormEl) {
     const adminNote = inputNote ? inputNote.value.trim() : "";
 
     if (!txId) {
-      alert("Transaction Reference ID is required for audit & refund approval.");
+      showAdminToast("Transaction Reference ID is required for audit & refund approval.", "warning");
       return;
     }
 
@@ -5623,11 +7073,11 @@ if (refundFormEl) {
         updatedAt: now,
       });
 
-      alert(`Refund for Order #${currentRefundOrderId} approved and marked completed successfully!`);
+      showAdminToast(`Refund for Order #${currentRefundOrderId} approved and marked completed!`, "success");
       closeRefundModal();
     } catch (err) {
       console.error("Failed to approve refund:", err);
-      alert(err.message || "Failed to process refund.");
+      showAdminToast(err.message || "Failed to process refund.", "error");
     } finally {
       if (approveBtn) {
         approveBtn.disabled = false;
@@ -5643,7 +7093,15 @@ if (rejectRefundBtnEl) {
     const inputNote = document.getElementById("refund-admin-note-input");
     const adminNote = inputNote ? inputNote.value.trim() : "";
 
-    if (!confirm(`Reject refund request for Order #${currentRefundOrderId}?`)) return;
+    const confirmed = await showAdminConfirmModal({
+      title: "Reject Refund Request",
+      message: `Are you sure you want to reject the refund request for Order <strong>#${currentRefundOrderId}</strong>?`,
+      confirmText: "Yes, Reject Refund",
+      cancelText: "Cancel",
+      confirmType: "danger",
+      icon: "✕",
+    });
+    if (!confirmed) return;
 
     try {
       rejectRefundBtnEl.disabled = true;
@@ -5659,11 +7117,11 @@ if (rejectRefundBtnEl) {
         updatedAt: now,
       });
 
-      alert(`Refund request for Order #${currentRefundOrderId} has been rejected.`);
+      showAdminToast(`Refund request for Order #${currentRefundOrderId} has been rejected.`, "info");
       closeRefundModal();
     } catch (err) {
       console.error("Failed to reject refund:", err);
-      alert(err.message || "Failed to reject refund request.");
+      showAdminToast(err.message || "Failed to reject refund request.", "error");
     } finally {
       rejectRefundBtnEl.disabled = false;
       rejectRefundBtnEl.textContent = "Reject Refund Request";
@@ -5680,9 +7138,15 @@ async function handleMarkBalanceSettled(orderId) {
   const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
   const currentBalance = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
 
-  if (!confirm(`Mark balance of ₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} settled for Order #${orderId.slice(0, 8)}...?`)) {
-    return;
-  }
+  const confirmed = await showAdminConfirmModal({
+    title: "Mark Balance Settled",
+    message: `Mark remaining balance of <strong>₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> as settled in cash for Order <strong>#${orderId.slice(0, 8)}</strong>?`,
+    confirmText: "Confirm Settled",
+    cancelText: "Cancel",
+    confirmType: "success",
+    icon: "💵",
+  });
+  if (!confirmed) return;
 
   try {
     const now = Timestamp.now();
@@ -5696,9 +7160,10 @@ async function handleMarkBalanceSettled(orderId) {
       updatedAt: now,
     });
     console.log(`Marked balance settled for order ${orderId}`);
+    showAdminToast(`Balance of ₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} marked as settled.`, "success");
   } catch (err) {
     console.error("Failed to settle balance:", err);
-    alert(err.message || "Could not mark balance settled.");
+    showAdminToast(err.message || "Could not mark balance settled.", "error");
   }
 }
 

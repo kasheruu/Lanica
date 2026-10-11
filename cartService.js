@@ -408,14 +408,6 @@ export async function placeOrderAtomic({
       subtotal: Number(item.price) * Number(item.quantity),
     }));
 
-    const isDownpayment = paymentOption === "downpayment";
-    const parsedTotal = Number(totalAmount);
-    const downpaymentAmount = isDownpayment ? Math.round(parsedTotal * 0.3) : parsedTotal;
-    const remainingBalance = isDownpayment ? parsedTotal - downpaymentAmount : 0;
-
-    const fulfillmentType =
-      address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
-
     const pMethodLower = String(paymentMethod || "").toLowerCase();
     let paymentType = "qr_code";
     if (pMethodLower.includes("cash") || pMethodLower.includes("walk_in") || pMethodLower.includes("walk-in") || pMethodLower.includes("over-the-counter")) {
@@ -423,6 +415,19 @@ export async function placeOrderAtomic({
     } else {
       paymentType = "qr_code";
     }
+
+    const isWalkInCash = paymentType === "walk_in_cash" || paymentMethod === "walk_in_cash";
+    const isDownpayment = paymentOption === "downpayment" || isWalkInCash;
+    const parsedTotal = Number(totalAmount);
+    const downpaymentRequired = Math.round(parsedTotal * 0.30);
+    const downpaymentAmount = isDownpayment ? downpaymentRequired : parsedTotal;
+    const remainingBalance = isDownpayment ? Math.max(0, parsedTotal - downpaymentAmount) : 0;
+    const reservationExpiresAt = isWalkInCash
+      ? new Date(Date.now() + 48 * 60 * 60 * 1000)
+      : null;
+
+    const fulfillmentType =
+      address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
 
     const customerName = address.recipientName || address.fullName || address.name || "";
     const customerEmail = address.email || "";
@@ -462,8 +467,11 @@ export async function placeOrderAtomic({
       userId: userId,
       items: orderItemsBreakdown,
       totalAmount: parsedTotal,
+      orderType: "made_to_order",
       paymentOption: isDownpayment ? "downpayment" : "full",
       downpaymentAmount: downpaymentAmount,
+      downpaymentRequired: downpaymentRequired,
+      downpaymentPaid: isDownpaymentPaid ? downpaymentAmount : 0,
       remainingBalance: remainingBalance,
       balanceDue: remainingBalance,
       balanceStatus: isDownpayment ? "pending" : "settled",
@@ -472,25 +480,30 @@ export async function placeOrderAtomic({
       fulfillmentType: fulfillmentType,
       customerName: customerName,
       customerEmail: customerEmail,
-      paymentType: paymentType,
-      paymentMethod: paymentMethod, // "COD", "GCash", "QR Ph (PayMongo)", etc.
-      paymentStatus: isDownpaymentPaid
-        ? "downpayment_paid"
-        : isDownpayment
-          ? "Downpayment Pending Verification"
-          : paymentMethod === "COD"
-            ? "Unpaid (COD)"
-            : "Paid / Pending Verification",
-      orderStatus: isDownpaymentPaid ? "downpayment confirmed" : "placed",
-      status: isDownpaymentPaid ? "Downpayment Confirmed" : "placed",
+      paymentType: isWalkInCash ? "walk_in_cash" : paymentType,
+      paymentMethod: isWalkInCash ? "walk_in_cash" : paymentMethod,
+      paymentStatus: isWalkInCash
+        ? "awaiting_counter_downpayment"
+        : (isDownpaymentPaid
+          ? "downpayment_paid"
+          : isDownpayment
+            ? "Downpayment Pending Verification"
+            : paymentMethod === "COD"
+              ? "Unpaid (COD)"
+              : "Paid / Pending Verification"),
+      orderStatus: isWalkInCash
+        ? "slot_reserved"
+        : (isDownpaymentPaid ? "downpayment confirmed" : "placed"),
+      status: isWalkInCash
+        ? "Slot Reserved"
+        : (isDownpaymentPaid ? "Downpayment Confirmed" : "placed"),
+      reservationExpiresAt: reservationExpiresAt,
       paymentIntentId: paymentDetails?.paymentIntentId || null,
       downpaymentPaidAt: isDownpaymentPaid ? serverTimestamp() : null,
       placedAt: serverTimestamp(),
       stockDeducted: true, // Prevents duplicate inventory deduction in admin dashboard
-      isMadeToOrder: hasMadeToOrderItems,
-      estimatedLeadTime: hasMadeToOrderItems
-        ? "14-21 Business Days (Crafted Upon Order)"
-        : "3-5 Business Days (Ready Stock)",
+      isMadeToOrder: true,
+      estimatedLeadTime: "14-21 Business Days (Crafted Upon Order)",
       shippingAddress: shippingAddressObj,
       address: addressObj,
       nearestLandmark: landmarkText,

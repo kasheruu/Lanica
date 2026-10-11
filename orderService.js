@@ -48,6 +48,7 @@ export function normalizeOrderStatus(rawStatus) {
   const s = String(rawStatus).trim().toLowerCase();
 
   if (s === "pending" || s === "order placed" || s === "placed") return "Placed";
+  if (s === "slot_reserved" || s === "slot reserved" || s === "reserved") return "Slot Reserved";
   if (
     s === "downpayment confirmed" ||
     s === "deposit confirmed" ||
@@ -136,7 +137,7 @@ export function getRiderName(order) {
  */
 export function isOrderCancellable(status) {
   const norm = normalizeOrderStatus(status);
-  return norm === "Placed" || norm === "Downpayment Confirmed";
+  return norm === "Placed" || norm === "Slot Reserved" || norm === "Downpayment Confirmed";
 }
 
 /**
@@ -235,6 +236,7 @@ export function getTrackingStepIndex(status) {
   const norm = normalizeOrderStatus(status);
   switch (norm) {
     case "Placed":
+    case "Slot Reserved":
       return 0;
     case "Downpayment Confirmed":
       return 1;
@@ -383,16 +385,21 @@ export function subscribeToUserOrders(userId, callback, errorCallback) {
   return onSnapshot(
     q,
     (snapshot) => {
-      const orders = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        const canonicalStatus = getOrderCanonicalStatus(data);
-        return {
-          orderId: docSnap.id,
-          id: docSnap.id,
-          ...data,
-          canonicalStatus: canonicalStatus,
-        };
-      });
+      const orders = snapshot.docs
+        .filter((docSnap) => {
+          const data = docSnap.data();
+          return !data.isDeleted && data.action !== "delete";
+        })
+        .map((docSnap) => {
+          const data = docSnap.data();
+          const canonicalStatus = getOrderCanonicalStatus(data);
+          return {
+            orderId: docSnap.id,
+            id: docSnap.id,
+            ...data,
+            canonicalStatus: canonicalStatus,
+          };
+        });
       if (typeof callback === "function") callback(orders);
     },
     (error) => {
