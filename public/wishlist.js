@@ -1181,18 +1181,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeAuthModalBtn = document.getElementById("close-auth-modal-btn");
   const authModal = document.getElementById("auth-modal");
 
-  if (authModalBtn && authModal) {
-    authModalBtn.addEventListener("click", () => {
-      authModal.classList.add("active");
-      document.body.style.overflow = "hidden";
-    });
-  }
-  if (closeAuthModalBtn && authModal) {
-    closeAuthModalBtn.addEventListener("click", () => {
-      authModal.classList.remove("active");
-      document.body.style.overflow = "";
-    });
-  }
+
 
   // Auth Tabs
   const tabLoginBtn = document.getElementById("tab-login-btn");

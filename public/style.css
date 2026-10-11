@@ -1033,6 +1033,10 @@ ul {
   font-size: 1rem;
   border: none;
   cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--transition-fast);
 }
 

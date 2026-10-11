@@ -427,12 +427,20 @@ function setupEditProfileModal() {
     if (currentUser) {
       document.getElementById("edit-full-name").value = currentUser.displayName || "";
 
-      // Fetch user phone number from Firestore document
+      let currentPhoto = currentUser.photoURL || null;
       try {
         const userDocRef = doc(db, "users", currentUser.uid);
         const snap = await getDoc(userDocRef);
-        if (snap.exists() && snap.data().phoneNumber) {
-          document.getElementById("edit-phone-number").value = snap.data().phoneNumber;
+        if (snap.exists()) {
+          const userData = snap.data();
+          if (userData.phoneNumber) {
+            document.getElementById("edit-phone-number").value = userData.phoneNumber;
+          } else {
+            document.getElementById("edit-phone-number").value = currentUser.phoneNumber || "";
+          }
+          if (userData.photoURL) {
+            currentPhoto = userData.photoURL;
+          }
         } else {
           document.getElementById("edit-phone-number").value = currentUser.phoneNumber || "";
         }
@@ -441,8 +449,8 @@ function setupEditProfileModal() {
       }
 
       if (avatarPreviewCircle) {
-        if (currentUser.photoURL) {
-          avatarPreviewCircle.innerHTML = `<img src="${escapeHtml(currentUser.photoURL)}" alt="Avatar preview" />`;
+        if (currentPhoto) {
+          avatarPreviewCircle.innerHTML = `<img src="${escapeHtml(currentPhoto)}" alt="Avatar preview" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />`;
         } else {
           const initial = (currentUser.displayName || currentUser.email || "L").charAt(0).toUpperCase();
           avatarPreviewCircle.textContent = initial;
@@ -753,5 +761,9 @@ function setupBugReportingModal() {
   }
 }
 
-// Initialize on DOM load
-document.addEventListener("DOMContentLoaded", initProfileApp);
+// Initialize on DOM load or immediately if already loaded
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initProfileApp);
+} else {
+  initProfileApp();
+}

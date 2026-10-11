@@ -199,18 +199,7 @@ function setupHeaderAndAuthUI() {
     });
   }
 
-  // Auth Modal Toggles
-  if (authModalBtn && authModal) {
-    authModalBtn.addEventListener("click", () => authModal.classList.add("active"));
-  }
-  if (closeAuthBtn && authModal) {
-    closeAuthBtn.addEventListener("click", () => authModal.classList.remove("active"));
-  }
-  if (authModal) {
-    authModal.addEventListener("click", (e) => {
-      if (e.target === authModal) authModal.classList.remove("active");
-    });
-  }
+
 
   // SIGN OUT HANDLER
   if (signOutBtn) {

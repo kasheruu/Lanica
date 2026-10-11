@@ -1,6 +1,8 @@
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 import {
   auth,
+  db,
   signUpUser,
   signInUser,
   signInWithGoogle,
@@ -37,10 +39,6 @@ export function initAuthModalController() {
   if (authModalBtns.length > 0 && authModal) {
     authModalBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (auth?.currentUser && !auth.currentUser.isAnonymous) {
-          window.location.href = "profile.html";
-          return;
-        }
         authModal.classList.add("active");
         document.body.style.overflow = "hidden";
       });
@@ -314,7 +312,7 @@ export function initAuthModalController() {
   }
 
   // 10. Auth State Listener
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     const custAvatar = document.getElementById("cust-avatar-initial");
     const custName = document.getElementById("cust-signedin-name");
     const custEmail = document.getElementById("cust-signedin-email");
@@ -328,18 +326,59 @@ export function initAuthModalController() {
       navWishlistBtns.forEach((btn) => (btn.style.display = "inline-flex"));
       navMyOrdersLinks.forEach((link) => (link.style.display = "inline-block"));
 
-      const name = user.displayName || user.email?.split("@")[0] || "Customer";
-      const initial = name.charAt(0).toUpperCase();
+      let name = user.displayName || user.email?.split("@")[0] || "Customer";
+      let photoURL = user.photoURL || null;
 
-      if (custAvatar) custAvatar.textContent = initial;
-      if (custName) custName.textContent = name;
-      if (custEmail) custEmail.textContent = user.email || "";
+      const updateAvatars = (photo, displayName) => {
+        const initial = (displayName || "U").charAt(0).toUpperCase();
+        if (custAvatar) {
+          if (photo) {
+            custAvatar.innerHTML = `<img src="${photo}" alt="${displayName}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />`;
+          } else {
+            custAvatar.textContent = initial;
+          }
+        }
+        if (custName) custName.textContent = displayName;
+        if (custEmail) custEmail.textContent = user.email || "";
+
+        authModalBtns.forEach((btn) => {
+          if (photo) {
+            btn.innerHTML = `<img src="${photo}" alt="${displayName}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 2px solid #FFD700; display: block;" />`;
+          } else {
+            btn.innerHTML = `<div style="width: 30px; height: 30px; border-radius: 50%; background: #FFD700; color: #111827; font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; justify-content: center;">${initial}</div>`;
+          }
+        });
+      };
+
+      updateAvatars(photoURL, name);
+
+      // Async fetch Firestore user document to pick up custom uploaded avatar
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const udata = snap.data();
+          if (udata.photoURL) photoURL = udata.photoURL;
+          if (udata.displayName) name = udata.displayName;
+          updateAvatars(photoURL, name);
+        }
+      } catch (err) {
+        console.warn("Could not query user doc:", err);
+      }
     } else {
       if (signedOutView) signedOutView.style.display = "block";
       if (signedInView) signedInView.style.display = "none";
 
       navWishlistBtns.forEach((btn) => (btn.style.display = "none"));
       navMyOrdersLinks.forEach((link) => (link.style.display = "none"));
+
+      authModalBtns.forEach((btn) => {
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        `;
+      });
     }
   });
 }
