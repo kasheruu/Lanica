@@ -42,6 +42,7 @@ import {
 } from "./cartService.js";
 
 import { getCachedModelUrl, attachModelToViewer } from "./modelCacheService.js";
+import { openPaymongoQrModal } from "./paymongoController.js";
 
 import {
   getCustomerOrders,
@@ -973,6 +974,30 @@ async function handlePlaceOrderSubmit() {
     submitBtn.disabled = false;
     submitBtn.textContent = "Place Order Now";
     document.getElementById("checkout-modal")?.classList.remove("active");
+
+    const isOnlineQr =
+      selectedPaymentMethod === "qr_code" ||
+      String(selectedPaymentMethod).toLowerCase().includes("qr");
+
+    if (isOnlineQr) {
+      openPaymongoQrModal({
+        orderId: result.orderId,
+        totalAmount: totalAmount,
+        onSuccess: (confirmedOrderId) => {
+          showToast("30% Downpayment Verified! Redirecting to orders...", "success");
+          setTimeout(() => {
+            window.location.href = `orders.html?orderId=${encodeURIComponent(confirmedOrderId)}&payment=success`;
+          }, 1200);
+        },
+        onClose: () => {
+          showToast(`Order #${result.orderId} recorded. View tracking in My Orders.`, "info");
+          setTimeout(() => {
+            window.location.href = "orders.html";
+          }, 1500);
+        },
+      });
+      return;
+    }
 
     showToast(
       `Order Placed Successfully! (ID: ${result.orderId}). Redirecting to order tracking...`,

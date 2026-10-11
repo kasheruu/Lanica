@@ -52,7 +52,8 @@ export function normalizeOrderStatus(rawStatus) {
     s === "downpayment confirmed" ||
     s === "deposit confirmed" ||
     s === "payment verified" ||
-    s === "confirmed"
+    s === "confirmed" ||
+    s === "downpayment_paid"
   ) {
     return "Downpayment Confirmed";
   }

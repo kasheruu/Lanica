@@ -40,6 +40,7 @@ import {
   getURLQueryParam,
   updateURLQueryParam,
 } from "./paginationService.js";
+import { openPaymongoQrModal } from "./paymongoController.js";
 
 // Global State
 let currentUser = null;
@@ -999,6 +1000,12 @@ function createOrderCardElement(order) {
     ? `<div style="font-size:0.8rem; color:#b45309; background:#fffbeb; border:1px solid #fef3c7; padding:6px 10px; border-radius:6px; margin-top:8px;">📌 <strong>Landmark / Instructions:</strong> ${escapeHtml(landmark)}</div>`
     : "";
 
+  const needsDownpayment =
+    normStatus === "Placed" &&
+    order.paymentStatus !== "downpayment_paid" &&
+    order.paymentStatus !== "Paid" &&
+    order.paymentStatus !== "paid";
+
   card.innerHTML = `
     <div class="order-card-header">
       <div class="order-meta">
@@ -1038,10 +1045,29 @@ function createOrderCardElement(order) {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
           <span>Chat Workshop</span>
         </button>
+        ${needsDownpayment ? `
+        <button type="button" class="btn-pay-downpayment-qr" data-order-id="${orderId}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: #121212; color: #FFD700; font-weight: 700; font-size: 0.82rem; border: 1.5px solid #FFD700; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>Pay 30% QR Ph</span>
+        </button>
+        ` : ""}
         ${cancelButtonHTML}
       </div>
     </div>
   `;
+
+  const payBtn = card.querySelector(".btn-pay-downpayment-qr");
+  if (payBtn) {
+    payBtn.addEventListener("click", () => {
+      openPaymongoQrModal({
+        orderId: orderId,
+        totalAmount: totalVal,
+        onSuccess: () => {
+          setTimeout(() => window.location.reload(), 1500);
+        },
+      });
+    });
+  }
 
   return card;
 }

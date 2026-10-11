@@ -293,6 +293,262 @@ app.post("/api/paymongo/checkout", checkoutLimiter, async (req, res) => {
   }
 });
 
+app.post("/api/paymongo/create-qr", checkoutLimiter, async (req, res) => {
+  try {
+    const secretKey = String(
+      process.env.PAYMONGO_SECRET_KEY || process.env.PAYMONGO_SECRET || process.env.PAYMONGO_KEY || ""
+    ).trim();
+    const publicKey = String(
+      process.env.PAYMONGO_PUBLIC_KEY || process.env.PAYMONGO_PUBLIC || process.env.PAYMONGO_PUBKEY || ""
+    ).trim();
+
+    if (!secretKey) {
+      res.status(500).json({ error: "PayMongo secret key is not configured on the server. Set PAYMONGO_SECRET_KEY." });
+      return;
+    }
+
+    const { orderId, totalAmount } = req.body || {};
+    const cleanOrderId = String(orderId || "").trim();
+    const rawTotal = Number(totalAmount);
+
+    if (!cleanOrderId) {
+      res.status(400).json({ error: "Missing required field: orderId." });
+      return;
+    }
+    if (isNaN(rawTotal) || rawTotal <= 0) {
+      res.status(400).json({ error: "Invalid or missing totalAmount. Must be a positive number." });
+      return;
+    }
+
+    const downpaymentAmount = Math.round(rawTotal * 0.30 * 100);
+    const downpaymentPhp = Math.round(rawTotal * 0.30);
+
+    const secretAuth = `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`;
+    const publicAuth = `Basic ${Buffer.from(`${publicKey || secretKey}:`).toString("base64")}`;
+
+    // Step 1: POST to https://api.paymongo.com/v1/payment_intents
+    const intentRes = await fetch("https://api.paymongo.com/v1/payment_intents", {
+      method: "POST",
+      headers: {
+        Authorization: secretAuth,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            amount: downpaymentAmount,
+            payment_method_allowed: ["qrph", "gcash", "paymaya"],
+            payment_method_options: {
+              card: {
+                request_three_d_secure: "any",
+              },
+            },
+            currency: "PHP",
+            description: `30% Downpayment for Order #${cleanOrderId}`,
+          },
+        },
+      }),
+    });
+
+    const intentData = await intentRes.json().catch(() => ({}));
+    if (!intentRes.ok) {
+      console.error("PayMongo Intent creation failed:", intentData);
+      res.status(intentRes.status || 500).json({
+        error: intentData.errors?.[0]?.detail || "Failed to create PayMongo payment intent.",
+        details: intentData.errors,
+      });
+      return;
+    }
+
+    const intentId = intentData.data?.id;
+    const clientKey = intentData.data?.attributes?.client_key;
+    if (!intentId) {
+      res.status(502).json({ error: "Payment Intent ID missing in PayMongo response." });
+      return;
+    }
+
+    // Step 2: POST to https://api.paymongo.com/v1/payment_methods
+    const methodRes = await fetch("https://api.paymongo.com/v1/payment_methods", {
+      method: "POST",
+      headers: {
+        Authorization: publicAuth,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            type: "qrph",
+          },
+        },
+      }),
+    });
+
+    const methodData = await methodRes.json().catch(() => ({}));
+    if (!methodRes.ok) {
+      console.error("PayMongo Payment Method creation failed:", methodData);
+      res.status(methodRes.status || 500).json({
+        error: methodData.errors?.[0]?.detail || "Failed to create PayMongo payment method.",
+        details: methodData.errors,
+      });
+      return;
+    }
+
+    const paymentMethodId = methodData.data?.id;
+    if (!paymentMethodId) {
+      res.status(502).json({ error: "Payment Method ID missing in PayMongo response." });
+      return;
+    }
+
+    // Step 3: POST to https://api.paymongo.com/v1/payment_intents/{intentId}/attach
+    const attachPayload = {
+      data: {
+        attributes: {
+          payment_method: paymentMethodId,
+          ...(clientKey ? { client_key: clientKey } : {}),
+        },
+      },
+    };
+
+    const attachRes = await fetch(
+      `https://api.paymongo.com/v1/payment_intents/${encodeURIComponent(intentId)}/attach`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: secretAuth,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(attachPayload),
+      }
+    );
+
+    const attachData = await attachRes.json().catch(() => ({}));
+    if (!attachRes.ok) {
+      console.error("PayMongo Payment Intent Attach failed:", attachData);
+      res.status(attachRes.status || 500).json({
+        error: attachData.errors?.[0]?.detail || "Failed to attach payment method to intent.",
+        details: attachData.errors,
+      });
+      return;
+    }
+
+    const nextAction = attachData.data?.attributes?.next_action;
+    const qrImageUrl =
+      nextAction?.code?.image_url ||
+      nextAction?.image_url ||
+      nextAction?.code?.url ||
+      "";
+
+    if (!qrImageUrl) {
+      console.error("PayMongo attach response missing QR image url:", attachData);
+      res.status(502).json({
+        error: "QR image URL was not returned by PayMongo attach action.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      paymentIntentId: intentId,
+      qrImageUrl: qrImageUrl,
+      downpaymentPhp: downpaymentPhp,
+    });
+  } catch (error) {
+    console.error("PayMongo create-qr error:", error);
+    res.status(500).json({ error: error.message || "Failed to create QR code." });
+  }
+});
+
+app.post("/api/paymongo/verify-payment", checkoutLimiter, async (req, res) => {
+  try {
+    const secretKey = String(
+      process.env.PAYMONGO_SECRET_KEY || process.env.PAYMONGO_SECRET || process.env.PAYMONGO_KEY || ""
+    ).trim();
+
+    if (!secretKey) {
+      res.status(500).json({ error: "PayMongo secret key is not configured on the server. Set PAYMONGO_SECRET_KEY." });
+      return;
+    }
+
+    const { paymentIntentId, orderId } = req.body || {};
+    const cleanIntentId = String(paymentIntentId || "").trim();
+    const cleanOrderId = String(orderId || "").trim();
+
+    if (!cleanIntentId) {
+      res.status(400).json({ error: "Missing required field: paymentIntentId." });
+      return;
+    }
+
+    const secretAuth = `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`;
+
+    const getRes = await fetch(
+      `https://api.paymongo.com/v1/payment_intents/${encodeURIComponent(cleanIntentId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: secretAuth,
+          Accept: "application/json",
+        },
+      }
+    );
+
+    const piData = await getRes.json().catch(() => ({}));
+    if (!getRes.ok) {
+      console.error("PayMongo verify fetch failed:", piData);
+      res.status(getRes.status || 500).json({
+        error: piData.errors?.[0]?.detail || "Failed to retrieve PayMongo payment intent.",
+        details: piData.errors,
+      });
+      return;
+    }
+
+    const attributes = piData.data?.attributes || {};
+    const status = attributes.status || "";
+    const payments = Array.isArray(attributes.payments) ? attributes.payments : [];
+    const hasPaidPayment = payments.some(
+      (p) => p.attributes?.status === "paid" || p.attributes?.status === "succeeded"
+    );
+
+    const isPaid = status === "succeeded" || status === "paid" || hasPaidPayment;
+
+    if (isPaid && cleanOrderId) {
+      try {
+        const authHeader = req.headers.authorization;
+        const firestoreUrl = `https://firestore.googleapis.com/v1/projects/jobsync-745a6/databases/(default)/documents/orders/${encodeURIComponent(cleanOrderId)}?updateMask.fieldPaths=paymentStatus&updateMask.fieldPaths=paymentIntentId&updateMask.fieldPaths=downpaymentPaidAt&updateMask.fieldPaths=orderStatus&updateMask.fieldPaths=status`;
+
+        const patchHeaders = { "Content-Type": "application/json" };
+        if (authHeader) patchHeaders["Authorization"] = authHeader;
+
+        await fetch(firestoreUrl, {
+          method: "PATCH",
+          headers: patchHeaders,
+          body: JSON.stringify({
+            fields: {
+              paymentStatus: { stringValue: "downpayment_paid" },
+              paymentIntentId: { stringValue: cleanIntentId },
+              downpaymentPaidAt: { timestampValue: new Date().toISOString() },
+              orderStatus: { stringValue: "downpayment confirmed" },
+              status: { stringValue: "Downpayment Confirmed" },
+            },
+          }),
+        });
+      } catch (fsErr) {
+        console.warn("Could not patch Firestore from server:", fsErr);
+      }
+    }
+
+    res.status(200).json({
+      isPaid: isPaid,
+      status: status,
+    });
+  } catch (error) {
+    console.error("PayMongo verify error:", error);
+    res.status(500).json({ error: error.message || "Failed to verify payment." });
+  }
+});
+
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });

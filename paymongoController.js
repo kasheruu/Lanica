@@ -1,0 +1,531 @@
+/**
+ * Lanica Furniture Platform - Dynamic PayMongo QR Ph 30% Downpayment Controller
+ * Handles serverless QR Ph generation, verification, modal rendering, downloading & auto-polling.
+ */
+import { db, auth } from "./firebaseConfig.js";
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+
+let activePollInterval = null;
+let currentPaymentIntentId = null;
+let currentOrderId = null;
+let currentQrImageUrl = null;
+let currentDownpaymentPhp = 0;
+let modalOnSuccessCallback = null;
+let modalOnCloseCallback = null;
+
+/**
+ * Creates a dynamic PayMongo QR Ph payment intent, payment method, and attach action
+ * via the serverless Cloudflare / Express backend.
+ */
+export async function createPaymongoQrPayment({ orderId, totalAmount }) {
+  if (!orderId) {
+    throw new Error("Order ID is required to generate PayMongo QR Ph.");
+  }
+  const parsedTotal = Number(totalAmount);
+  if (isNaN(parsedTotal) || parsedTotal <= 0) {
+    throw new Error("Valid totalAmount is required.");
+  }
+
+  const res = await fetch("/api/paymongo/create-qr", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      orderId: String(orderId).trim(),
+      totalAmount: parsedTotal,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    const errorMsg = data.error || data.message || "Failed to generate PayMongo QR Ph.";
+    throw new Error(errorMsg);
+  }
+
+  return {
+    success: true,
+    paymentIntentId: data.paymentIntentId,
+    qrImageUrl: data.qrImageUrl,
+    downpaymentPhp: data.downpaymentPhp,
+  };
+}
+
+/**
+ * Verifies PayMongo payment status via the serverless backend.
+ * Upon verified payment, updates Firestore order records.
+ */
+export async function verifyPaymongoPayment({ paymentIntentId, orderId }) {
+  if (!paymentIntentId) {
+    throw new Error("paymentIntentId is required for verification.");
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  // Attach Firebase ID token if user is signed in
+  if (auth?.currentUser) {
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      if (idToken) {
+        headers["Authorization"] = `Bearer ${idToken}`;
+      }
+    } catch (tokenErr) {
+      console.warn("Could not retrieve ID token:", tokenErr);
+    }
+  }
+
+  const res = await fetch("/api/paymongo/verify-payment", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      paymentIntentId: String(paymentIntentId).trim(),
+      orderId: String(orderId || "").trim(),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const errorMsg = data.error || data.message || "Failed to verify PayMongo payment.";
+    throw new Error(errorMsg);
+  }
+
+  // Double coverage: If verified, guarantee Firestore update from client as well
+  if (data.isPaid && orderId) {
+    try {
+      const orderRef = doc(db, "orders", String(orderId).trim());
+      await updateDoc(orderRef, {
+        paymentStatus: "downpayment_paid",
+        paymentIntentId: paymentIntentId,
+        downpaymentPaidAt: serverTimestamp(),
+        orderStatus: "downpayment confirmed",
+        status: "Downpayment Confirmed",
+      });
+    } catch (fsErr) {
+      console.warn("Client Firestore update notice:", fsErr);
+    }
+  }
+
+  return {
+    isPaid: Boolean(data.isPaid),
+    status: data.status || "",
+  };
+}
+
+/**
+ * Downloads the Base64 QR code image as `lanica-order-<orderId>-qrph.png`
+ */
+export async function downloadPaymongoQrCode(qrImageUrl, orderId) {
+  if (!qrImageUrl) return;
+  const filename = `lanica-order-${orderId || "payment"}-qrph.png`;
+
+  if (qrImageUrl.startsWith("data:")) {
+    const link = document.createElement("a");
+    link.href = qrImageUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return;
+  }
+
+  try {
+    const res = await fetch(qrImageUrl);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch (err) {
+    const link = document.createElement("a");
+    link.href = qrImageUrl;
+    link.target = "_blank";
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+/**
+ * Injects or ensures the PayMongo QR Ph Modal DOM exists
+ */
+function ensurePaymongoModalDom() {
+  let modal = document.getElementById("paymongo-qr-modal");
+  if (modal) return modal;
+
+  const modalHtml = `
+    <div id="paymongo-qr-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-card paymongo-qr-card">
+        <!-- Header -->
+        <div class="paymongo-qr-header">
+          <div class="paymongo-qr-header-left">
+            <div class="paymongo-qr-icon-badge">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+            </div>
+            <div>
+              <h3 class="paymongo-qr-title">LIVE PAYMONGO QR PH</h3>
+              <p class="paymongo-qr-sub">GCash • Maya • GoTyme • Banks</p>
+            </div>
+          </div>
+          <button type="button" id="paymongo-modal-close-btn" class="paymongo-qr-close" aria-label="Close QR Modal">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="paymongo-qr-body">
+          <!-- Metric Pill -->
+          <div class="paymongo-metric-pill">
+            <div class="paymongo-metric-info">
+              <span class="paymongo-metric-sub">30% Downpayment Due</span>
+              <span id="paymongo-order-ref" class="paymongo-metric-order">Order #---</span>
+            </div>
+            <div id="paymongo-amount-display" class="paymongo-metric-amount">₱0</div>
+          </div>
+
+          <!-- White QR Container -->
+          <div class="paymongo-white-qr-container">
+            <div class="paymongo-qrph-branding">
+              <span>QR</span> PH
+            </div>
+            <div class="paymongo-qr-image-frame">
+              <img id="paymongo-qr-img" src="" alt="Live PayMongo QR Ph" style="display: none;" />
+              <div id="paymongo-qr-spinner" class="paymongo-loading-spinner"></div>
+            </div>
+            <div class="paymongo-qr-instructions">
+              SCAN OR UPLOAD QR PH VIA YOUR BANK / WALLET APP
+            </div>
+          </div>
+
+          <!-- Info Panel -->
+          <div class="paymongo-info-panel">
+            <div class="paymongo-info-title">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              Supported QR Ph Wallets & Banks
+            </div>
+            <div class="paymongo-wallets-list">
+              <span class="paymongo-wallet-tag">GCash</span>
+              <span class="paymongo-wallet-tag">Maya</span>
+              <span class="paymongo-wallet-tag">ShopeePay</span>
+              <span class="paymongo-wallet-tag">GrabPay</span>
+              <span class="paymongo-wallet-tag">StarPay</span>
+              <span class="paymongo-wallet-tag">GoTyme</span>
+              <span class="paymongo-wallet-tag">BDO</span>
+              <span class="paymongo-wallet-tag">BPI</span>
+              <span class="paymongo-wallet-tag">UnionBank</span>
+              <span class="paymongo-wallet-tag">RCBC</span>
+              <span class="paymongo-wallet-tag">SeaBank</span>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="paymongo-btn-grid">
+            <button type="button" id="paymongo-save-qr-btn" class="paymongo-btn-save">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              SAVE QR
+            </button>
+            <button type="button" id="paymongo-verify-btn" class="paymongo-btn-verify">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              VERIFY & SUBMIT
+            </button>
+          </div>
+
+          <div id="paymongo-status-toast" class="paymongo-status-toast polling">
+            Awaiting payment detection...
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+  modal = document.getElementById("paymongo-qr-modal");
+
+  // Wire static close button
+  const closeBtn = document.getElementById("paymongo-modal-close-btn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closePaymongoQrModal);
+  }
+
+  // Wire static save button
+  const saveBtn = document.getElementById("paymongo-save-qr-btn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      if (currentQrImageUrl && currentOrderId) {
+        downloadPaymongoQrCode(currentQrImageUrl, currentOrderId);
+      }
+    });
+  }
+
+  // Wire manual verify button
+  const verifyBtn = document.getElementById("paymongo-verify-btn");
+  if (verifyBtn) {
+    verifyBtn.addEventListener("click", handleManualVerification);
+  }
+
+  return modal;
+}
+
+/**
+ * Handles manual verification click on the modal
+ */
+async function handleManualVerification() {
+  if (!currentPaymentIntentId || !currentOrderId) return;
+  const verifyBtn = document.getElementById("paymongo-verify-btn");
+  const toast = document.getElementById("paymongo-status-toast");
+
+  try {
+    if (verifyBtn) {
+      verifyBtn.disabled = true;
+      verifyBtn.innerHTML = `
+        <div class="paymongo-loading-spinner" style="width: 16px; height: 16px; border-width: 2px; border-color: rgba(0,0,0,0.2); border-top-color: #000;"></div>
+        Verifying...
+      `;
+    }
+    if (toast) {
+      toast.className = "paymongo-status-toast polling";
+      toast.textContent = "Connecting to PayMongo payment gateway...";
+    }
+
+    const result = await verifyPaymongoPayment({
+      paymentIntentId: currentPaymentIntentId,
+      orderId: currentOrderId,
+    });
+
+    if (result.isPaid) {
+      handlePaymentSuccessful();
+    } else {
+      if (toast) {
+        toast.className = "paymongo-status-toast error";
+        toast.textContent = "Payment not detected yet. Complete the payment in your banking or wallet app, then try again.";
+      }
+      if (verifyBtn) {
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          VERIFY & SUBMIT
+        `;
+      }
+    }
+  } catch (err) {
+    console.error("Manual verification error:", err);
+    if (toast) {
+      toast.className = "paymongo-status-toast error";
+      toast.textContent = err.message || "Verification request failed. Please check your connection.";
+    }
+    if (verifyBtn) {
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        VERIFY & SUBMIT
+      `;
+    }
+  }
+}
+
+/**
+ * Starts automatic 5-second polling for payment intent status
+ */
+function startVerificationPolling() {
+  stopVerificationPolling();
+  activePollInterval = setInterval(async () => {
+    if (!currentPaymentIntentId || !currentOrderId) return;
+    try {
+      const result = await verifyPaymongoPayment({
+        paymentIntentId: currentPaymentIntentId,
+        orderId: currentOrderId,
+      });
+
+      if (result.isPaid) {
+        handlePaymentSuccessful();
+      }
+    } catch (err) {
+      // Background poll silently continues
+      console.debug("Auto-poll verification ping:", err.message);
+    }
+  }, 5000);
+}
+
+/**
+ * Clears active polling timer
+ */
+function stopVerificationPolling() {
+  if (activePollInterval) {
+    clearInterval(activePollInterval);
+    activePollInterval = null;
+  }
+}
+
+/**
+ * Handles successful verified payment
+ */
+function handlePaymentSuccessful() {
+  stopVerificationPolling();
+
+  const toast = document.getElementById("paymongo-status-toast");
+  const verifyBtn = document.getElementById("paymongo-verify-btn");
+  const saveBtn = document.getElementById("paymongo-save-qr-btn");
+
+  if (toast) {
+    toast.className = "paymongo-status-toast success";
+    toast.textContent = "✓ 30% Downpayment Verified! Redirecting to your order...";
+  }
+
+  if (verifyBtn) {
+    verifyBtn.disabled = true;
+    verifyBtn.style.background = "#10B981";
+    verifyBtn.style.borderColor = "#10B981";
+    verifyBtn.style.color = "#ffffff";
+    verifyBtn.textContent = "PAYMENT VERIFIED ✓";
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+  }
+
+  const finishedOrderId = currentOrderId;
+
+  setTimeout(() => {
+    closePaymongoQrModal();
+    if (typeof modalOnSuccessCallback === "function") {
+      modalOnSuccessCallback(finishedOrderId);
+    } else {
+      window.location.href = `orders.html?orderId=${encodeURIComponent(finishedOrderId)}&payment=success`;
+    }
+  }, 1800);
+}
+
+/**
+ * Closes the PayMongo QR Ph Modal cleanly
+ */
+export function closePaymongoQrModal() {
+  stopVerificationPolling();
+  const modal = document.getElementById("paymongo-qr-modal");
+  if (modal) {
+    modal.classList.remove("active");
+    modal.style.display = "none";
+  }
+  if (typeof modalOnCloseCallback === "function") {
+    modalOnCloseCallback();
+  }
+}
+
+/**
+ * Opens the Live PayMongo QR Ph Modal with dynamic backend generation
+ */
+export async function openPaymongoQrModal({ orderId, totalAmount, onSuccess, onClose }) {
+  const modal = ensurePaymongoModalDom();
+  currentOrderId = String(orderId).trim();
+  modalOnSuccessCallback = onSuccess || null;
+  modalOnCloseCallback = onClose || null;
+
+  // Reset modal state
+  const orderRefEl = document.getElementById("paymongo-order-ref");
+  const amountDisplayEl = document.getElementById("paymongo-amount-display");
+  const qrImg = document.getElementById("paymongo-qr-img");
+  const spinner = document.getElementById("paymongo-qr-spinner");
+  const toast = document.getElementById("paymongo-status-toast");
+  const verifyBtn = document.getElementById("paymongo-verify-btn");
+  const saveBtn = document.getElementById("paymongo-save-qr-btn");
+
+  const expectedDownpayment = Math.round(Number(totalAmount) * 0.30);
+  if (orderRefEl) orderRefEl.textContent = `Order #${currentOrderId}`;
+  if (amountDisplayEl) amountDisplayEl.textContent = `₱${expectedDownpayment.toLocaleString()}`;
+
+  if (qrImg) qrImg.style.display = "none";
+  if (spinner) spinner.style.display = "block";
+  if (toast) {
+    toast.className = "paymongo-status-toast polling";
+    toast.textContent = "Generating official PayMongo QR Ph code...";
+  }
+
+  if (verifyBtn) {
+    verifyBtn.disabled = true;
+    verifyBtn.style.background = "#FFD700";
+    verifyBtn.style.borderColor = "#FFD700";
+    verifyBtn.style.color = "#000000";
+    verifyBtn.textContent = "VERIFY & SUBMIT";
+  }
+  if (saveBtn) saveBtn.disabled = true;
+
+  // Show modal
+  modal.style.display = "flex";
+  void modal.offsetWidth;
+  modal.classList.add("active");
+
+  try {
+    // Generate QR Ph via Backend
+    const qrResult = await createPaymongoQrPayment({
+      orderId: currentOrderId,
+      totalAmount: totalAmount,
+    });
+
+    currentPaymentIntentId = qrResult.paymentIntentId;
+    currentQrImageUrl = qrResult.qrImageUrl;
+    currentDownpaymentPhp = qrResult.downpaymentPhp;
+
+    if (amountDisplayEl) {
+      amountDisplayEl.textContent = `₱${currentDownpaymentPhp.toLocaleString()}`;
+    }
+
+    if (qrImg) {
+      qrImg.src = currentQrImageUrl;
+      qrImg.onload = () => {
+        if (spinner) spinner.style.display = "none";
+        qrImg.style.display = "block";
+      };
+    }
+
+    if (verifyBtn) verifyBtn.disabled = false;
+    if (saveBtn) saveBtn.disabled = false;
+
+    if (toast) {
+      toast.className = "paymongo-status-toast polling";
+      toast.textContent = "Awaiting payment (Auto-verifying every 5s)...";
+    }
+
+    // Start 5-second polling
+    startVerificationPolling();
+  } catch (err) {
+    console.error("Failed to initialize PayMongo QR modal:", err);
+    if (spinner) spinner.style.display = "none";
+    if (toast) {
+      toast.className = "paymongo-status-toast error";
+      toast.textContent = err.message || "Failed to generate PayMongo QR Ph. Please try again.";
+    }
+  }
+}
