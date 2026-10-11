@@ -542,6 +542,7 @@ app.post("/api/paymongo/verify-payment", checkoutLimiter, async (req, res) => {
     res.status(200).json({
       isPaid: isPaid,
       status: status,
+      paymentIntentId: cleanIntentId,
     });
   } catch (error) {
     console.error("PayMongo verify error:", error);

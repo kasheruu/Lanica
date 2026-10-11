@@ -323,12 +323,13 @@ export async function placeOrderAtomic({
   paymentOption = "full", // "full" or "downpayment" (50% deposit)
   customNotes = "",
   paymentDetails = {},
+  orderId: customOrderId = null,
 }) {
   if (!userId) throw new Error("User ID is required to place an order.");
   if (!cartItems || cartItems.length === 0) throw new Error("Cart is empty.");
   if (!address || !address.fullAddress) throw new Error("Delivery address is required.");
 
-  const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderId = customOrderId || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const orderRef = doc(db, "orders", orderId);
 
   await runTransaction(db, async (transaction) => {
@@ -451,6 +452,11 @@ export async function placeOrderAtomic({
       longitude: address.longitude || null,
     };
 
+    const isDownpaymentPaid = Boolean(
+      paymentDetails?.downpaymentPaid ||
+      paymentDetails?.paymentStatus === "downpayment_paid"
+    );
+
     const orderDocData = {
       orderId: orderId,
       userId: userId,
@@ -467,14 +473,19 @@ export async function placeOrderAtomic({
       customerName: customerName,
       customerEmail: customerEmail,
       paymentType: paymentType,
-      paymentMethod: paymentMethod, // "COD", "GCash", or "Bank Transfer"
-      paymentStatus: isDownpayment
-        ? "Downpayment Pending Verification"
-        : paymentMethod === "COD"
-          ? "Unpaid (COD)"
-          : "Paid / Pending Verification",
-      orderStatus: "placed", // Canonical lowercase: placed -> downpayment confirmed -> in production -> quality checked -> shipped -> delivered
-      status: "placed",
+      paymentMethod: paymentMethod, // "COD", "GCash", "QR Ph (PayMongo)", etc.
+      paymentStatus: isDownpaymentPaid
+        ? "downpayment_paid"
+        : isDownpayment
+          ? "Downpayment Pending Verification"
+          : paymentMethod === "COD"
+            ? "Unpaid (COD)"
+            : "Paid / Pending Verification",
+      orderStatus: isDownpaymentPaid ? "downpayment confirmed" : "placed",
+      status: isDownpaymentPaid ? "Downpayment Confirmed" : "placed",
+      paymentIntentId: paymentDetails?.paymentIntentId || null,
+      downpaymentPaidAt: isDownpaymentPaid ? serverTimestamp() : null,
+      placedAt: serverTimestamp(),
       stockDeducted: true, // Prevents duplicate inventory deduction in admin dashboard
       isMadeToOrder: hasMadeToOrderItems,
       estimatedLeadTime: hasMadeToOrderItems

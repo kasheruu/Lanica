@@ -14,6 +14,8 @@ let currentPaymentIntentId = null;
 let currentOrderId = null;
 let currentQrImageUrl = null;
 let currentDownpaymentPhp = 0;
+let isPaymentVerified = false;
+let modalOnConfirmPaymentCallback = null;
 let modalOnSuccessCallback = null;
 let modalOnCloseCallback = null;
 
@@ -97,8 +99,8 @@ export async function verifyPaymongoPayment({ paymentIntentId, orderId }) {
     throw new Error(errorMsg);
   }
 
-  // Double coverage: If verified, guarantee Firestore update from client as well
-  if (data.isPaid && orderId) {
+  // For pre-existing orders being paid, update Firestore directly upon verification
+  if (data.isPaid && orderId && !modalOnConfirmPaymentCallback) {
     try {
       const orderRef = doc(db, "orders", String(orderId).trim());
       await updateDoc(orderRef, {
@@ -116,6 +118,7 @@ export async function verifyPaymongoPayment({ paymentIntentId, orderId }) {
   return {
     isPaid: Boolean(data.isPaid),
     status: data.status || "",
+    paymentIntentId: paymentIntentId,
   };
 }
 
@@ -358,7 +361,7 @@ async function handleManualVerification() {
 }
 
 /**
- * Starts automatic 5-second polling for payment intent status
+ * Starts automatic 3.5-second polling for payment intent status
  */
 function startVerificationPolling() {
   stopVerificationPolling();
@@ -371,13 +374,13 @@ function startVerificationPolling() {
       });
 
       if (result.isPaid) {
-        handlePaymentSuccessful();
+        await handlePaymentSuccessful();
       }
     } catch (err) {
       // Background poll silently continues
       console.debug("Auto-poll verification ping:", err.message);
     }
-  }, 5000);
+  }, 3500);
 }
 
 /**
@@ -393,7 +396,9 @@ function stopVerificationPolling() {
 /**
  * Handles successful verified payment
  */
-function handlePaymentSuccessful() {
+async function handlePaymentSuccessful() {
+  if (isPaymentVerified) return;
+  isPaymentVerified = true;
   stopVerificationPolling();
 
   const toast = document.getElementById("paymongo-status-toast");
@@ -402,7 +407,7 @@ function handlePaymentSuccessful() {
 
   if (toast) {
     toast.className = "paymongo-status-toast success";
-    toast.textContent = "✓ 30% Downpayment Verified! Redirecting to your order...";
+    toast.textContent = "✓ 30% Downpayment Verified! Finalizing your order...";
   }
 
   if (verifyBtn) {
@@ -419,37 +424,76 @@ function handlePaymentSuccessful() {
 
   const finishedOrderId = currentOrderId;
 
+  // Execute post-verification atomic order creation gate if provided
+  if (typeof modalOnConfirmPaymentCallback === "function") {
+    try {
+      await modalOnConfirmPaymentCallback({
+        paymentIntentId: currentPaymentIntentId,
+        orderId: finishedOrderId,
+        downpaymentPhp: currentDownpaymentPhp,
+      });
+      if (toast) {
+        toast.className = "paymongo-status-toast success";
+        toast.textContent = "✓ Order Placed Successfully! Redirecting to orders...";
+      }
+    } catch (commitErr) {
+      console.error("Post-verification order placement error:", commitErr);
+      isPaymentVerified = false; // Allow retry
+      if (toast) {
+        toast.className = "paymongo-status-toast error";
+        toast.textContent = `Payment verified, but order placement failed: ${commitErr.message}. Please click to retry.`;
+      }
+      if (verifyBtn) {
+        verifyBtn.disabled = false;
+        verifyBtn.style.background = "#FFD700";
+        verifyBtn.style.borderColor = "#FFD700";
+        verifyBtn.style.color = "#000000";
+        verifyBtn.textContent = "RETRY ORDER PLACEMENT";
+      }
+      return;
+    }
+  }
+
   setTimeout(() => {
-    closePaymongoQrModal();
+    closePaymongoQrModal(false);
     if (typeof modalOnSuccessCallback === "function") {
       modalOnSuccessCallback(finishedOrderId);
     } else {
       window.location.href = `orders.html?orderId=${encodeURIComponent(finishedOrderId)}&payment=success`;
     }
-  }, 1800);
+  }, 1200);
 }
 
 /**
  * Closes the PayMongo QR Ph Modal cleanly
  */
-export function closePaymongoQrModal() {
+export function closePaymongoQrModal(isDismissedByUser = true) {
   stopVerificationPolling();
   const modal = document.getElementById("paymongo-qr-modal");
   if (modal) {
     modal.classList.remove("active");
     modal.style.display = "none";
   }
+  const wasVerified = isPaymentVerified;
   if (typeof modalOnCloseCallback === "function") {
-    modalOnCloseCallback();
+    modalOnCloseCallback({ wasPaid: wasVerified, isDismissed: isDismissedByUser });
   }
 }
 
 /**
  * Opens the Live PayMongo QR Ph Modal with dynamic backend generation
  */
-export async function openPaymongoQrModal({ orderId, totalAmount, onSuccess, onClose }) {
+export async function openPaymongoQrModal({
+  orderId,
+  totalAmount,
+  onConfirmPayment,
+  onSuccess,
+  onClose,
+}) {
   const modal = ensurePaymongoModalDom();
   currentOrderId = String(orderId).trim();
+  isPaymentVerified = false;
+  modalOnConfirmPaymentCallback = onConfirmPayment || null;
   modalOnSuccessCallback = onSuccess || null;
   modalOnCloseCallback = onClose || null;
 
@@ -515,10 +559,10 @@ export async function openPaymongoQrModal({ orderId, totalAmount, onSuccess, onC
 
     if (toast) {
       toast.className = "paymongo-status-toast polling";
-      toast.textContent = "Awaiting payment (Auto-verifying every 5s)...";
+      toast.textContent = "Awaiting payment (Auto-verifying every 3s)...";
     }
 
-    // Start 5-second polling
+    // Start 3.5-second polling
     startVerificationPolling();
   } catch (err) {
     console.error("Failed to initialize PayMongo QR modal:", err);

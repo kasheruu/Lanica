@@ -119,6 +119,7 @@ export async function onRequestPost(context) {
     return jsonResponse({
       isPaid: isPaid,
       status: status,
+      paymentIntentId: paymentIntentId,
     });
   } catch (err) {
     console.error("PayMongo verify-payment error:", err);

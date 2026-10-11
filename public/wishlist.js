@@ -939,11 +939,90 @@ async function handlePlaceOrderSubmit() {
       nearestLandmark: nearestLandmarkVal,
     };
 
+    const isOnlineQr =
+      selectedPaymentMethod === "qr_code" ||
+      String(selectedPaymentMethod).toLowerCase().includes("qr");
+
+    if (isOnlineQr) {
+      // Step 1: Draft Order ID & Payment Gate initialization (No Firestore insertion yet!)
+      const draftOrderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      // Close checkout modal so user can interact with the Live PayMongo QR Ph Modal
+      document.getElementById("checkout-modal")?.classList.remove("active");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Place Order Now";
+
+      // Step 2 & 3: Trigger PayMongo QR Ph Modal & Await Verification Gate
+      await openPaymongoQrModal({
+        orderId: draftOrderId,
+        totalAmount: totalAmount,
+        onConfirmPayment: async ({ paymentIntentId }) => {
+          // POST-VERIFICATION PLACEMENT GATE:
+          // Strictly execute atomic order creation only AFTER PayMongo confirms payment is succeeded!
+          const orderResult = await placeOrderAtomic({
+            orderId: draftOrderId,
+            userId: currentUser.uid,
+            cartItems: currentCartItems,
+            totalAmount: totalAmount,
+            paymentMethod: "QR Ph (PayMongo)",
+            paymentOption: selectedPaymentTerm,
+            address: addressWithLandmark,
+            customNotes: customComments,
+            paymentDetails: {
+              paymentSlipUrl: paymentSlipUrl || null,
+              customSketchUrl: customSketchUrl || null,
+              customComments: customComments,
+              selectedTerm: selectedPaymentTerm,
+              accountName: targetAddress.recipientName,
+              submittedAt: new Date().toISOString(),
+              downpaymentPaid: true,
+              paymentStatus: "downpayment_paid",
+              paymentIntentId: paymentIntentId,
+              downpaymentCentavos: Math.round(totalAmount * 0.30 * 100),
+              downpaymentAmount: Math.round(totalAmount * 0.30),
+              verifiedAt: new Date().toISOString(),
+            },
+          });
+
+          // Post confirmation to live chat
+          try {
+            const termLabel = selectedPaymentTerm === "downpayment" ? "30% Downpayment" : "Full Payment";
+            await sendChatMessage({
+              orderId: draftOrderId,
+              senderId: currentUser.uid,
+              senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
+              senderRole: "customer",
+              text: `Hello! I have placed Order #${draftOrderId} (${termLabel} Verified via PayMongo QR Ph). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
+              attachmentUrl: paymentSlipUrl || customSketchUrl || null,
+            });
+          } catch (chatErr) {
+            console.warn("Could not post auto chat confirmation:", chatErr);
+          }
+
+          return orderResult;
+        },
+        onSuccess: (confirmedOrderId) => {
+          showToast(`Payment Verified! Order #${confirmedOrderId} Placed Successfully.`, "success");
+          setTimeout(() => {
+            window.location.href = `orders.html?orderId=${encodeURIComponent(confirmedOrderId)}&payment=success`;
+          }, 1200);
+        },
+        onClose: ({ wasPaid }) => {
+          if (!wasPaid) {
+            showToast("Payment was not completed. Your order has not been placed.", "warning");
+          }
+        },
+      });
+      return;
+    }
+
+    // Walk-in (Cash) Checkout Flow:
+    submitBtn.textContent = "Finalizing Order...";
     const result = await placeOrderAtomic({
       userId: currentUser.uid,
       cartItems: currentCartItems,
       totalAmount: totalAmount,
-      paymentMethod: selectedPaymentMethod,
+      paymentMethod: "Walk-in Cash",
       paymentOption: selectedPaymentTerm,
       address: addressWithLandmark,
       customNotes: customComments,
@@ -954,6 +1033,7 @@ async function handlePlaceOrderSubmit() {
         selectedTerm: selectedPaymentTerm,
         accountName: targetAddress.recipientName,
         submittedAt: new Date().toISOString(),
+        walkInCash: true,
       },
     });
 
@@ -964,7 +1044,7 @@ async function handlePlaceOrderSubmit() {
         senderId: currentUser.uid,
         senderName: currentUser.displayName || targetAddress.recipientName || "Customer",
         senderRole: "customer",
-        text: `Hello! I have placed Order #${result.orderId} (${termLabel} via ${selectedPaymentMethod}). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
+        text: `Hello! I have placed Order #${result.orderId} (${termLabel} via Walk-in Cash). Total: ₱${totalAmount.toLocaleString()}.${customComments ? ` Custom Notes: "${customComments}"` : ""}`,
         attachmentUrl: paymentSlipUrl || customSketchUrl || null,
       });
     } catch (chatErr) {
@@ -975,32 +1055,8 @@ async function handlePlaceOrderSubmit() {
     submitBtn.textContent = "Place Order Now";
     document.getElementById("checkout-modal")?.classList.remove("active");
 
-    const isOnlineQr =
-      selectedPaymentMethod === "qr_code" ||
-      String(selectedPaymentMethod).toLowerCase().includes("qr");
-
-    if (isOnlineQr) {
-      openPaymongoQrModal({
-        orderId: result.orderId,
-        totalAmount: totalAmount,
-        onSuccess: (confirmedOrderId) => {
-          showToast("30% Downpayment Verified! Redirecting to orders...", "success");
-          setTimeout(() => {
-            window.location.href = `orders.html?orderId=${encodeURIComponent(confirmedOrderId)}&payment=success`;
-          }, 1200);
-        },
-        onClose: () => {
-          showToast(`Order #${result.orderId} recorded. View tracking in My Orders.`, "info");
-          setTimeout(() => {
-            window.location.href = "orders.html";
-          }, 1500);
-        },
-      });
-      return;
-    }
-
     showToast(
-      `Order Placed Successfully! (ID: ${result.orderId}). Redirecting to order tracking...`,
+      `Order Placed Successfully! (ID: ${result.orderId}). Please visit the showroom for cash settlement.`,
       "success"
     );
     setTimeout(() => {
