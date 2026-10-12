@@ -3776,6 +3776,37 @@ textarea:focus-visible {
   border-bottom-left-radius: 6px;
 }
 
+.chat-quoted-box {
+  background: rgba(0, 0, 0, 0.06);
+  border-left: 3px solid #6b4423;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-msg-row.customer .chat-quoted-box {
+  background: rgba(0, 0, 0, 0.08);
+  border-left-color: #78350f;
+}
+
+.chat-quoted-box-sender {
+  font-weight: 700;
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.chat-quoted-box-text {
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
 .chat-msg-img {
   max-width: 100%;
   max-height: 200px;
@@ -5625,3 +5656,319 @@ html, body {
 
 
 
+
+/* Messenger-style Message Action Buttons & Bubble Wrapper */
+.chat-bubble-with-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  max-width: 85%;
+}
+
+.chat-msg-row.customer .chat-bubble-with-actions {
+  flex-direction: row-reverse;
+}
+
+.chat-msg-actions {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.chat-bubble-with-actions:hover .chat-msg-actions {
+  display: inline-flex;
+}
+
+.chat-msg-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.chat-msg-action-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+.chat-msg-action-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.chat-msg-action-btn.unsend:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+}
+
+/* Messenger-style Unsent Bubble */
+.chat-bubble-unsent {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 18px;
+  border: 1px dashed #cbd5e1;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-style: italic;
+  user-select: none;
+  max-width: 100%;
+}
+
+/* Messenger Header Dropdown & 3-dots */
+.messenger-header-dots-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.messenger-header-dots-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.messenger-options-dropdown {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  min-width: 200px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.messenger-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: #1e293b;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.messenger-dropdown-item:hover {
+  background: #f1f5f9;
+}
+
+.messenger-dropdown-item.destructive {
+  color: #dc2626;
+}
+
+.messenger-dropdown-item.destructive:hover {
+  background: #fef2f2;
+}
+
+.messenger-item-icon {
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Conversation Sidebar 3-dots Menu */
+.chat-session-item {
+  position: relative;
+}
+
+.chat-session-dots-btn {
+  opacity: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  color: #475569;
+  cursor: pointer;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: all 0.15s ease;
+  z-index: 5;
+}
+
+.chat-session-item:hover .chat-session-dots-btn {
+  opacity: 1;
+}
+
+.chat-session-dots-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Messenger Unsend Modal Dialog */
+.messenger-unsend-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.messenger-unsend-backdrop.visible {
+  opacity: 1;
+}
+
+.messenger-unsend-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 440px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transform: scale(0.96);
+  transition: transform 0.2s ease;
+  font-family: inherit;
+}
+
+.messenger-unsend-backdrop.visible .messenger-unsend-modal {
+  transform: scale(1);
+}
+
+.messenger-unsend-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.messenger-unsend-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.messenger-unsend-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.messenger-unsend-radio-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+
+.messenger-unsend-radio-row:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.messenger-unsend-radio-row input[type='radio'] {
+  margin-top: 3px;
+  cursor: pointer;
+}
+
+.messenger-unsend-radio-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.messenger-unsend-radio-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.messenger-unsend-radio-desc {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.messenger-unsend-footer {
+  padding: 14px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafafa;
+}
+
+.messenger-btn-cancel {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.messenger-btn-cancel:hover {
+  background: #f1f5f9;
+}
+
+.messenger-btn-confirm {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #6b4423;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.messenger-btn-confirm:hover {
+  background: #52341b;
+}

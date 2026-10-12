@@ -32,6 +32,11 @@ import {
   sendChatMessage,
   uploadChatAttachment,
   markOrderMessagesAsRead,
+  unsendChatMessage,
+  showMessengerUnsendModal,
+  archiveChatSession,
+  unarchiveChatSession,
+  deleteConversation,
 } from "./chatService.js";
 import { recordAuditLog } from "./auditService.js";
 import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
@@ -3202,6 +3207,41 @@ function updateStaffNavChatBadge() {
   }
 }
 
+function parseChatMessageContent(m) {
+  if (!m) return { mediaUrl: "", displayText: "" };
+
+  let mediaUrl =
+    m.attachmentUrl ||
+    m.imageUrl ||
+    (m.type === 1 && typeof m.content === "string" ? m.content : "") ||
+    "";
+
+  let rawText = m.text || m.message || m.content || "";
+  if (typeof rawText !== "string") rawText = "";
+  rawText = rawText.trim();
+
+  // Detect if rawText is an image URL (Firebase Storage or direct image file)
+  const isUrl = rawText.startsWith("http://") || rawText.startsWith("https://");
+  const isImageTarget =
+    isUrl &&
+    (/\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i.test(rawText) ||
+      rawText.includes("firebasestorage.googleapis.com") ||
+      rawText.includes("firebasestorage.app") ||
+      rawText.includes("/lanica_chats"));
+
+  if (!mediaUrl && isImageTarget) {
+    mediaUrl = rawText;
+  }
+
+  // If rawText matches mediaUrl or is purely an image URL, do not show the raw URL string as text
+  let displayText = rawText;
+  if (mediaUrl && (displayText === mediaUrl || isImageTarget)) {
+    displayText = "";
+  }
+
+  return { mediaUrl, displayText };
+}
+
 function setupStaffLiveChat() {
   const sessionsListEl = document.getElementById("staff-chat-sessions-list");
   const messagesEl = document.getElementById("staff-chat-messages");
@@ -3248,10 +3288,67 @@ function setupStaffLiveChat() {
   const filterAllBtn = document.getElementById("staff-chat-filter-all");
   const filterSupportBtn = document.getElementById("staff-chat-filter-support");
   const filterOrdersBtn = document.getElementById("staff-chat-filter-orders");
+  const filterClosedBtn = document.getElementById("staff-chat-filter-closed");
+  const staffChatTotalCount = document.getElementById("staff-chat-total-count");
+
+  // Reply Quoting State
+  let activeReplyingMessage = null;
+  const replyPreviewEl = document.getElementById("staff-chat-reply-preview");
+  const replySenderEl = document.getElementById("staff-chat-reply-sender");
+  const replySnippetEl = document.getElementById("staff-chat-reply-snippet");
+  const cancelReplyBtn = document.getElementById("staff-chat-cancel-reply");
+
+  function setReplyingMessage(m) {
+    activeReplyingMessage = m;
+    if (replyPreviewEl && replySenderEl && replySnippetEl) {
+      if (m) {
+        const { mediaUrl, displayText } = parseChatMessageContent(m);
+        const snippet = displayText || (mediaUrl ? "[Photo Attachment]" : "Message");
+        replySenderEl.textContent = m.senderName || (m.senderRole === "admin" || m.senderRole === "staff" ? "Workshop Artisan" : "Customer");
+        replySnippetEl.textContent = `"${snippet.slice(0, 65)}${snippet.length > 65 ? "..." : ""}"`;
+        replyPreviewEl.style.display = "flex";
+        if (chatInput) chatInput.focus();
+      } else {
+        replyPreviewEl.style.display = "none";
+      }
+    }
+  }
+
+  if (cancelReplyBtn) {
+    cancelReplyBtn.addEventListener("click", () => setReplyingMessage(null));
+  }
+
+  function renderAvatarHtml(photoURL, name, isSupport = false, size = 36) {
+    const nameParts = (name || "Customer").trim().split(/\s+/);
+    const initials = nameParts.length > 1
+      ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+      : (nameParts[0].slice(0, 2)).toUpperCase();
+
+    const bg = isSupport ? "#fef3c7" : "#f1f5f9";
+    const fg = isSupport ? "#92400e" : "#334155";
+    const border = isSupport ? "#fde68a" : "#e2e8f0";
+
+    const fallback = `<span style="display: ${photoURL ? "none" : "flex"}; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: ${Math.round(size * 0.38)}px; font-weight: 700; color: ${fg}; user-select: none;">${escapeHtml(initials)}</span>`;
+
+    if (photoURL && (photoURL.startsWith("http://") || photoURL.startsWith("https://") || photoURL.startsWith("data:"))) {
+      return `
+        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: ${bg}; border: 1.5px solid ${border}; position: relative; display: flex; align-items: center; justify-content: center;">
+          <img src="${escapeHtml(photoURL)}" alt="${escapeHtml(name)}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+          ${fallback}
+        </div>
+      `;
+    }
+
+    return `
+      <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: ${bg}; border: 1.5px solid ${border}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <span style="font-size: ${Math.round(size * 0.38)}px; font-weight: 700; color: ${fg}; user-select: none;">${escapeHtml(initials)}</span>
+      </div>
+    `;
+  }
 
   function setStaffChatFilter(filter) {
     currentStaffChatFilter = filter;
-    [filterAllBtn, filterSupportBtn, filterOrdersBtn].forEach((btn) => {
+    [filterAllBtn, filterSupportBtn, filterOrdersBtn, filterClosedBtn].forEach((btn) => {
       if (!btn) return;
       btn.style.background = "#fff";
       btn.style.color = "#374151";
@@ -3262,6 +3359,8 @@ function setupStaffLiveChat() {
         ? filterSupportBtn
         : filter === "orders"
         ? filterOrdersBtn
+        : filter === "closed"
+        ? filterClosedBtn
         : filterAllBtn;
     if (activeBtn) {
       activeBtn.style.background = "#111827";
@@ -3274,6 +3373,7 @@ function setupStaffLiveChat() {
   if (filterAllBtn) filterAllBtn.addEventListener("click", () => setStaffChatFilter("all"));
   if (filterSupportBtn) filterSupportBtn.addEventListener("click", () => setStaffChatFilter("support"));
   if (filterOrdersBtn) filterOrdersBtn.addEventListener("click", () => setStaffChatFilter("orders"));
+  if (filterClosedBtn) filterClosedBtn.addEventListener("click", () => setStaffChatFilter("closed"));
 
   subscribeToAllChats((sessions) => {
     allStaffChatSessions = sessions;
@@ -3324,13 +3424,8 @@ function setupStaffLiveChat() {
         staffSessionUnreadCounts.set(s.id, unread);
 
         if (latestMsg) {
-          const textPreview =
-            latestMsg.content ||
-            latestMsg.text ||
-            latestMsg.message ||
-            (latestMsg.type === 1 || latestMsg.attachmentUrl || latestMsg.imageUrl
-              ? "[Photo Attachment]"
-              : "");
+          const { mediaUrl, displayText } = parseChatMessageContent(latestMsg);
+          const textPreview = displayText || (mediaUrl ? "[Photo Attachment]" : "No message text");
 
           staffSessionLatestMessages.set(s.id, {
             text: textPreview,
@@ -3345,11 +3440,8 @@ function setupStaffLiveChat() {
 
         if (unread > prevUnread && activeStaffChatSessionId !== s.id) {
           playStaffChatNotificationSound();
-          const preview =
-            latestMsg?.content ||
-            latestMsg?.text ||
-            latestMsg?.message ||
-            "Sent an attachment";
+          const { mediaUrl, displayText } = parseChatMessageContent(latestMsg || {});
+          const preview = displayText || (mediaUrl ? "Sent a photo attachment" : "Sent a message");
           showStaffChatNotificationToast(preview, s);
         }
 
@@ -3399,6 +3491,11 @@ function setupStaffLiveChat() {
     if (!sessionsListEl) return;
 
     let filteredSessions = sessions.filter((s) => {
+      if (currentStaffChatFilter === "closed") {
+        return Boolean(s.isClosed);
+      }
+      if (s.isClosed) return false;
+
       if (currentStaffChatFilter === "support") return s.sessionType === "support";
       if (currentStaffChatFilter === "orders") return s.sessionType === "order";
       return true;
@@ -3415,15 +3512,25 @@ function setupStaffLiveChat() {
       });
     }
 
+    if (staffChatTotalCount) {
+      if (staffChatSearchQuery || currentStaffChatFilter !== "all") {
+        staffChatTotalCount.textContent = `${filteredSessions.length} / ${sessions.length}`;
+      } else {
+        staffChatTotalCount.textContent = `${sessions.length} Chats`;
+      }
+    }
+
     if (filteredSessions.length === 0) {
       if (staffChatSearchQuery) {
-        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No conversations found matching "${escapeHtml(staffChatSearchQuery)}".</div>`;
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #94a3b8; font-size: 0.85rem;">No conversations found matching "${escapeHtml(staffChatSearchQuery)}".</div>`;
       } else {
-        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #94a3b8; font-size: 0.85rem;">No ${
           currentStaffChatFilter === "support"
             ? "general live support"
             : currentStaffChatFilter === "orders"
             ? "order crafting"
+            : currentStaffChatFilter === "closed"
+            ? "closed / archived"
             : "active"
         } conversations found.</div>`;
       }
@@ -3465,44 +3572,50 @@ function setupStaffLiveChat() {
       const item = document.createElement("div");
       item.className = "chat-session-item";
       item.setAttribute("data-session-id", s.id);
-      item.style.cssText = `padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
+      item.style.cssText = `padding: 12px 14px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
         isSelected ? "#eff6ff" : unreadCount > 0 ? "#fef2f2" : "#fff"
       }; border-left: ${
         isSelected ? "4px solid #3b82f6" : unreadCount > 0 ? "4px solid #ef4444" : "4px solid transparent"
       }; transition: background 0.15s;`;
 
       item.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <strong style="font-size: 0.85rem; color: ${unreadCount > 0 ? "#991b1b" : "#111827"}; display: flex; align-items: center; gap: 6px;">
-            ${escapeHtml(s.customerName || "Customer")}
-            ${
-              isSupport
-                ? `<span style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Live Support</span>`
-                : `<span style="font-weight: 400; color: #6b7280; font-size: 0.76rem;">#${escapeHtml(s.orderId || s.id)}</span>`
-            }
-          </strong>
-          <span style="font-size: 0.72rem; color: #9ca3af;">${timeStr}</span>
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <span style="font-size: 0.70rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: ${
-            isSupport ? "#ecfdf5" : "#f3f4f6"
-          }; color: ${isSupport ? "#047857" : "#4b5563"};">
-            ${escapeHtml(s.status || (isSupport ? "Live Support" : "Placed"))}
-          </span>
-          ${
-            unreadCount > 0
-              ? `<span style="background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount}</span>`
-              : ""
-          }
-        </div>
-        <div style="font-size: 0.78rem; color: ${
-          unreadCount > 0 ? "#111827" : "#6b7280"
-        }; font-weight: ${
-        unreadCount > 0 ? "600" : "400"
-      }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${unreadCount > 0 ? `<span style="color: #ef4444; margin-right: 4px;">●</span>` : ""}${escapeHtml(
-        displayMessage
-      )}
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          ${renderAvatarHtml(s.photoURL, s.customerName, isSupport, 38)}
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <strong style="font-size: 0.85rem; color: ${unreadCount > 0 ? "#991b1b" : "#111827"}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 175px;">
+                ${escapeHtml(s.customerName || "Customer")}
+              </strong>
+              <span style="font-size: 0.70rem; color: #9ca3af; flex-shrink: 0;">${timeStr}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+              ${
+                isSupport
+                  ? `<span style="font-size: 0.66rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Support</span>`
+                  : `<span style="font-size: 0.66rem; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">🧵 #${escapeHtml(s.orderId || s.id)}</span>`
+              }
+              <span style="font-size: 0.66rem; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 500;">
+                ${escapeHtml(s.status || (isSupport ? "Live Support" : "Placed"))}
+              </span>
+              ${
+                s.isClosed
+                  ? `<span style="font-size: 0.66rem; padding: 1px 5px; border-radius: 4px; background: #f3f4f6; color: #64748b; font-weight: 600;">Closed</span>`
+                  : ""
+              }
+              ${
+                unreadCount > 0
+                  ? `<span style="margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount}</span>`
+                  : ""
+              }
+            </div>
+            <div style="font-size: 0.78rem; color: ${
+              unreadCount > 0 ? "#111827" : "#6b7280"
+            }; font-weight: ${
+              unreadCount > 0 ? "600" : "400"
+            }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${unreadCount > 0 ? '<span style="color: #ef4444; margin-right: 4px;">●</span>' : ""}${escapeHtml(displayMessage)}
+            </div>
+          </div>
         </div>
       `;
 
@@ -3516,6 +3629,13 @@ function setupStaffLiveChat() {
 
   const mobileBackBtn = document.getElementById("staff-chat-mobile-back");
   const chatWorkspaceEl = document.getElementById("staff-chat-workspace");
+  const activeAvatarEl = document.getElementById("staff-chat-active-avatar");
+  const staffChatHeaderActions = document.getElementById("staff-chat-header-actions");
+  const optionsMenuBtn = document.getElementById("staff-chat-options-menu-btn");
+  const optionsDropdown = document.getElementById("staff-chat-options-dropdown");
+  const archiveActionBtn = document.getElementById("staff-chat-action-archive");
+  const archiveText = document.getElementById("staff-chat-archive-text");
+  const deleteActionBtn = document.getElementById("staff-chat-action-delete");
 
   if (mobileBackBtn && chatWorkspaceEl) {
     mobileBackBtn.addEventListener("click", () => {
@@ -3523,12 +3643,20 @@ function setupStaffLiveChat() {
     });
   }
 
-  let staffChatVisibleLimit = 5;
+  // Close dropdown on click outside
+  document.addEventListener("click", (e) => {
+    if (optionsDropdown && !e.target.closest(".messenger-header-dropdown-wrap")) {
+      optionsDropdown.style.display = "none";
+    }
+  });
+
+  let staffChatVisibleLimit = 20;
 
   function selectStaffChatSession(session) {
     activeStaffChatSessionId = session.id;
-    staffChatVisibleLimit = 5; // Reset batch to 5 latest messages
+    staffChatVisibleLimit = 20; // Default 20 messages
     const isSupport = session.sessionType === "support";
+    setReplyingMessage(null);
 
     if (chatWorkspaceEl) {
       chatWorkspaceEl.classList.add("mobile-chat-open");
@@ -3538,15 +3666,101 @@ function setupStaffLiveChat() {
     updateStaffNavChatBadge();
     markOrderMessagesAsRead(session.id, "staff", isSupport);
 
+    // Header Avatar
+    if (activeAvatarEl) {
+      activeAvatarEl.innerHTML = renderAvatarHtml(session.photoURL, session.customerName, isSupport, 40);
+    }
+
+    // Configure Header Actions (Messenger Dropdown Options)
+    if (staffChatHeaderActions) {
+      staffChatHeaderActions.style.display = "flex";
+
+      const isArchived = Boolean(session.isArchived || session.isClosed);
+      if (archiveText) {
+        archiveText.textContent = isArchived ? "Unarchive Chat" : "Archive Chat";
+      }
+
+      if (optionsMenuBtn && optionsDropdown) {
+        optionsMenuBtn.onclick = (e) => {
+          e.stopPropagation();
+          const isShown = optionsDropdown.style.display === "flex";
+          optionsDropdown.style.display = isShown ? "none" : "flex";
+        };
+      }
+
+      if (archiveActionBtn) {
+        archiveActionBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (optionsDropdown) optionsDropdown.style.display = "none";
+          try {
+            if (isArchived) {
+              await unarchiveChatSession({ targetId: session.id, isUserSupport: isSupport });
+              session.isArchived = false;
+              session.isClosed = false;
+              showToast("Chat unarchived and moved to Inbox.", "success");
+            } else {
+              await archiveChatSession({ targetId: session.id, isUserSupport: isSupport });
+              session.isArchived = true;
+              session.isClosed = true;
+              showToast("Chat archived.", "info");
+            }
+            renderStaffChatSessionsList(allStaffChatSessions);
+            selectStaffChatSession(session);
+          } catch (err) {
+            showToast(err.message || "Failed to update chat status.", "error");
+          }
+        };
+      }
+
+      if (deleteActionBtn) {
+        deleteActionBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (optionsDropdown) optionsDropdown.style.display = "none";
+          const confirmed = await showConfirmModal({
+            title: "Delete Conversation?",
+            message: "Are you sure you want to delete this entire conversation? All message history will be permanently deleted.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            isDestructive: true,
+          });
+
+          if (confirmed) {
+            try {
+              await deleteConversation({ targetId: session.id, isUserSupport: isSupport });
+              showToast("Conversation deleted.", "info");
+              activeStaffChatSessionId = null;
+              if (chatWorkspaceEl) chatWorkspaceEl.classList.remove("mobile-chat-open");
+              if (customerNameEl) customerNameEl.textContent = "Select a conversation";
+              if (customerEmailEl) customerEmailEl.textContent = "Choose a customer to consult on dimensions/materials";
+              if (activeAvatarEl) activeAvatarEl.innerHTML = "";
+              if (staffChatHeaderActions) staffChatHeaderActions.style.display = "none";
+              if (messagesEl) messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.9rem;">Select a conversation from the left to start chatting.</div>`;
+              if (chatInput) {
+                chatInput.disabled = true;
+                chatInput.placeholder = "Select a conversation to reply...";
+              }
+              if (chatSubmitBtn) {
+                chatSubmitBtn.disabled = true;
+                chatSubmitBtn.style.opacity = "0.6";
+                chatSubmitBtn.style.cursor = "not-allowed";
+              }
+            } catch (err) {
+              showToast(err.message || "Failed to delete conversation.", "error");
+            }
+          }
+        };
+      }
+    }
+
     if (customerNameEl) {
       if (isSupport) {
         customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">💬 LIVE SUPPORT</span>${escapeHtml(
           session.customerName || "Customer"
-        )}`;
+        )}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       } else {
         customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">🧵 ORDER #${escapeHtml(
           session.orderId || session.id
-        )}</span>${escapeHtml(session.customerName || "Customer")}`;
+        )}</span>${escapeHtml(session.customerName || "Customer")}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       }
     }
     if (customerEmailEl) {
@@ -3590,7 +3804,7 @@ function setupStaffLiveChat() {
         loadMoreBtn.innerHTML = `📜 Load earlier messages (${hiddenCount} hidden)`;
         loadMoreBtn.addEventListener("click", () => {
           const oldScrollHeight = messagesEl.scrollHeight;
-          staffChatVisibleLimit += 5;
+          staffChatVisibleLimit += 20;
           renderMessageBatch();
           messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
         });
@@ -3604,9 +3818,7 @@ function setupStaffLiveChat() {
           m.senderId === "support_admin";
 
         const row = document.createElement("div");
-        row.style.cssText = `display: flex; flex-direction: column; align-items: ${
-          isStaff ? "flex-end" : "flex-start"
-        }; margin-bottom: 12px;`;
+        row.className = `chat-message-row ${isStaff ? "is-staff" : "is-customer"}`;
 
         const senderLabel = isStaff
           ? "Workshop Artisan & Staff"
@@ -3617,33 +3829,97 @@ function setupStaffLiveChat() {
           ? timeVal.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           : "";
 
-        const textContent = m.content || m.text || m.message || "";
-        const mediaUrl =
-          m.attachmentUrl || m.imageUrl || (m.type === 1 ? m.content : "") || "";
+        const { mediaUrl, displayText } = parseChatMessageContent(m);
+
+        // Avatar for customer message
+        const avatarCol = !isStaff
+          ? renderAvatarHtml(session.photoURL, senderLabel, isSupport, 32)
+          : "";
+
+        // Quoted Reply HTML
+        const quotedHtml = m.replyTo && m.replyTo.text
+          ? `
+            <div class="chat-quoted-box">
+              <span class="chat-quoted-box-sender">Replying to ${escapeHtml(m.replyTo.senderName || "User")}</span>
+              <span class="chat-quoted-box-text">${escapeHtml(m.replyTo.text)}</span>
+            </div>
+          `
+          : "";
 
         row.innerHTML = `
-          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
-            ${escapeHtml(senderLabel)} • ${timeStr}
-          </span>
-          <div style="max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
-            isStaff ? "#6b4423" : "#ffffff"
-          }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
-          isStaff ? "#6b4423" : "#e5e7eb"
-        }; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            ${
-              m.isUnsent
-                ? `<p style="margin: 0; font-style: italic; color: #9ca3af;">This message was unsent</p>`
-                : textContent
-                ? `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(textContent)}</p>`
-                : ""
-            }
-            ${
-              mediaUrl && !m.isUnsent
-                ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png';" style="max-width: 240px; max-height: 180px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
-                : ""
-            }
+          ${avatarCol}
+          <div class="chat-message-content-wrap">
+            <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
+              ${escapeHtml(senderLabel)} • ${timeStr}
+            </span>
+            <div class="chat-bubble-with-actions">
+              ${
+                m.isUnsent
+                  ? `<div class="chat-bubble-unsent">${isStaff ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}</div>`
+                  : `
+                <div class="chat-bubble-${isStaff ? "staff" : "customer"}" style="padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
+                  isStaff ? "#6b4423" : "#ffffff"
+                }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
+                  isStaff ? "#6b4423" : "#e5e7eb"
+                }; box-shadow: 0 1px 2px rgba(0,0,0,0.05); max-width: 100%;">
+                  ${quotedHtml}
+                  ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
+                  ${
+                    mediaUrl
+                      ? `<a href="${mediaUrl}" target="_blank" rel="noopener" style="display: block; border-radius: 8px; overflow: hidden; max-width: 280px; max-height: 280px; border: 1px solid rgba(0,0,0,0.08); background: #000; text-decoration: none;" title="Click to view full image">
+                          <img src="${mediaUrl}" loading="lazy" style="width: 100%; height: 100%; max-height: 280px; object-fit: contain; display: block;" alt="Attachment" />
+                        </a>`
+                      : ""
+                  }
+                </div>
+                `
+              }
+              ${
+                !m.isUnsent
+                  ? `
+                <div class="chat-msg-actions">
+                  <button type="button" class="chat-msg-action-btn reply-btn" title="Reply to message">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 9V5L3 12l7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+                  </button>
+                  ${
+                    isStaff
+                      ? `<button type="button" class="chat-msg-action-btn unsend unsend-btn" title="More options / Unsend"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>`
+                      : ""
+                  }
+                </div>
+                `
+                  : ""
+              }
+            </div>
           </div>
         `;
+
+        const replyBtn = row.querySelector(".reply-btn");
+        if (replyBtn) {
+          replyBtn.onclick = () => setReplyingMessage(m);
+        }
+
+        const unsendBtn = row.querySelector(".unsend-btn");
+        if (unsendBtn) {
+          unsendBtn.onclick = async () => {
+            const result = await showMessengerUnsendModal({ canUnsendForEveryone: isStaff });
+            if (!result) return;
+            try {
+              await unsendChatMessage({
+                targetId: session.id,
+                messageId: m.id,
+                isUserSupport: isSupport,
+                unsendFor: result.unsendFor,
+                currentUserId: currentUser ? currentUser.uid : "staff",
+              });
+              showToast(result.unsendFor === "everyone" ? "You unsent a message." : "Message removed for you.", "info");
+            } catch (err) {
+              console.error("Unsend error:", err);
+              showToast(err.message || "Could not unsend message.", "error");
+            }
+          };
+        }
+
         messagesEl.appendChild(row);
       });
     }
@@ -3652,7 +3928,7 @@ function setupStaffLiveChat() {
       messagesEl.onscroll = () => {
         if (messagesEl.scrollTop <= 10 && allLoadedMessages.length > staffChatVisibleLimit) {
           const oldScrollHeight = messagesEl.scrollHeight;
-          staffChatVisibleLimit += 5;
+          staffChatVisibleLimit += 20;
           renderMessageBatch();
           messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
         }
@@ -3685,6 +3961,13 @@ function setupStaffLiveChat() {
 
       const activeSession = allStaffChatSessions.find((s) => s.id === activeStaffChatSessionId);
       const isSupport = activeSession?.sessionType === "support";
+      const replyPayload = activeReplyingMessage
+        ? {
+            id: activeReplyingMessage.id,
+            senderName: activeReplyingMessage.senderName || (activeReplyingMessage.senderRole === "admin" || activeReplyingMessage.senderRole === "staff" ? "Workshop Artisan" : "Customer"),
+            text: activeReplyingMessage.text || activeReplyingMessage.content || "[Photo]",
+          }
+        : null;
 
       try {
         let attachmentUrl = "";
@@ -3709,9 +3992,11 @@ function setupStaffLiveChat() {
           receiverId: activeSession?.userId || "customer",
           text: text,
           attachmentUrl: attachmentUrl,
+          replyTo: replyPayload,
         });
 
         if (chatInput) chatInput.value = "";
+        setReplyingMessage(null);
       } catch (err) {
         console.error("Chat send error:", err);
         showToast(err.message || "Failed to send reply.", "error");

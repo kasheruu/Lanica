@@ -8,6 +8,8 @@ import {
   getDocs,
   setDoc,
   addDoc,
+  deleteDoc,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -111,6 +113,7 @@ export async function sendUserSupportMessage({
   receiverId = "",
   text = "",
   attachmentUrl = "",
+  replyTo = null,
 }) {
   if (!userId) throw new Error("Customer user ID is required for live support chat.");
   if (!senderId) throw new Error("Sender ID is required.");
@@ -147,6 +150,14 @@ export async function sendUserSupportMessage({
     isUnsent: false,
   };
 
+  if (replyTo && replyTo.id) {
+    messagePayload.replyTo = {
+      id: replyTo.id,
+      senderName: replyTo.senderName || "User",
+      text: (replyTo.text || replyTo.content || "").slice(0, 150),
+    };
+  }
+
   const docRef = await addDoc(messagesColRef, messagePayload);
 
   // Update parent user document metadata for staff/admin dashboard queues
@@ -158,6 +169,8 @@ export async function sendUserSupportMessage({
     lastSenderName: senderName || (isCustomer ? "Customer" : "Lanica Support"),
     hasUnreadStaff: isCustomer,
     hasUnreadCustomer: !isCustomer,
+    isChatClosed: false,
+    chatStatus: "open",
   };
 
   await setDoc(userDocRef, summaryUpdate, { merge: true }).catch(() => {});
@@ -209,6 +222,7 @@ export function subscribeToUserSupportMessages(userId, callback, errorCallback) 
           isRead: d.isRead ?? true,
           isEdited: Boolean(d.isEdited),
           isUnsent: Boolean(d.isUnsent),
+          replyTo: d.replyTo || null,
           createdAt: d.timestamp || d.createdAt,
           timestamp: d.timestamp || d.createdAt,
         });
@@ -292,6 +306,7 @@ export async function sendChatMessage({
   receiverId = "",
   text = "",
   attachmentUrl = "",
+  replyTo = null,
 }) {
   const targetId = orderId || chatId || userId;
   const isSupport =
@@ -310,6 +325,7 @@ export async function sendChatMessage({
       receiverId,
       text,
       attachmentUrl,
+      replyTo,
     });
   }
 
@@ -349,6 +365,14 @@ export async function sendChatMessage({
     isUnsent: false,
   };
 
+  if (replyTo && replyTo.id) {
+    messagePayload.replyTo = {
+      id: replyTo.id,
+      senderName: replyTo.senderName || "User",
+      text: (replyTo.text || replyTo.content || "").slice(0, 150),
+    };
+  }
+
   const docRef = await addDoc(messagesColRef, messagePayload);
 
   // Update parent order summary metadata for staff/admin dashboard queues
@@ -359,6 +383,8 @@ export async function sendChatMessage({
     lastSenderName: senderName || senderRole,
     hasUnreadCustomer: !isCustomer,
     hasUnreadStaff: isCustomer,
+    isChatClosed: false,
+    chatStatus: "open",
   };
 
   await updateDoc(orderDocRef, summaryUpdate).catch(() => {});
@@ -411,6 +437,7 @@ export function subscribeToMessages(targetId, callback, errorCallback, isUserSup
           isRead: d.isRead ?? true,
           isEdited: Boolean(d.isEdited),
           isUnsent: Boolean(d.isUnsent),
+          replyTo: d.replyTo || null,
           createdAt: d.timestamp || d.createdAt,
           timestamp: d.timestamp || d.createdAt,
         });
@@ -490,7 +517,35 @@ export async function markOrderMessagesAsRead(targetId, role = "admin", isUserSu
 export function subscribeToAllChats(callback, errorCallback) {
   let orderSessions = [];
   let userSupportSessions = [];
+  let rawOrdersDocs = [];
+  const userProfileMap = new Map();
   const scannedUserIds = new Set();
+
+  function enrichOrderSessions() {
+    orderSessions = rawOrdersDocs
+      .filter((d) => !d.chatDeleted && !d.isChatDeleted)
+      .map((d) => {
+        const userProfile = userProfileMap.get(d.userId);
+        const isArch = Boolean(d.isArchived || d.chatStatus === "archived" || d.isChatClosed || d.chatStatus === "closed");
+        return {
+          id: d.id,
+          sessionType: "order",
+          orderId: d.orderId || d.id,
+          userId: d.userId,
+          photoURL: d.customerPhotoURL || d.photoURL || userProfile?.photoURL || "",
+          customerName: d.address?.recipientName || d.userName || d.customerName || userProfile?.name || "Customer",
+          customerEmail: d.customerEmail || d.email || userProfile?.email || "",
+          status: d.orderStatus || d.status || "Placed",
+          isClosed: isArch,
+          isArchived: isArch,
+          lastMessage: d.lastMessage || `Order #${d.orderId || d.id} placed`,
+          updatedAt: d.lastMessageAt || d.createdAt,
+          createdAt: d.createdAt,
+          totalAmount: d.totalAmount || 0,
+          items: d.items || [],
+        };
+      });
+  }
 
   function emitCombined() {
     const combined = [...userSupportSessions, ...orderSessions];
@@ -511,24 +566,11 @@ export function subscribeToAllChats(callback, errorCallback) {
   const unsubOrders = onSnapshot(
     ordersColRef,
     (snapshot) => {
-      orderSessions = [];
+      rawOrdersDocs = [];
       snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        orderSessions.push({
-          id: docSnap.id,
-          sessionType: "order",
-          orderId: d.orderId || docSnap.id,
-          userId: d.userId,
-          customerName: d.address?.recipientName || d.userName || d.customerName || "Customer",
-          customerEmail: d.customerEmail || d.email || "",
-          status: d.orderStatus || d.status || "Placed",
-          lastMessage: d.lastMessage || `Order #${d.orderId || docSnap.id} placed`,
-          updatedAt: d.lastMessageAt || d.createdAt,
-          createdAt: d.createdAt,
-          totalAmount: d.totalAmount || 0,
-          items: d.items || [],
-        });
+        rawOrdersDocs.push({ id: docSnap.id, ...docSnap.data() });
       });
+      enrichOrderSessions();
       emitCombined();
     },
     (err) => {
@@ -537,7 +579,7 @@ export function subscribeToAllChats(callback, errorCallback) {
     }
   );
 
-  // 2. Listen to users for overall customer support chat
+  // 2. Listen to users for overall customer support chat and profile photos
   const usersColRef = collection(db, "users");
   const unsubUsers = onSnapshot(
     usersColRef,
@@ -547,6 +589,19 @@ export function subscribeToAllChats(callback, errorCallback) {
       for (const docSnap of snapshot.docs) {
         const d = docSnap.data();
         const uid = docSnap.id;
+
+        const photo = d.photoURL || d.profilePic || d.avatarUrl || "";
+        const name = d.displayName || d.name || d.fullName || (d.email ? d.email.split("@")[0] : "Customer");
+        userProfileMap.set(uid, {
+          photoURL: photo,
+          name: name,
+          email: d.email || "",
+        });
+
+        // Skip chats marked as deleted
+        if (d.chatDeleted || d.isChatDeleted) {
+          continue;
+        }
 
         // An active support session if user has hasSupportChat, lastMessage, or has messages subcollection
         let hasSupport = Boolean(d.hasSupportChat || d.lastMessage || d.hasUnreadStaff != null);
@@ -567,15 +622,19 @@ export function subscribeToAllChats(callback, errorCallback) {
         }
 
         if (hasSupport) {
+          const isArch = Boolean(d.isArchived || d.chatStatus === "archived" || d.isChatClosed || d.chatStatus === "closed");
           activeUserSessions.push({
             id: `user_${uid}`,
             actualId: uid,
             sessionType: "support",
             isUserSupport: true,
             userId: uid,
-            customerName: d.displayName || d.name || d.fullName || (d.email ? d.email.split("@")[0] : "Customer"),
+            photoURL: photo,
+            customerName: name,
             customerEmail: d.email || "",
             status: "Live Support",
+            isClosed: isArch,
+            isArchived: isArch,
             lastMessage: d.lastMessage || "Live customer inquiry",
             updatedAt: d.lastMessageAt || d.createdAt,
             createdAt: d.createdAt || d.lastMessageAt,
@@ -585,6 +644,7 @@ export function subscribeToAllChats(callback, errorCallback) {
       }
 
       userSupportSessions = activeUserSessions;
+      enrichOrderSessions();
       emitCombined();
     },
     (err) => {
@@ -597,6 +657,227 @@ export function subscribeToAllChats(callback, errorCallback) {
     unsubUsers();
   };
 }
+
+/**
+ * Marks a message as unsent across either order messages or user support messages.
+ * Messenger style: supports unsendFor: "everyone" | "you".
+ */
+export async function unsendChatMessage({
+  targetId,
+  messageId,
+  isUserSupport = false,
+  unsendFor = "everyone",
+  currentUserId = null,
+}) {
+  if (!targetId || !messageId) throw new Error("Target ID and message ID are required.");
+
+  const isSupport = isUserSupport || String(targetId).startsWith("user_");
+  const cleanId = String(targetId).replace(/^user_/, "");
+
+  const msgRef = isSupport
+    ? doc(db, "users", cleanId, "messages", messageId)
+    : doc(db, "orders", cleanId, "messages", messageId);
+
+  if (unsendFor === "everyone") {
+    await updateDoc(msgRef, {
+      isUnsent: true,
+      unsentBy: currentUserId || null,
+      content: "This message was unsent",
+      text: "This message was unsent",
+      message: "This message was unsent",
+      attachmentUrl: null,
+      imageUrl: null,
+      unsentAt: serverTimestamp(),
+    });
+
+    const parentRef = isSupport
+      ? doc(db, "users", cleanId)
+      : doc(db, "orders", cleanId);
+
+    await updateDoc(parentRef, {
+      lastMessage: "A message was unsent",
+      lastMessageAt: serverTimestamp(),
+    }).catch(() => {});
+  } else {
+    // Hidden only for the current user
+    const hideKey = currentUserId ? `hiddenFor_${currentUserId}` : `hiddenFor_user`;
+    await updateDoc(msgRef, {
+      [hideKey]: true,
+    }).catch(() => {});
+  }
+}
+
+/**
+ * Displays Facebook Messenger-style modal dialog asking:
+ * "Who do you want to unsend this for?"
+ * Returns Promise<{ unsendFor: "everyone" | "you" } | null>
+ */
+export function showMessengerUnsendModal({ canUnsendForEveryone = true } = {}) {
+  return new Promise((resolve) => {
+    // Remove any existing dialog
+    const existing = document.querySelector(".messenger-unsend-backdrop");
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "messenger-unsend-backdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+
+    backdrop.innerHTML = `
+      <div class="messenger-unsend-modal">
+        <div class="messenger-unsend-header">
+          <h3 class="messenger-unsend-title">Who do you want to unsend this for?</h3>
+        </div>
+        <div class="messenger-unsend-body">
+          ${
+            canUnsendForEveryone
+              ? `
+            <label class="messenger-unsend-radio-row">
+              <input type="radio" name="messenger_unsend_choice" value="everyone" checked />
+              <div class="messenger-unsend-radio-info">
+                <span class="messenger-unsend-radio-title">Unsend for everyone</span>
+                <span class="messenger-unsend-radio-desc">This message will be removed for everyone in the chat.</span>
+              </div>
+            </label>
+            `
+              : ""
+          }
+          <label class="messenger-unsend-radio-row">
+            <input type="radio" name="messenger_unsend_choice" value="you" ${!canUnsendForEveryone ? "checked" : ""} />
+            <div class="messenger-unsend-radio-info">
+              <span class="messenger-unsend-radio-title">Unsend for you</span>
+              <span class="messenger-unsend-radio-desc">This message will be removed from your view only. Others in the chat will still see it.</span>
+            </div>
+          </label>
+        </div>
+        <div class="messenger-unsend-footer">
+          <button type="button" class="messenger-btn-cancel">Cancel</button>
+          <button type="button" class="messenger-btn-confirm">Unsend</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+    requestAnimationFrame(() => backdrop.classList.add("visible"));
+
+    const closeWith = (val) => {
+      backdrop.classList.remove("visible");
+      setTimeout(() => {
+        try { backdrop.remove(); } catch (_) {}
+      }, 200);
+      resolve(val);
+    };
+
+    backdrop.querySelector(".messenger-btn-cancel").onclick = () => closeWith(null);
+    backdrop.onclick = (e) => {
+      if (e.target === backdrop) closeWith(null);
+    };
+
+    backdrop.querySelector(".messenger-btn-confirm").onclick = () => {
+      const selected = backdrop.querySelector('input[name="messenger_unsend_choice"]:checked');
+      closeWith({ unsendFor: selected ? selected.value : "everyone" });
+    };
+  });
+}
+
+/**
+ * Archives an order or support chat session (Messenger style: moves to Archived folder).
+ */
+export async function archiveChatSession({ targetId, isUserSupport = false }) {
+  if (!targetId) throw new Error("Target ID is required.");
+
+  const isSupport = isUserSupport || String(targetId).startsWith("user_");
+  const cleanId = String(targetId).replace(/^user_/, "");
+
+  const parentRef = isSupport
+    ? doc(db, "users", cleanId)
+    : doc(db, "orders", cleanId);
+
+  await updateDoc(parentRef, {
+    isArchived: true,
+    isChatClosed: true,
+    chatStatus: "archived",
+    archivedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Unarchives a chat session (Messenger style: restores back to Inbox).
+ */
+export async function unarchiveChatSession({ targetId, isUserSupport = false }) {
+  if (!targetId) throw new Error("Target ID is required.");
+
+  const isSupport = isUserSupport || String(targetId).startsWith("user_");
+  const cleanId = String(targetId).replace(/^user_/, "");
+
+  const parentRef = isSupport
+    ? doc(db, "users", cleanId)
+    : doc(db, "orders", cleanId);
+
+  await updateDoc(parentRef, {
+    isArchived: false,
+    isChatClosed: false,
+    chatStatus: "open",
+    unarchivedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Deletes an entire conversation permanently from Firestore (Messenger style: Delete conversation).
+ */
+export async function deleteConversation({ targetId, isUserSupport = false }) {
+  if (!targetId) throw new Error("Target ID is required.");
+
+  const isSupport = isUserSupport || String(targetId).startsWith("user_");
+  const cleanId = String(targetId).replace(/^user_/, "");
+
+  const messagesColRef = isSupport
+    ? collection(db, "users", cleanId, "messages")
+    : collection(db, "orders", cleanId, "messages");
+
+  const snap = await getDocs(messagesColRef);
+  if (!snap.empty) {
+    const batch = writeBatch(db);
+    snap.forEach((d) => {
+      batch.delete(d.ref);
+    });
+    await batch.commit();
+  }
+
+  const parentRef = isSupport
+    ? doc(db, "users", cleanId)
+    : doc(db, "orders", cleanId);
+
+  if (isSupport) {
+    await updateDoc(parentRef, {
+      hasSupportChat: false,
+      chatDeleted: true,
+      lastMessage: "",
+      lastMessageAt: null,
+      isArchived: false,
+      isChatClosed: false,
+      chatStatus: "deleted",
+      hasUnreadStaff: false,
+      hasUnreadCustomer: false,
+    }).catch(() => {});
+  } else {
+    await updateDoc(parentRef, {
+      chatDeleted: true,
+      lastMessage: "",
+      lastMessageAt: null,
+      isArchived: false,
+      isChatClosed: false,
+      chatStatus: "deleted",
+      hasUnreadStaff: false,
+      hasUnreadCustomer: false,
+    }).catch(() => {});
+  }
+}
+
+// Aliases for compatibility
+export const closeChatSession = archiveChatSession;
+export const reopenChatSession = unarchiveChatSession;
+export const deleteChatHistory = deleteConversation;
 
 import { compressAndResizeImage } from "./imageOptimizationService.js";
 

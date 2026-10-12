@@ -52,6 +52,8 @@ import {
   subscribeToUserSupportMessages,
   markUserSupportMessagesAsRead,
   uploadChatAttachment,
+  unsendChatMessage,
+  showMessengerUnsendModal,
 } from "./chatService.js";
 
 // Global State
@@ -2109,8 +2111,74 @@ function setupLiveChatWidget() {
     });
   }
 
+  function parseChatMessageContent(m) {
+    if (!m) return { mediaUrl: "", displayText: "" };
+
+    let mediaUrl =
+      m.attachmentUrl ||
+      m.imageUrl ||
+      (m.type === 1 && typeof m.content === "string" ? m.content : "") ||
+      "";
+
+    let rawText = m.text || m.message || m.content || "";
+    if (typeof rawText !== "string") rawText = "";
+    rawText = rawText.trim();
+
+    const isUrl = rawText.startsWith("http://") || rawText.startsWith("https://");
+    const isImageTarget =
+      isUrl &&
+      (/\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i.test(rawText) ||
+        rawText.includes("firebasestorage.googleapis.com") ||
+        rawText.includes("firebasestorage.app") ||
+        rawText.includes("/lanica_chats"));
+
+    if (!mediaUrl && isImageTarget) {
+      mediaUrl = rawText;
+    }
+
+    let displayText = rawText;
+    if (mediaUrl && (displayText === mediaUrl || isImageTarget)) {
+      displayText = "";
+    }
+
+    return { mediaUrl, displayText };
+  }
+
+  let activeCustomerReplyingMessage = null;
+  let currentCustomerLoadedMessages = [];
+
+  function setCustomerReplyingMessage(msg) {
+    activeCustomerReplyingMessage = msg;
+    let previewEl = document.getElementById("products-chat-reply-preview");
+    if (!previewEl && form) {
+      previewEl = document.createElement("div");
+      previewEl.id = "products-chat-reply-preview";
+      previewEl.className = "customer-chat-reply-preview";
+      previewEl.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: #f8fafc; border-top: 1px solid #e2e8f0; border-left: 3px solid #6b4423; font-size: 0.78rem;";
+      form.parentNode.insertBefore(previewEl, form);
+    }
+    if (!previewEl) return;
+    if (!msg) {
+      previewEl.style.display = "none";
+      return;
+    }
+    const sender = msg.senderName || (msg.senderRole === "admin" || msg.senderRole === "staff" ? "Lanica Support" : "You");
+    const snippet = msg.text || msg.content || (msg.attachmentUrl ? "[Photo]" : "");
+    previewEl.innerHTML = `
+      <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        <strong style="color: #6b4423;">Replying to ${escapeHtml(sender)}:</strong>
+        <span style="font-style: italic; color: #64748b; margin-left: 4px;">${escapeHtml(snippet)}</span>
+      </div>
+      <button type="button" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-weight: bold; font-size: 0.85rem;" title="Cancel reply">✕</button>
+    `;
+    previewEl.style.display = "flex";
+    previewEl.querySelector("button").onclick = () => setCustomerReplyingMessage(null);
+    if (textInput) textInput.focus();
+  }
+
   function renderMessagesList(messages, channelType, orderNum = "") {
     if (!messagesArea) return;
+    currentCustomerLoadedMessages = messages || [];
 
     const welcomeHtml =
       channelType === "support"
@@ -2152,8 +2220,8 @@ function setupLiveChatWidget() {
           html += `
             <div class="chat-msg-row ${roleClass}">
               <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
-              <div class="chat-msg-bubble unsent">
-                This message was unsent
+              <div class="chat-bubble-unsent">
+                ${isMe ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}
               </div>
               ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
             </div>
@@ -2161,16 +2229,40 @@ function setupLiveChatWidget() {
           return;
         }
 
+        const { mediaUrl, displayText } = parseChatMessageContent(m);
+
+        const quotedHtml = m.replyTo && m.replyTo.text
+          ? `
+            <div class="chat-quoted-box">
+              <span class="chat-quoted-box-sender">Replying to ${escapeHtml(m.replyTo.senderName || "User")}</span>
+              <span class="chat-quoted-box-text">${escapeHtml(m.replyTo.text)}</span>
+            </div>
+          `
+          : "";
+
         html += `
-          <div class="chat-msg-row ${roleClass}">
+          <div class="chat-msg-row ${roleClass}" data-msg-id="${m.id}">
             <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
-            <div class="chat-msg-bubble">
-              ${m.text || m.message || m.content ? `<p style="margin: 0;">${escapeHtml(m.text || m.message || m.content)}</p>` : ""}
-              ${
-                m.attachmentUrl || m.imageUrl
-                  ? `<a href="${m.attachmentUrl || m.imageUrl}" target="_blank" rel="noopener"><img src="${m.attachmentUrl || m.imageUrl}" class="chat-msg-img" alt="Attachment" /></a>`
-                  : ""
-              }
+            <div class="chat-bubble-with-actions">
+              <div class="chat-msg-bubble">
+                ${quotedHtml}
+                ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
+                ${
+                  mediaUrl
+                    ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" class="chat-msg-img" alt="Attachment" /></a>`
+                    : ""
+                }
+              </div>
+              <div class="chat-msg-actions">
+                <button type="button" class="chat-msg-action-btn reply-btn" data-msg-id="${m.id}" title="Reply">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 9V5L3 12l7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+                </button>
+                ${
+                  isMe
+                    ? `<button type="button" class="chat-msg-action-btn unsend unsend-btn" data-msg-id="${m.id}" title="More options / Unsend"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>`
+                    : ""
+                }
+              </div>
             </div>
             ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
           </div>
@@ -2179,6 +2271,37 @@ function setupLiveChatWidget() {
     }
 
     messagesArea.innerHTML = html;
+
+    messagesArea.onclick = async (e) => {
+      const replyBtn = e.target.closest(".reply-btn");
+      if (replyBtn) {
+        const msgId = replyBtn.getAttribute("data-msg-id");
+        const msg = currentCustomerLoadedMessages.find((x) => x.id === msgId);
+        if (msg) setCustomerReplyingMessage(msg);
+        return;
+      }
+      const unsendBtn = e.target.closest(".unsend-btn");
+      if (unsendBtn) {
+        const msgId = unsendBtn.getAttribute("data-msg-id");
+        const res = await showMessengerUnsendModal({ canUnsendForEveryone: true });
+        if (!res) return;
+        try {
+          const target = channelType === "support" ? currentUser.uid : activeChatOrderId;
+          await unsendChatMessage({
+            targetId: target,
+            messageId: msgId,
+            isUserSupport: channelType === "support",
+            unsendFor: res.unsendFor,
+            currentUserId: currentUser ? currentUser.uid : null,
+          });
+          showToast(res.unsendFor === "everyone" ? "You unsent a message." : "Message removed for you.", "info");
+        } catch (err) {
+          console.error("Unsend error:", err);
+          showToast(err.message || "Failed to unsend message.", "error");
+        }
+      }
+    };
+
     scrollChatToBottom();
   }
 
@@ -2281,6 +2404,18 @@ function setupLiveChatWidget() {
           if (previewBox) previewBox.style.display = "none";
         }
 
+        const replyPayload = activeCustomerReplyingMessage
+          ? {
+              id: activeCustomerReplyingMessage.id,
+              senderName:
+                activeCustomerReplyingMessage.senderName ||
+                (activeCustomerReplyingMessage.senderRole === "admin" || activeCustomerReplyingMessage.senderRole === "staff"
+                  ? "Lanica Support"
+                  : "You"),
+              text: activeCustomerReplyingMessage.text || activeCustomerReplyingMessage.content || "[Photo]",
+            }
+          : null;
+
         if (currentChannel === "support") {
           await sendChatMessage({
             userId: currentUser.uid,
@@ -2290,6 +2425,7 @@ function setupLiveChatWidget() {
             text: text,
             attachmentUrl: attachmentUrl,
             channel: "support",
+            replyTo: replyPayload,
           });
         } else if (activeChatOrderId) {
           await sendChatMessage({
@@ -2300,10 +2436,12 @@ function setupLiveChatWidget() {
             text: text,
             attachmentUrl: attachmentUrl,
             channel: "order",
+            replyTo: replyPayload,
           });
         }
 
         if (textInput) textInput.value = "";
+        setCustomerReplyingMessage(null);
         scrollChatToBottom();
       } catch (err) {
         console.error("Error sending chat message:", err);

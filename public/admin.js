@@ -34,6 +34,11 @@ import {
   sendChatMessage,
   uploadChatAttachment,
   markOrderMessagesAsRead,
+  unsendChatMessage,
+  showMessengerUnsendModal,
+  archiveChatSession,
+  unarchiveChatSession,
+  deleteConversation,
 } from "./chatService.js";
 
 import {
@@ -3031,6 +3036,7 @@ let adminInvCurrentPage = 1;
 let adminInvPerPage = 10;
 let dashRecentOrdersCurrentPage = 1;
 let dashRecentOrdersPerPage = 5;
+let dashOrdersSearchQuery = "";
 let adminTransCurrentPage = 1;
 let adminTransPerPage = 10;
 let adminTransSearchQuery = "";
@@ -3870,55 +3876,165 @@ function exportInventoryCsv() {
 }
 
 function updateDashboardKpis(products, orders) {
+  const greetingEl = document.getElementById("dash-greeting-time");
+  if (greetingEl) {
+    const now = new Date();
+    const hour = now.getHours();
+    const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const dateFormatted = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    greetingEl.textContent = `${timeGreeting}, Administrator • ${dateFormatted} • Real-time Made-to-Order fulfillment & operational metrics.`;
+  }
+
   const totalProducts = products ? products.length : 0;
   const activeOrders = orders ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete") : [];
+  const lowStockProducts = products ? products.filter((p) => Number(p.stock) <= 3) : [];
 
-  // Workshop Queue: active orders in Made-to-Order production lifecycle
-  const workshopQueueCount = activeOrders.filter((o) => {
+  let placedCount = 0;
+  let downpaymentCount = 0;
+  let productionCount = 0;
+  let qcCount = 0;
+  let shippedCount = 0;
+  let deliveredCount = 0;
+  let totalRevenue = 0;
+  let totalCollected = 0;
+
+  activeOrders.forEach((o) => {
     const st = normalizeOrderStatus(o.status);
-    return st === "placed" || st === "downpayment confirmed" || st === "in production" || st === "quality checked";
-  }).length;
+    if (st === "placed" || st === "pending") placedCount++;
+    else if (st === "downpayment confirmed" || st === "slot reserved") downpaymentCount++;
+    else if (st === "in production" || st === "crafting") productionCount++;
+    else if (st === "quality checked") qcCount++;
+    else if (st === "shipped") shippedCount++;
+    else if (st === "delivered") deliveredCount++;
 
-  const pendingOrdersCount = activeOrders.filter((o) => {
-    const st = normalizeOrderStatus(o.status);
-    return st === "placed" || st === "downpayment confirmed";
-  }).length;
+    if (st !== "cancelled" && st !== "declined") {
+      const totalVal = Number(o.total != null ? o.total : o.totalAmount) || 0;
+      totalRevenue += totalVal;
 
-  const totalRevenue = activeOrders
-    .filter((o) => {
-      const st = normalizeOrderStatus(o.status);
-      return st !== "cancelled";
-    })
-    .reduce((sum, o) => sum + (Number(o.total != null ? o.total : o.totalAmount) || 0), 0);
+      const isDown = o.paymentOption === "downpayment" || Number(o.downpaymentAmount) > 0;
+      const isAwaitingCounter = o.paymentStatus === "awaiting_counter_downpayment";
+      const paidVal = isAwaitingCounter
+        ? Number(o.downpaymentPaid || 0)
+        : Number(o.downpaymentAmount ?? (isDown ? Math.round(totalVal * 0.3) : totalVal));
+      const balanceDue = Number(o.remainingBalance ?? o.balanceDue ?? (isDown ? Math.max(0, totalVal - paidVal) : 0));
+      const isSettled = o.balanceStatus === "settled" || balanceDue <= 0;
+      totalCollected += isSettled ? totalVal : paidVal;
+    }
+  });
+
+  const pendingCount = placedCount + downpaymentCount;
+  const workshopQueueCount = placedCount + downpaymentCount + productionCount + qcCount;
+  const fulfilledCount = shippedCount + deliveredCount;
+  const totalBalance = Math.max(0, totalRevenue - totalCollected);
 
   if (dashTotalRevenueEl) {
     dashTotalRevenueEl.textContent =
       "₱" + totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-  if (dashPendingOrdersEl) dashPendingOrdersEl.textContent = String(pendingOrdersCount);
+
+  const revCollectedEl = document.getElementById("dash-revenue-collected");
+  if (revCollectedEl) {
+    revCollectedEl.textContent = `₱${totalCollected.toLocaleString("en-US", { maximumFractionDigits: 0 })} Collected • ₱${totalBalance.toLocaleString("en-US", { maximumFractionDigits: 0 })} Balance`;
+  }
+
+  if (dashPendingOrdersEl) dashPendingOrdersEl.textContent = String(pendingCount);
   if (dashLowStockEl) dashLowStockEl.textContent = String(workshopQueueCount);
+
+  const fulfilledEl = document.getElementById("dash-fulfilled-orders");
+  if (fulfilledEl) fulfilledEl.textContent = String(fulfilledCount);
+
   if (dashTotalProductsEl) dashTotalProductsEl.textContent = String(totalProducts);
 
-  renderDashboardRecentOrders(activeOrders.slice(0, 5));
+  const lowStockSubEl = document.getElementById("dash-low-stock-sub");
+  if (lowStockSubEl) {
+    if (lowStockProducts.length > 0) {
+      lowStockSubEl.textContent = `⚠️ ${lowStockProducts.length} low stock items`;
+      lowStockSubEl.style.color = "#dc2626";
+      lowStockSubEl.style.fontWeight = "700";
+    } else {
+      lowStockSubEl.textContent = "All stock levels normal";
+      lowStockSubEl.style.color = "#64748b";
+      lowStockSubEl.style.fontWeight = "400";
+    }
+  }
+
+  // Update Production Lifecycle Pipeline Badges
+  const pipePlaced = document.getElementById("pipe-count-placed");
+  const pipeDp = document.getElementById("pipe-count-downpayment");
+  const pipeProd = document.getElementById("pipe-count-production");
+  const pipeQc = document.getElementById("pipe-count-qc");
+  const pipeShip = document.getElementById("pipe-count-shipped");
+  const pipeDeliv = document.getElementById("pipe-count-delivered");
+  if (pipePlaced) pipePlaced.textContent = String(placedCount);
+  if (pipeDp) pipeDp.textContent = String(downpaymentCount);
+  if (pipeProd) pipeProd.textContent = String(productionCount);
+  if (pipeQc) pipeQc.textContent = String(qcCount);
+  if (pipeShip) pipeShip.textContent = String(shippedCount);
+  if (pipeDeliv) pipeDeliv.textContent = String(deliveredCount);
+
+  // Update Stock Watchlist Widget
+  const watchlistItemsEl = document.getElementById("dash-watchlist-items");
+  const watchlistBadgeEl = document.getElementById("dash-widget-lowstock-badge");
+  if (watchlistBadgeEl) {
+    watchlistBadgeEl.textContent = `${lowStockProducts.length} Items`;
+    watchlistBadgeEl.style.background = lowStockProducts.length > 0 ? "#fef2f2" : "#f0fdf4";
+    watchlistBadgeEl.style.color = lowStockProducts.length > 0 ? "#dc2626" : "#16a34a";
+  }
+  if (watchlistItemsEl) {
+    if (lowStockProducts.length === 0) {
+      watchlistItemsEl.innerHTML = `<div style="font-size: 0.8rem; color: #10b981; text-align: center; padding: 12px 0;">✓ All inventory items are adequately stocked.</div>`;
+    } else {
+      watchlistItemsEl.innerHTML = lowStockProducts.slice(0, 5).map((p) => `
+        <div class="dash-watchlist-row">
+          <div style="min-width: 0; flex: 1; padding-right: 8px;">
+            <div style="font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name || "Product")}</div>
+            <span style="font-size: 0.72rem; color: #dc2626; font-weight: 700;">Stock: ${p.stock ?? 0} remaining</span>
+          </div>
+          <button type="button" class="dash-action-btn-sm btn-edit-watchlist" data-product-id="${escapeHtml(p.id)}" style="flex-shrink: 0;">
+            Edit
+          </button>
+        </div>
+      `).join("");
+    }
+  }
+
+  // Ensure interactive listeners are wired
+  initDashboardInteractiveListeners();
+
+  // Render recent orders (all active orders passed so pagination and search work properly!)
+  renderDashboardRecentOrders(activeOrders);
 }
 
-function renderDashboardRecentOrders(recentOrders) {
+function renderDashboardRecentOrders(orders) {
   if (!dashRecentOrdersListEl) return;
   dashRecentOrdersListEl.innerHTML = "";
 
-  if (!recentOrders || recentOrders.length === 0) {
-    dashRecentOrdersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: #6b7280;">No customer orders recorded yet.</td></tr>`;
+  const allActive = orders || [];
+  let filtered = allActive;
+  if (dashOrdersSearchQuery && dashOrdersSearchQuery.trim()) {
+    const q = dashOrdersSearchQuery.toLowerCase().trim();
+    filtered = allActive.filter((o) => {
+      const idMatch = (o.id || "").toLowerCase().includes(q);
+      const cust = resolveCustomerDisplay(o).toLowerCase();
+      const itemsSummary = formatOrderItemsSummary(o.items).toLowerCase();
+      const st = normalizeOrderStatus(o.status).toLowerCase();
+      return idMatch || cust.includes(q) || itemsSummary.includes(q) || st.includes(q);
+    });
+  }
+
+  if (filtered.length === 0) {
+    dashRecentOrdersListEl.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: #6b7280;">No orders matching current search or filter.</td></tr>`;
     renderDashRecentOrdersPagination(0, 1);
     return;
   }
 
-  const totalItems = recentOrders.length;
+  const totalItems = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / dashRecentOrdersPerPage));
   if (dashRecentOrdersCurrentPage > totalPages) dashRecentOrdersCurrentPage = totalPages;
   if (dashRecentOrdersCurrentPage < 1) dashRecentOrdersCurrentPage = 1;
 
   const startIndex = (dashRecentOrdersCurrentPage - 1) * dashRecentOrdersPerPage;
-  const pagedOrders = recentOrders.slice(startIndex, startIndex + dashRecentOrdersPerPage);
+  const pagedOrders = filtered.slice(startIndex, startIndex + dashRecentOrdersPerPage);
 
   pagedOrders.forEach((order) => {
     const st = normalizeOrderStatus(order.status);
@@ -3937,14 +4053,33 @@ function renderDashboardRecentOrders(recentOrders) {
         ? `₱${Number(total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         : "—";
 
+    const isDown = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+    const paidVal = Number(order.downpaymentAmount || Math.round(Number(total || 0) * 0.3));
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong style="font-size:0.88rem;">${escapeHtml((order.id || "").slice(0, 8))}…</strong></td>
-      <td>${escapeHtml(String(customer))}</td>
-      <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
-      <td><strong>${totalStr}</strong></td>
+      <td><strong style="font-size:0.86rem; color:#0f172a;">#${escapeHtml((order.id || "").slice(0, 8))}</strong></td>
+      <td>
+        <div style="font-weight:600; color:#1e293b; font-size:0.86rem;">${escapeHtml(String(customer))}</div>
+        ${order.email || order.userEmail ? `<div style="font-size:0.74rem; color:#64748b;">${escapeHtml(order.email || order.userEmail)}</div>` : ''}
+      </td>
+      <td class="order-items-cell" style="max-width:190px;">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
+      <td>
+        <strong style="color:#0f172a; font-size:0.88rem;">${totalStr}</strong>
+        ${isDown ? `<div style="font-size:0.71rem; color:#2563eb; font-weight:600; margin-top:2px;">Partial (₱${paidVal.toLocaleString()})</div>` : ''}
+      </td>
       <td><span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(st.charAt(0).toUpperCase() + st.slice(1))}</span></td>
-      <td style="font-size:0.85rem; color:#6b7280;">${escapeHtml(dateStr)}</td>
+      <td style="font-size:0.82rem; color:#64748b;">${escapeHtml(dateStr)}</td>
+      <td style="text-align: center; white-space: nowrap;">
+        <div style="display: inline-flex; gap: 6px;">
+          <button type="button" class="dash-action-btn-sm btn-dash-view-order" data-order-id="${escapeHtml(order.id)}" title="View Order Summary & Details">
+            👁️ View
+          </button>
+          <button type="button" class="dash-action-btn-sm dash-action-btn-voucher btn-dash-voucher" data-order-id="${escapeHtml(order.id)}" title="Generate / Print Official Voucher">
+            📑 Voucher
+          </button>
+        </div>
+      </td>
     `;
     dashRecentOrdersListEl.appendChild(tr);
   });
@@ -3973,6 +4108,114 @@ function renderDashRecentOrdersPagination(totalItems, totalPages) {
       dashRecentOrdersCurrentPage = 1;
       updateDashboardKpis(allProducts, allOrders);
     },
+  });
+}
+
+function initDashboardInteractiveListeners() {
+  const listEl = document.getElementById("dash-recent-orders-list");
+  if (listEl && !listEl.dataset.bound) {
+    listEl.dataset.bound = "true";
+    listEl.addEventListener("click", (e) => {
+      const viewBtn = e.target.closest(".btn-dash-view-order");
+      if (viewBtn) {
+        const orderId = viewBtn.getAttribute("data-order-id");
+        if (orderId && typeof showOrderSummaryModal === "function") {
+          showOrderSummaryModal(orderId);
+        }
+        return;
+      }
+      const voucherBtn = e.target.closest(".btn-dash-voucher");
+      if (voucherBtn) {
+        const orderId = voucherBtn.getAttribute("data-order-id");
+        if (orderId && typeof openLanicaReceiptModal === "function") {
+          openLanicaReceiptModal(orderId, "voucher");
+        }
+        return;
+      }
+    });
+  }
+
+  const searchInput = document.getElementById("dash-orders-search-input");
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = "true";
+    let debounce = null;
+    searchInput.addEventListener("input", (e) => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        dashOrdersSearchQuery = e.target.value;
+        dashRecentOrdersCurrentPage = 1;
+        updateDashboardKpis(allProducts, allOrders);
+      }, 200);
+    });
+  }
+
+  const pipelineContainer = document.querySelector(".dashboard-pipeline-steps");
+  if (pipelineContainer && !pipelineContainer.dataset.bound) {
+    pipelineContainer.dataset.bound = "true";
+    pipelineContainer.addEventListener("click", (e) => {
+      const stepItem = e.target.closest(".pipeline-step-item");
+      if (!stepItem) return;
+      const stage = stepItem.getAttribute("data-stage");
+      if (stage) {
+        if (stage === "in production" || stage === "quality checked") {
+          showAdminSection("workshop");
+        } else {
+          showAdminSection("orders");
+          if (ordersStatusFilter) {
+            ordersStatusFilter.value = stage;
+            ordersFilterValue = stage;
+            applyOrdersFilter();
+          }
+        }
+      }
+    });
+  }
+
+  const watchlistItemsEl = document.getElementById("dash-watchlist-items");
+  if (watchlistItemsEl && !watchlistItemsEl.dataset.bound) {
+    watchlistItemsEl.dataset.bound = "true";
+    watchlistItemsEl.addEventListener("click", (e) => {
+      const editBtn = e.target.closest(".btn-edit-watchlist");
+      if (editBtn) {
+        const pId = editBtn.getAttribute("data-product-id");
+        if (pId && typeof window.editProduct === "function") {
+          window.editProduct(pId);
+        }
+      }
+    });
+  }
+
+  const btnOpenChat = document.getElementById("dash-btn-open-chat");
+  const actionChats = document.getElementById("dash-action-chats");
+  [btnOpenChat, actionChats].forEach((btn) => {
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", () => showAdminSection("chats"));
+    }
+  });
+
+  const btnViewInv = document.getElementById("dash-btn-view-inventory");
+  if (btnViewInv && !btnViewInv.dataset.bound) {
+    btnViewInv.dataset.bound = "true";
+    btnViewInv.addEventListener("click", () => showAdminSection("inventory"));
+  }
+
+  const btnOpenTrans = document.getElementById("dash-btn-open-transactions");
+  if (btnOpenTrans && !btnOpenTrans.dataset.bound) {
+    btnOpenTrans.dataset.bound = "true";
+    btnOpenTrans.addEventListener("click", () => showAdminSection("transactions"));
+  }
+
+  const actionWorkshop = document.getElementById("dash-action-workshop");
+  const linkWorkshop = document.getElementById("dash-link-workshop-all");
+  [actionWorkshop, linkWorkshop].forEach((btn) => {
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        showAdminSection("workshop");
+      });
+    }
   });
 }
 
@@ -6925,9 +7168,39 @@ if (ordersListEl) {
   });
 }
 
-function showOrderSummaryModal(orderId) {
-  const order = allOrders.find((o) => o.id === orderId);
-  if (!order) return;
+async function showOrderSummaryModal(orderId) {
+  if (!orderId) return;
+
+  let order = Array.isArray(allOrders)
+    ? allOrders.find(
+        (o) =>
+          o.id === orderId ||
+          o.orderId === orderId ||
+          String(o.orderNumber) === String(orderId)
+      )
+    : null;
+
+  if (!order) {
+    try {
+      const snap = await getDoc(doc(db, "orders", orderId));
+      if (snap.exists()) {
+        order = { id: snap.id, ...snap.data() };
+      } else {
+        const q = query(collection(db, "orders"), where("orderId", "==", String(orderId)));
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          order = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch order for summary modal:", err);
+    }
+  }
+
+  if (!order) {
+    showToast("Order details could not be found.", "error");
+    return;
+  }
 
   const modal = document.createElement("div");
   modal.className = "modal active";
@@ -6973,7 +7246,7 @@ function showOrderSummaryModal(orderId) {
     <div style="background: #ffffff; border-radius: 16px; max-width: 580px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); padding: 24px;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
         <div>
-          <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a;">Order Summary #${escapeHtml(order.id.slice(0, 8))}</h3>
+          <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a;">Order Summary #${escapeHtml(String(order.orderId || order.id || "").slice(0, 8))}</h3>
           <div style="font-size: 0.78rem; color: #64748b; margin-top: 3px;">Placed on ${formatOrderDate(order.createdAt)}</div>
         </div>
         <button type="button" class="btn-close-modal" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
@@ -7515,14 +7788,70 @@ function updateAdminNavChatBadge() {
   });
 
   const navBadge = document.getElementById("nav-chat-unread-badge");
+  const dashBadge = document.getElementById("dash-chat-badge");
+  const dashWidgetCount = document.getElementById("dash-widget-chat-count");
+  const unreadFilterBadge = document.getElementById("admin-chat-unread-filter-badge");
+
+  const countStr = totalUnread > 99 ? "99+" : String(totalUnread);
   if (navBadge) {
     if (totalUnread > 0) {
-      navBadge.textContent = totalUnread > 99 ? "99+" : String(totalUnread);
+      navBadge.textContent = countStr;
       navBadge.style.display = "inline-block";
     } else {
       navBadge.style.display = "none";
     }
   }
+  if (dashBadge) {
+    if (totalUnread > 0) {
+      dashBadge.textContent = countStr;
+      dashBadge.style.display = "inline-block";
+    } else {
+      dashBadge.style.display = "none";
+    }
+  }
+  if (unreadFilterBadge) {
+    unreadFilterBadge.textContent = String(totalUnread);
+  }
+  if (dashWidgetCount) {
+    dashWidgetCount.textContent = totalUnread > 0 ? `${countStr} Unread` : `${allChatSessions.length} Active`;
+    dashWidgetCount.style.background = totalUnread > 0 ? "#fef2f2" : "#eff6ff";
+    dashWidgetCount.style.color = totalUnread > 0 ? "#dc2626" : "#2563eb";
+  }
+}
+
+function parseChatMessageContent(m) {
+  if (!m) return { mediaUrl: "", displayText: "" };
+
+  let mediaUrl =
+    m.attachmentUrl ||
+    m.imageUrl ||
+    (m.type === 1 && typeof m.content === "string" ? m.content : "") ||
+    "";
+
+  let rawText = m.text || m.message || m.content || "";
+  if (typeof rawText !== "string") rawText = "";
+  rawText = rawText.trim();
+
+  // Detect if rawText is an image URL (Firebase Storage or direct image file)
+  const isUrl = rawText.startsWith("http://") || rawText.startsWith("https://");
+  const isImageTarget =
+    isUrl &&
+    (/\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i.test(rawText) ||
+      rawText.includes("firebasestorage.googleapis.com") ||
+      rawText.includes("firebasestorage.app") ||
+      rawText.includes("/lanica_chats"));
+
+  if (!mediaUrl && isImageTarget) {
+    mediaUrl = rawText;
+  }
+
+  // If rawText matches mediaUrl or is purely an image URL, do not show the raw URL string as text
+  let displayText = rawText;
+  if (mediaUrl && (displayText === mediaUrl || isImageTarget)) {
+    displayText = "";
+  }
+
+  return { mediaUrl, displayText };
 }
 
 function setupAdminLiveChat() {
@@ -7532,6 +7861,10 @@ function setupAdminLiveChat() {
   const customerEmailEl = document.getElementById("admin-chat-customer-email");
   const chatForm = document.getElementById("admin-chat-form");
   const chatInput = document.getElementById("admin-chat-input");
+  const chatSubmitBtn = document.getElementById("admin-chat-submit-btn");
+  const chatHeaderActions = document.getElementById("admin-chat-header-actions");
+  const chatViewOrderBtn = document.getElementById("admin-chat-view-order-btn");
+  const chatTotalCount = document.getElementById("admin-chat-total-count");
   const fileInput = document.getElementById("admin-chat-file-input");
   const attachBtn = document.getElementById("admin-chat-attach-btn");
   const attachPreview = document.getElementById("admin-chat-attachment-preview");
@@ -7569,34 +7902,95 @@ function setupAdminLiveChat() {
 
   let currentChatFilter = "all";
   const filterAllBtn = document.getElementById("admin-chat-filter-all");
+  const filterUnreadBtn = document.getElementById("admin-chat-filter-unread");
   const filterSupportBtn = document.getElementById("admin-chat-filter-support");
   const filterOrdersBtn = document.getElementById("admin-chat-filter-orders");
+  const filterClosedBtn = document.getElementById("admin-chat-filter-closed");
+
+  // Reply Quoting State
+  let activeReplyingMessage = null;
+  const replyPreviewEl = document.getElementById("admin-chat-reply-preview");
+  const replySenderEl = document.getElementById("admin-chat-reply-sender");
+  const replySnippetEl = document.getElementById("admin-chat-reply-snippet");
+  const cancelReplyBtn = document.getElementById("admin-chat-cancel-reply");
+
+  function setReplyingMessage(m) {
+    activeReplyingMessage = m;
+    if (replyPreviewEl && replySenderEl && replySnippetEl) {
+      if (m) {
+        const { mediaUrl, displayText } = parseChatMessageContent(m);
+        const snippet = displayText || (mediaUrl ? "[Photo Attachment]" : "Message");
+        replySenderEl.textContent = m.senderName || (m.senderRole === "admin" || m.senderRole === "staff" ? "Lanica Workshop" : "Customer");
+        replySnippetEl.textContent = `"${snippet.slice(0, 65)}${snippet.length > 65 ? "..." : ""}"`;
+        replyPreviewEl.style.display = "flex";
+        if (chatInput) chatInput.focus();
+      } else {
+        replyPreviewEl.style.display = "none";
+      }
+    }
+  }
+
+  if (cancelReplyBtn) {
+    cancelReplyBtn.addEventListener("click", () => setReplyingMessage(null));
+  }
+
+  function renderAvatarHtml(photoURL, name, isSupport = false, size = 36) {
+    const nameParts = (name || "Customer").trim().split(/\s+/);
+    const initials = nameParts.length > 1
+      ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+      : (nameParts[0].slice(0, 2)).toUpperCase();
+
+    const bg = isSupport ? "#fef3c7" : "#f1f5f9";
+    const fg = isSupport ? "#92400e" : "#334155";
+    const border = isSupport ? "#fde68a" : "#e2e8f0";
+
+    const fallback = `<span style="display: ${photoURL ? "none" : "flex"}; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: ${Math.round(size * 0.38)}px; font-weight: 700; color: ${fg}; user-select: none;">${escapeHtml(initials)}</span>`;
+
+    if (photoURL && (photoURL.startsWith("http://") || photoURL.startsWith("https://") || photoURL.startsWith("data:"))) {
+      return `
+        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: ${bg}; border: 1.5px solid ${border}; position: relative; display: flex; align-items: center; justify-content: center;">
+          <img src="${escapeHtml(photoURL)}" alt="${escapeHtml(name)}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+          ${fallback}
+        </div>
+      `;
+    }
+
+    return `
+      <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: ${bg}; border: 1.5px solid ${border}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <span style="font-size: ${Math.round(size * 0.38)}px; font-weight: 700; color: ${fg}; user-select: none;">${escapeHtml(initials)}</span>
+      </div>
+    `;
+  }
 
   function setChatFilter(filter) {
     currentChatFilter = filter;
-    [filterAllBtn, filterSupportBtn, filterOrdersBtn].forEach((btn) => {
+    [filterAllBtn, filterUnreadBtn, filterSupportBtn, filterOrdersBtn, filterClosedBtn].forEach((btn) => {
       if (!btn) return;
-      btn.style.background = "#fff";
-      btn.style.color = "#374151";
-      btn.style.border = "1px solid #d1d5db";
+      btn.classList.remove("active");
+      btn.removeAttribute("data-active");
     });
     const activeBtn =
-      filter === "support"
+      filter === "unread"
+        ? filterUnreadBtn
+        : filter === "support"
         ? filterSupportBtn
         : filter === "orders"
         ? filterOrdersBtn
+        : filter === "closed"
+        ? filterClosedBtn
         : filterAllBtn;
     if (activeBtn) {
-      activeBtn.style.background = "#111827";
-      activeBtn.style.color = "#fff";
-      activeBtn.style.border = "none";
+      activeBtn.classList.add("active");
+      activeBtn.setAttribute("data-active", "true");
     }
     renderChatSessionsList(allChatSessions);
   }
 
   if (filterAllBtn) filterAllBtn.addEventListener("click", () => setChatFilter("all"));
+  if (filterUnreadBtn) filterUnreadBtn.addEventListener("click", () => setChatFilter("unread"));
   if (filterSupportBtn) filterSupportBtn.addEventListener("click", () => setChatFilter("support"));
   if (filterOrdersBtn) filterOrdersBtn.addEventListener("click", () => setChatFilter("orders"));
+  if (filterClosedBtn) filterClosedBtn.addEventListener("click", () => setChatFilter("closed"));
 
   // Subscribe to all conversations (both live support & orders)
   subscribeToAllChats((sessions) => {
@@ -7649,13 +8043,8 @@ function setupAdminLiveChat() {
         sessionUnreadCounts.set(s.id, unread);
 
         if (latestMsg) {
-          const textPreview =
-            latestMsg.content ||
-            latestMsg.text ||
-            latestMsg.message ||
-            (latestMsg.type === 1 || latestMsg.attachmentUrl || latestMsg.imageUrl
-              ? "[Photo Attachment]"
-              : "");
+          const { mediaUrl, displayText } = parseChatMessageContent(latestMsg);
+          const textPreview = displayText || (mediaUrl ? "[Photo Attachment]" : "No message text");
 
           sessionLatestMessages.set(s.id, {
             text: textPreview,
@@ -7671,11 +8060,8 @@ function setupAdminLiveChat() {
         // New unread customer message notification
         if (unread > prevUnread && activeChatSessionId !== s.id) {
           playChatNotificationSound();
-          const preview =
-            latestMsg?.content ||
-            latestMsg?.text ||
-            latestMsg?.message ||
-            "Sent an attachment";
+          const { mediaUrl, displayText } = parseChatMessageContent(latestMsg || {});
+          const preview = displayText || (mediaUrl ? "Sent a photo attachment" : "Sent a message");
           showChatNotificationToast(preview, s);
         }
 
@@ -7724,8 +8110,14 @@ function setupAdminLiveChat() {
   function renderChatSessionsList(sessions) {
     if (!sessionsListEl) return;
 
-    // Filter by active category tab
+    // Filter by active category tab (exclude closed threads from active tabs)
     let filteredSessions = sessions.filter((s) => {
+      if (currentChatFilter === "closed") {
+        return Boolean(s.isClosed);
+      }
+      if (s.isClosed) return false;
+
+      if (currentChatFilter === "unread") return (sessionUnreadCounts.get(s.id) || 0) > 0;
       if (currentChatFilter === "support") return s.sessionType === "support";
       if (currentChatFilter === "orders") return s.sessionType === "order";
       return true;
@@ -7743,15 +8135,27 @@ function setupAdminLiveChat() {
       });
     }
 
+    if (chatTotalCount) {
+      if (adminChatSearchQuery || currentChatFilter !== "all") {
+        chatTotalCount.textContent = `${filteredSessions.length} / ${sessions.length}`;
+      } else {
+        chatTotalCount.textContent = `${sessions.length} Chats`;
+      }
+    }
+
     if (filteredSessions.length === 0) {
       if (adminChatSearchQuery) {
-        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No conversations found matching "${escapeHtml(adminChatSearchQuery)}".</div>`;
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #94a3b8; font-size: 0.85rem;">No conversations found matching "${escapeHtml(adminChatSearchQuery)}".</div>`;
       } else {
-        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #9ca3af; font-size: 0.85rem;">No ${
-          currentChatFilter === "support"
+        sessionsListEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #94a3b8; font-size: 0.85rem;">No ${
+          currentChatFilter === "unread"
+            ? "unread"
+            : currentChatFilter === "support"
             ? "general live support"
             : currentChatFilter === "orders"
             ? "order crafting"
+            : currentChatFilter === "closed"
+            ? "closed / archived"
             : "active"
         } conversations found.</div>`;
       }
@@ -7792,46 +8196,47 @@ function setupAdminLiveChat() {
         : "";
 
       const item = document.createElement("div");
-      item.className = "chat-session-item";
+      item.className = `chat-session-item ${isSelected ? "is-selected" : ""} ${unreadCount > 0 ? "has-unread" : ""}`;
       item.setAttribute("data-session-id", s.id);
-      item.style.cssText = `padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
-        isSelected ? "#eff6ff" : unreadCount > 0 ? "#fef2f2" : "#fff"
-      }; border-left: ${
-        isSelected ? "4px solid #3b82f6" : unreadCount > 0 ? "4px solid #ef4444" : "4px solid transparent"
-      }; transition: background 0.15s;`;
 
       item.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <strong style="font-size: 0.85rem; color: ${unreadCount > 0 ? "#991b1b" : "#111827"}; display: flex; align-items: center; gap: 6px;">
-            ${escapeHtml(s.customerName || "Customer")}
-            ${
-              isSupport
-                ? `<span style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Live Support</span>`
-                : `<span style="font-weight: 400; color: #6b7280; font-size: 0.76rem;">#${escapeHtml(s.orderId || s.id)}</span>`
-            }
-          </strong>
-          <span style="font-size: 0.72rem; color: #9ca3af;">${timeStr}</span>
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <span style="font-size: 0.70rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: ${
-            isSupport ? "#ecfdf5" : "#f3f4f6"
-          }; color: ${isSupport ? "#047857" : "#4b5563"};">
-            ${escapeHtml(s.status || (isSupport ? "Live Support" : "Placed"))}
-          </span>
-          ${
-            unreadCount > 0
-              ? `<span style="background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount}</span>`
-              : ""
-          }
-        </div>
-        <div style="font-size: 0.78rem; color: ${
-          unreadCount > 0 ? "#111827" : "#6b7280"
-        }; font-weight: ${
-        unreadCount > 0 ? "600" : "400"
-      }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${unreadCount > 0 ? `<span style="color: #ef4444; margin-right: 4px;">●</span>` : ""}${escapeHtml(
-        displayMessage
-      )}
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          ${renderAvatarHtml(s.photoURL, s.customerName, isSupport, 38)}
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <strong style="font-size: 0.84rem; color: ${unreadCount > 0 ? "#0f172a" : "#1e293b"}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 175px;">
+                ${escapeHtml(s.customerName || "Customer")}
+              </strong>
+              <span style="font-size: 0.70rem; color: #94a3b8; flex-shrink: 0;">${timeStr}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+              ${
+                isSupport
+                  ? `<span style="font-size: 0.66rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Support</span>`
+                  : `<span style="font-size: 0.66rem; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">🧵 #${escapeHtml(s.orderId || s.id)}</span>`
+              }
+              <span style="font-size: 0.66rem; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 500;">
+                ${escapeHtml(s.status || (isSupport ? "Active" : "Placed"))}
+              </span>
+              ${
+                s.isClosed
+                  ? `<span style="font-size: 0.66rem; padding: 1px 5px; border-radius: 4px; background: #f3f4f6; color: #64748b; font-weight: 600;">Closed</span>`
+                  : ""
+              }
+              ${
+                unreadCount > 0
+                  ? `<span style="margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 9999px; line-height: 1.2;">${unreadCount}</span>`
+                  : ""
+              }
+            </div>
+            <div style="font-size: 0.76rem; color: ${
+              unreadCount > 0 ? "#0f172a" : "#64748b"
+            }; font-weight: ${
+              unreadCount > 0 ? "600" : "400"
+            }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${unreadCount > 0 ? '<span style="color: #ef4444; margin-right: 3px;">●</span>' : ""}${escapeHtml(displayMessage)}
+            </div>
+          </div>
         </div>
       `;
 
@@ -7845,6 +8250,12 @@ function setupAdminLiveChat() {
 
   const mobileBackBtn = document.getElementById("admin-chat-mobile-back");
   const chatWorkspaceEl = document.getElementById("admin-chat-workspace");
+  const activeAvatarEl = document.getElementById("admin-chat-active-avatar");
+  const optionsMenuBtn = document.getElementById("admin-chat-options-menu-btn");
+  const optionsDropdown = document.getElementById("admin-chat-options-dropdown");
+  const archiveActionBtn = document.getElementById("admin-chat-action-archive");
+  const archiveText = document.getElementById("admin-chat-archive-text");
+  const deleteActionBtn = document.getElementById("admin-chat-action-delete");
 
   if (mobileBackBtn && chatWorkspaceEl) {
     mobileBackBtn.addEventListener("click", () => {
@@ -7852,12 +8263,20 @@ function setupAdminLiveChat() {
     });
   }
 
-  let adminChatVisibleLimit = 5;
+  // Close dropdown on click outside
+  document.addEventListener("click", (e) => {
+    if (optionsDropdown && !e.target.closest(".messenger-header-dropdown-wrap")) {
+      optionsDropdown.style.display = "none";
+    }
+  });
+
+  let adminChatVisibleLimit = 20;
 
   function selectChatSession(session) {
     activeChatSessionId = session.id;
-    adminChatVisibleLimit = 5; // Reset batch to 5 latest messages
+    adminChatVisibleLimit = 20; // Default to 20 messages batch
     const isSupport = session.sessionType === "support";
+    setReplyingMessage(null);
 
     if (chatWorkspaceEl) {
       chatWorkspaceEl.classList.add("mobile-chat-open");
@@ -7868,15 +8287,132 @@ function setupAdminLiveChat() {
     updateAdminNavChatBadge();
     markOrderMessagesAsRead(session.id, "admin", isSupport);
 
+    // Enable chat input & submit button
+    if (chatInput) {
+      chatInput.disabled = false;
+      chatInput.style.background = "#ffffff";
+      chatInput.placeholder = session.isArchived || session.isClosed
+        ? "Type to send a message and unarchive this conversation..."
+        : "Type a message or WIP photo update...";
+      chatInput.focus();
+    }
+    if (chatSubmitBtn) {
+      chatSubmitBtn.disabled = false;
+      chatSubmitBtn.style.opacity = "1";
+      chatSubmitBtn.style.cursor = "pointer";
+    }
+
+    // Header Avatar
+    if (activeAvatarEl) {
+      activeAvatarEl.innerHTML = renderAvatarHtml(session.photoURL, session.customerName, isSupport, 40);
+    }
+
+    // Configure Header Actions (Order, Messenger Dropdown Options)
+    if (chatHeaderActions) {
+      chatHeaderActions.style.display = "flex";
+
+      if (chatViewOrderBtn) {
+        if (!isSupport && (session.orderId || session.id)) {
+          chatViewOrderBtn.style.display = "inline-flex";
+          chatViewOrderBtn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const orderDocId = session.id || session.orderId;
+            if (typeof showOrderSummaryModal === "function") {
+              await showOrderSummaryModal(orderDocId);
+            }
+          };
+        } else {
+          chatViewOrderBtn.style.display = "none";
+        }
+      }
+
+      const isArchived = Boolean(session.isArchived || session.isClosed);
+      if (archiveText) {
+        archiveText.textContent = isArchived ? "Unarchive Chat" : "Archive Chat";
+      }
+
+      if (optionsMenuBtn && optionsDropdown) {
+        optionsMenuBtn.onclick = (e) => {
+          e.stopPropagation();
+          const isShown = optionsDropdown.style.display === "flex";
+          optionsDropdown.style.display = isShown ? "none" : "flex";
+        };
+      }
+
+      if (archiveActionBtn) {
+        archiveActionBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (optionsDropdown) optionsDropdown.style.display = "none";
+          try {
+            if (isArchived) {
+              await unarchiveChatSession({ targetId: session.id, isUserSupport: isSupport });
+              session.isArchived = false;
+              session.isClosed = false;
+              showToast("Chat unarchived and moved to Inbox.", "success");
+            } else {
+              await archiveChatSession({ targetId: session.id, isUserSupport: isSupport });
+              session.isArchived = true;
+              session.isClosed = true;
+              showToast("Chat archived.", "info");
+            }
+            renderChatSessionsList(allChatSessions);
+            selectChatSession(session);
+          } catch (err) {
+            showToast(err.message || "Failed to update chat status.", "error");
+          }
+        };
+      }
+
+      if (deleteActionBtn) {
+        deleteActionBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (optionsDropdown) optionsDropdown.style.display = "none";
+          const confirmed = await showConfirmModal({
+            title: "Delete Conversation?",
+            message: "Are you sure you want to delete this entire conversation? All message history will be permanently deleted.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            isDestructive: true,
+          });
+
+          if (confirmed) {
+            try {
+              await deleteConversation({ targetId: session.id, isUserSupport: isSupport });
+              showToast("Conversation deleted.", "info");
+              activeChatSessionId = null;
+              if (chatWorkspaceEl) chatWorkspaceEl.classList.remove("mobile-chat-open");
+              if (customerNameEl) customerNameEl.textContent = "Select a conversation";
+              if (customerEmailEl) customerEmailEl.textContent = "Choose a customer from the left panel to begin";
+              if (activeAvatarEl) activeAvatarEl.innerHTML = "";
+              if (chatHeaderActions) chatHeaderActions.style.display = "none";
+              if (messagesEl) messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.9rem;">Select a conversation from the left to start chatting.</div>`;
+              if (chatInput) {
+                chatInput.disabled = true;
+                chatInput.placeholder = "Select a conversation to reply...";
+              }
+              if (chatSubmitBtn) {
+                chatSubmitBtn.disabled = true;
+                chatSubmitBtn.style.opacity = "0.6";
+                chatSubmitBtn.style.cursor = "not-allowed";
+              }
+            } catch (err) {
+              showToast(err.message || "Failed to delete conversation.", "error");
+            }
+          }
+        };
+      }
+    }
+
     if (customerNameEl) {
       if (isSupport) {
         customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">💬 LIVE SUPPORT</span>${escapeHtml(
           session.customerName || "Customer"
-        )}`;
+        )}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       } else {
         customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">🧵 ORDER #${escapeHtml(
           session.orderId || session.id
-        )}</span>${escapeHtml(session.customerName || "Customer")}`;
+        )}</span>${escapeHtml(session.customerName || "Customer")}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       }
     }
     if (customerEmailEl) {
@@ -7920,7 +8456,7 @@ function setupAdminLiveChat() {
         loadMoreBtn.innerHTML = `📜 Load earlier messages (${hiddenCount} hidden)`;
         loadMoreBtn.addEventListener("click", () => {
           const oldScrollHeight = messagesEl.scrollHeight;
-          adminChatVisibleLimit += 5;
+          adminChatVisibleLimit += 20;
           renderMessageBatch();
           messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
         });
@@ -7934,9 +8470,7 @@ function setupAdminLiveChat() {
           m.senderId === "support_admin";
 
         const row = document.createElement("div");
-        row.style.cssText = `display: flex; flex-direction: column; align-items: ${
-          isStaff ? "flex-end" : "flex-start"
-        }; margin-bottom: 12px;`;
+        row.className = `chat-message-row ${isStaff ? "is-staff" : "is-customer"}`;
 
         const senderLabel = isStaff
           ? "Lanica Workshop & Admin"
@@ -7947,33 +8481,97 @@ function setupAdminLiveChat() {
           ? timeVal.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           : "";
 
-        const textContent = m.content || m.text || m.message || "";
-        const mediaUrl =
-          m.attachmentUrl || m.imageUrl || (m.type === 1 ? m.content : "") || "";
+        const { mediaUrl, displayText } = parseChatMessageContent(m);
+
+        // Avatar for customer message
+        const avatarCol = !isStaff
+          ? renderAvatarHtml(session.photoURL, senderLabel, isSupport, 32)
+          : "";
+
+        // Quoted Reply HTML
+        const quotedHtml = m.replyTo && m.replyTo.text
+          ? `
+            <div class="chat-quoted-box">
+              <span class="chat-quoted-box-sender">Replying to ${escapeHtml(m.replyTo.senderName || "User")}</span>
+              <span class="chat-quoted-box-text">${escapeHtml(m.replyTo.text)}</span>
+            </div>
+          `
+          : "";
 
         row.innerHTML = `
-          <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
-            ${escapeHtml(senderLabel)} • ${timeStr}
-          </span>
-          <div style="max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
-            isStaff ? "#6b4423" : "#ffffff"
-          }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
-          isStaff ? "#6b4423" : "#e5e7eb"
-        }; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            ${
-              m.isUnsent
-                ? `<p style="margin: 0; font-style: italic; color: #9ca3af;">This message was unsent</p>`
-                : textContent
-                ? `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(textContent)}</p>`
-                : ""
-            }
-            ${
-              mediaUrl && !m.isUnsent
-                ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" style="max-width: 240px; max-height: 180px; border-radius: 6px; margin-top: 6px; display: block;" /></a>`
-                : ""
-            }
+          ${avatarCol}
+          <div class="chat-message-content-wrap">
+            <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
+              ${escapeHtml(senderLabel)} • ${timeStr}
+            </span>
+            <div class="chat-bubble-with-actions">
+              ${
+                m.isUnsent
+                  ? `<div class="chat-bubble-unsent">${isStaff ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}</div>`
+                  : `
+                <div class="chat-bubble-${isStaff ? "staff" : "customer"}" style="padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
+                  isStaff ? "#6b4423" : "#ffffff"
+                }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
+                  isStaff ? "#6b4423" : "#e5e7eb"
+                }; box-shadow: 0 1px 2px rgba(0,0,0,0.05); max-width: 100%;">
+                  ${quotedHtml}
+                  ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
+                  ${
+                    mediaUrl
+                      ? `<a href="${mediaUrl}" target="_blank" rel="noopener" style="display: block; border-radius: 8px; overflow: hidden; max-width: 280px; max-height: 280px; border: 1px solid rgba(0,0,0,0.08); background: #000; text-decoration: none;" title="Click to view full image">
+                          <img src="${mediaUrl}" loading="lazy" style="width: 100%; height: 100%; max-height: 280px; object-fit: contain; display: block;" alt="Attachment" />
+                        </a>`
+                      : ""
+                  }
+                </div>
+                `
+              }
+              ${
+                !m.isUnsent
+                  ? `
+                <div class="chat-msg-actions">
+                  <button type="button" class="chat-msg-action-btn reply-btn" title="Reply to message">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 9V5L3 12l7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+                  </button>
+                  ${
+                    isStaff
+                      ? `<button type="button" class="chat-msg-action-btn unsend unsend-btn" title="More options / Unsend"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>`
+                      : ""
+                  }
+                </div>
+                `
+                  : ""
+              }
+            </div>
           </div>
         `;
+
+        const replyBtn = row.querySelector(".reply-btn");
+        if (replyBtn) {
+          replyBtn.onclick = () => setReplyingMessage(m);
+        }
+
+        const unsendBtn = row.querySelector(".unsend-btn");
+        if (unsendBtn) {
+          unsendBtn.onclick = async () => {
+            const result = await showMessengerUnsendModal({ canUnsendForEveryone: isStaff });
+            if (!result) return;
+            try {
+              await unsendChatMessage({
+                targetId: session.id,
+                messageId: m.id,
+                isUserSupport: isSupport,
+                unsendFor: result.unsendFor,
+                currentUserId: currentUser ? currentUser.uid : "admin",
+              });
+              showToast(result.unsendFor === "everyone" ? "You unsent a message." : "Message removed for you.", "info");
+            } catch (err) {
+              console.error("Unsend error:", err);
+              showToast(err.message || "Could not unsend message.", "error");
+            }
+          };
+        }
+
         messagesEl.appendChild(row);
       });
     }
@@ -7982,7 +8580,7 @@ function setupAdminLiveChat() {
       messagesEl.onscroll = () => {
         if (messagesEl.scrollTop <= 10 && allLoadedMessages.length > adminChatVisibleLimit) {
           const oldScrollHeight = messagesEl.scrollHeight;
-          adminChatVisibleLimit += 5;
+          adminChatVisibleLimit += 20;
           renderMessageBatch();
           messagesEl.scrollTop = messagesEl.scrollHeight - oldScrollHeight;
         }
@@ -8016,6 +8614,13 @@ function setupAdminLiveChat() {
 
       const activeSession = allChatSessions.find((s) => s.id === activeChatSessionId);
       const isSupport = activeSession?.sessionType === "support";
+      const replyPayload = activeReplyingMessage
+        ? {
+            id: activeReplyingMessage.id,
+            senderName: activeReplyingMessage.senderName || (activeReplyingMessage.senderRole === "admin" || activeReplyingMessage.senderRole === "staff" ? "Lanica Workshop" : "Customer"),
+            text: activeReplyingMessage.text || activeReplyingMessage.content || "[Photo]",
+          }
+        : null;
 
       try {
         let attachmentUrl = "";
@@ -8040,9 +8645,11 @@ function setupAdminLiveChat() {
           receiverId: activeSession?.userId || "customer",
           text: text,
           attachmentUrl: attachmentUrl,
+          replyTo: replyPayload,
         });
 
         if (chatInput) chatInput.value = "";
+        setReplyingMessage(null);
       } catch (err) {
         console.error("Chat send error:", err);
         showToast(err.message || "Failed to send reply.", "error");

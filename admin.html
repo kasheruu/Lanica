@@ -132,21 +132,44 @@
   <main class="admin-main">
     <!-- Dashboard Section -->
     <div id="dashboard-section" class="admin-section">
-      <header class="admin-header">
+      <!-- Executive Welcome & Operations Header -->
+      <header class="admin-header dashboard-executive-header">
         <div>
-          <h1>Dashboard Overview</h1>
-          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time operational summary & key performance metrics.</p>
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap;">
+            <h1 style="margin: 0; font-size: 1.85rem; font-weight: 800; color: #0f172a;">Executive Dashboard</h1>
+            <span class="pulse-indicator-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; color: #059669; font-size: 0.76rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid #a7f3d0;">
+              <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; animation: pulse 1.8s infinite;"></span>
+              Realtime Sync Active
+            </span>
+          </div>
+          <p id="dash-greeting-time" class="admin-subtitle" style="margin: 0; color: #64748b; font-size: 0.88rem;">
+            Real-time operations summary, Made-to-Order lifecycle &amp; key store metrics.
+          </p>
         </div>
         <div class="dashboard-quick-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-          <button id="dash-action-add-product" class="btn-primary" type="button">+ Add New Product</button>
-          <button id="dash-action-view-orders" class="btn-secondary" type="button">View All Orders</button>
-          <button id="dash-action-export-csv" class="btn-secondary" type="button">Export Inventory CSV</button>
+          <button id="dash-action-add-product" class="btn-primary" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
+            <span>+</span> Add New Product
+          </button>
+          <button id="dash-action-view-orders" class="btn-secondary" type="button">
+            📦 Orders Hub
+          </button>
+          <button id="dash-action-workshop" class="btn-secondary" type="button">
+            🔨 Workshop Queue
+          </button>
+          <button id="dash-action-chats" class="btn-secondary" type="button" style="position: relative;">
+            💬 Live Chat
+            <span id="dash-chat-badge" style="display: none; background: #ef4444; color: #fff; font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 9999px; margin-left: 4px;">0</span>
+          </button>
+          <button id="dash-action-export-csv" class="btn-secondary" type="button" title="Export product inventory to CSV">
+            📥 Export CSV
+          </button>
         </div>
       </header>
 
-      <!-- KPI Cards Grid -->
+      <!-- KPI Cards Grid (5-Card High-Impact Suite) -->
       <div class="stats-grid dashboard-kpi-grid">
-        <div class="stat-card kpi-card">
+        <!-- 1. Total Gross Sales -->
+        <div class="stat-card kpi-card kpi-revenue">
           <div class="kpi-icon-wrapper revenue-icon">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="1" x2="12" y2="23"></line>
@@ -154,13 +177,14 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Total Sales / Revenue</h3>
+            <h3>Total Sales (Gross)</h3>
             <p class="stat-value" id="dash-total-revenue">₱0.00</p>
-            <span class="kpi-subtitle">From completed orders</span>
+            <span class="kpi-subtitle" id="dash-revenue-collected">₱0.00 Collected • ₱0.00 Balance</span>
           </div>
         </div>
 
-        <div class="stat-card kpi-card">
+        <!-- 2. Pending Approval & Downpayment -->
+        <div class="stat-card kpi-card kpi-pending">
           <div class="kpi-icon-wrapper pending-icon">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
@@ -168,26 +192,45 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Pending Orders</h3>
+            <h3>Pending / Placed</h3>
             <p class="stat-value" id="dash-pending-orders">0</p>
-            <span class="kpi-subtitle">Needs fulfillment attention</span>
+            <span class="kpi-subtitle">Needs downpayment / review</span>
           </div>
         </div>
 
-        <div class="stat-card kpi-card">
+        <!-- 3. Workshop Crafting Queue -->
+        <div class="stat-card kpi-card kpi-workshop">
           <div class="kpi-icon-wrapper workshop-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb;">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Workshop Queue</h3>
+            <h3>Workshop Pipeline</h3>
             <p class="stat-value" id="dash-low-stock">0</p>
-            <span class="kpi-subtitle">Active Made-to-Order</span>
+            <span class="kpi-subtitle">In Production &amp; QC stage</span>
           </div>
         </div>
 
-        <div class="stat-card kpi-card">
+        <!-- 4. Fulfilled & Delivered -->
+        <div class="stat-card kpi-card kpi-fulfilled">
+          <div class="kpi-icon-wrapper fulfilled-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="1" y="3" width="15" height="13"></rect>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+          </div>
+          <div class="kpi-content">
+            <h3>Delivered / Complete</h3>
+            <p class="stat-value" id="dash-fulfilled-orders">0</p>
+            <span class="kpi-subtitle">Shipped &amp; successfully handed over</span>
+          </div>
+        </div>
+
+        <!-- 5. Active Catalog & Stock Alert -->
+        <div class="stat-card kpi-card kpi-products">
           <div class="kpi-icon-wrapper products-icon">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
@@ -196,41 +239,148 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Total Products</h3>
+            <h3>Active Products</h3>
             <p class="stat-value" id="dash-total-products">0</p>
-            <span class="kpi-subtitle">Active inventory listings</span>
+            <span class="kpi-subtitle" id="dash-low-stock-sub">All stock levels normal</span>
           </div>
         </div>
       </div>
 
-      <!-- Recent Orders Section -->
-      <div class="table-container recent-orders-container" style="margin-top: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(0, 0, 0, 0.05);">
+      <!-- Made-to-Order Production Lifecycle Interactive Tracker -->
+      <div class="dashboard-pipeline-card" style="margin-bottom: 24px; background: #ffffff; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); padding: 18px 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
           <div>
-            <h3 style="margin: 0; font-size: 1.15rem; color: #1f2937;">Recent Orders</h3>
-            <span style="font-size: 0.85rem; color: #6b7280;">Most recent 5 customer purchases</span>
+            <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+              <span>🔨</span> Made-to-Order Production Lifecycle Pipeline
+            </h3>
+            <span style="font-size: 0.78rem; color: #64748b;">Click any stage below to jump to orders filtered by stage</span>
           </div>
-          <a href="#" id="dash-link-all-orders" style="font-size: 0.9rem; font-weight: 600; color: #d97706; text-decoration: none;">View All Orders</a>
+          <a href="#" id="dash-link-workshop-all" style="font-size: 0.82rem; font-weight: 600; color: #2563eb; text-decoration: none;">
+            Open Workshop Queue &rarr;
+          </a>
         </div>
-        <table class="inventory-table orders-table">
-          <thead>
-            <tr>
-              <th>Order ID</th>
-              <th>Customer Name</th>
-              <th>Items Purchased</th>
-              <th>Total Amount</th>
-              <th>Status</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody id="dash-recent-orders-list">
-            <tr>
-              <td colspan="6" style="text-align: center; padding: 24px;">
-                <div class="dash-loading-spinner"></div> Loading recent orders...
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="dashboard-pipeline-steps" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;">
+          <div class="pipeline-step-item" data-stage="placed" role="button" tabindex="0" title="Click to view Placed orders">
+            <div class="pipeline-step-badge step-placed" id="pipe-count-placed">0</div>
+            <div class="pipeline-step-name">1. Placed</div>
+            <div class="pipeline-step-sub">New Orders</div>
+          </div>
+          <div class="pipeline-step-item" data-stage="downpayment confirmed" role="button" tabindex="0" title="Click to view Downpayment Confirmed orders">
+            <div class="pipeline-step-badge step-downpayment" id="pipe-count-downpayment">0</div>
+            <div class="pipeline-step-name">2. Confirmed</div>
+            <div class="pipeline-step-sub">Slot Reserved</div>
+          </div>
+          <div class="pipeline-step-item" data-stage="in production" role="button" tabindex="0" title="Click to view In Production orders">
+            <div class="pipeline-step-badge step-production" id="pipe-count-production">0</div>
+            <div class="pipeline-step-name">3. Crafting</div>
+            <div class="pipeline-step-sub">In Production</div>
+          </div>
+          <div class="pipeline-step-item" data-stage="quality checked" role="button" tabindex="0" title="Click to view Quality Checked orders">
+            <div class="pipeline-step-badge step-qc" id="pipe-count-qc">0</div>
+            <div class="pipeline-step-name">4. Quality QC</div>
+            <div class="pipeline-step-sub">Inspection Passed</div>
+          </div>
+          <div class="pipeline-step-item" data-stage="shipped" role="button" tabindex="0" title="Click to view Shipped orders">
+            <div class="pipeline-step-badge step-shipped" id="pipe-count-shipped">0</div>
+            <div class="pipeline-step-name">5. Shipped</div>
+            <div class="pipeline-step-sub">Out for Delivery</div>
+          </div>
+          <div class="pipeline-step-item" data-stage="delivered" role="button" tabindex="0" title="Click to view Delivered orders">
+            <div class="pipeline-step-badge step-delivered" id="pipe-count-delivered">0</div>
+            <div class="pipeline-step-name">6. Delivered</div>
+            <div class="pipeline-step-sub">Completed</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Operational Dashboard Grid (Two Columns) -->
+      <div class="dashboard-operational-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start;">
+        <!-- Left: Recent Orders Table -->
+        <div class="table-container recent-orders-container" style="margin: 0; background: #ffffff;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #0f172a;">Recent Orders</h3>
+              <span style="font-size: 0.82rem; color: #64748b;">Live customer orders, stage tracking &amp; instant voucher generation</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <input type="text" id="dash-orders-search-input" placeholder="🔍 Search recent orders..." style="padding: 6px 12px; font-size: 0.82rem; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; width: 200px;" />
+              <a href="#" id="dash-link-all-orders" style="font-size: 0.86rem; font-weight: 600; color: #d97706; text-decoration: none; white-space: nowrap;">
+                View All Orders &rarr;
+              </a>
+            </div>
+          </div>
+          <table class="inventory-table orders-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Items Purchased</th>
+                <th>Financial / Total</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th style="text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dash-recent-orders-list">
+              <tr>
+                <td colspan="7" style="text-align: center; padding: 24px;">
+                  <div class="dash-loading-spinner"></div> Loading recent orders...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Right Side Widgets -->
+        <div class="dashboard-side-widgets" style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- Widget 1: Live Chat & Inquiries Pulse -->
+          <div class="dash-widget-card" style="background: #ffffff; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                <span>💬</span> Customer Live Chat
+              </h4>
+              <span id="dash-widget-chat-count" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #eff6ff; color: #2563eb;">0 Active</span>
+            </div>
+            <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 14px; line-height: 1.4;">
+              Communicate directly with customers, answer order inquiries, and share attachments in real-time.
+            </p>
+            <button type="button" id="dash-btn-open-chat" style="width: 100%; background: #0f172a; color: #ffffff; border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;">
+              Open Chat Workspace &rarr;
+            </button>
+          </div>
+
+          <!-- Widget 2: Inventory & Restock Watchlist -->
+          <div class="dash-widget-card" style="background: #ffffff; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                <span>⚠️</span> Stock Attention Watchlist
+              </h4>
+              <span id="dash-widget-lowstock-badge" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #fef2f2; color: #dc2626;">0 Items</span>
+            </div>
+            <div id="dash-watchlist-items" style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-size: 0.8rem; color: #10b981; text-align: center; padding: 12px 0;">
+                ✓ All inventory items are adequately stocked.
+              </div>
+            </div>
+            <button type="button" id="dash-btn-view-inventory" style="width: 100%; margin-top: 14px; background: #f8fafc; color: #334155; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              Manage Inventory &rarr;
+            </button>
+          </div>
+
+          <!-- Widget 3: Official Document & Voucher Generator Shortcut -->
+          <div class="dash-widget-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; border-radius: 14px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span style="font-size: 1.2rem;">📑</span>
+              <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #ffffff;">Financial Voucher Generator</h4>
+            </div>
+            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 14px; line-height: 1.4;">
+              Instantly create, customize signatories, and print authentic Lanica Payment Vouchers and Quotations.
+            </p>
+            <button type="button" id="dash-btn-open-transactions" style="width: 100%; background: #d97706; color: #ffffff; border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;">
+              View Financial Ledger &rarr;
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -994,15 +1144,18 @@
         </div>
       </header>
 
-      <div class="admin-chat-workspace" id="admin-chat-workspace" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 650px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+      <div class="admin-chat-workspace" id="admin-chat-workspace">
         <!-- Left: Conversations List -->
-        <div id="admin-chat-sidebar" class="admin-chat-sidebar" style="border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f9fafb;">
-          <div style="padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: #fff;">
-            <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937;">Active Conversations</h3>
-            <span style="font-size: 0.78rem; color: #6b7280;">Real-time customer inquiries & workshop chats</span>
+        <div id="admin-chat-sidebar" class="admin-chat-sidebar">
+          <div class="admin-chat-sidebar-header">
+            <div style="min-width: 0; flex: 1; overflow: hidden; margin-right: 8px;">
+              <h3 style="margin: 0; font-size: 0.95rem; color: #1f2937; font-weight: 700;">Active Conversations</h3>
+              <span style="font-size: 0.76rem; color: #6b7280; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Real-time customer inquiries & workshop chats</span>
+            </div>
+            <span id="admin-chat-total-count" style="font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 9999px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center;">0 Chats</span>
           </div>
           <!-- Dedicated Search Bar for Live Chat Conversations -->
-          <div style="padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e7eb;">
+          <div class="admin-chat-search-bar">
             <div style="position: relative; display: flex; align-items: center;">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 10px; pointer-events: none;">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -1011,7 +1164,7 @@
               <input
                 type="text"
                 id="admin-chat-search-input"
-                placeholder="Search customers or messages..."
+                placeholder="Search customers, orders, messages..."
                 style="width: 100%; padding: 8px 30px 8px 32px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
                 autocomplete="off"
                 aria-label="Search conversations"
@@ -1024,12 +1177,16 @@
               >✕</button>
             </div>
           </div>
-          <div style="display: flex; gap: 6px; padding: 8px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
-            <button type="button" id="admin-chat-filter-all" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #111827; color: #fff;">All</button>
-            <button type="button" id="admin-chat-filter-support" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer; background: #fff; color: #374151;">💬 Support</button>
-            <button type="button" id="admin-chat-filter-orders" class="chat-filter-btn" style="flex: 1; padding: 5px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer; background: #fff; color: #374151;">🧵 Orders</button>
+          <div class="admin-chat-filters-bar">
+            <button type="button" id="admin-chat-filter-all" class="chat-filter-btn active">All</button>
+            <button type="button" id="admin-chat-filter-unread" class="chat-filter-btn">🔴 Unread (<span id="admin-chat-unread-filter-badge">0</span>)</button>
+            <button type="button" id="admin-chat-filter-support" class="chat-filter-btn">💬 Support</button>
+            <button type="button" id="admin-chat-filter-orders" class="chat-filter-btn">🧵 Orders</button>
+            <button type="button" id="admin-chat-filter-closed" class="chat-filter-btn">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Archived
+            </button>
           </div>
-          <div id="admin-chat-sessions-list" style="flex: 1; overflow-y: auto;">
+          <div id="admin-chat-sessions-list">
             <div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 0.85rem;">
               Loading chat sessions...
             </div>
@@ -1037,25 +1194,67 @@
         </div>
 
         <!-- Right: Active Chat Conversation -->
-        <div id="admin-active-chat-box" style="display: flex; flex-direction: column; height: 650px;">
+        <div id="admin-active-chat-box">
           <!-- Active Conversation Header -->
-          <div id="admin-chat-active-header" style="padding: 14px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #fff;">
-            <div style="display: flex; align-items: center; gap: 8px;">
+          <div id="admin-chat-active-header">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
               <button type="button" id="admin-chat-mobile-back" class="admin-chat-back-btn" style="display: none; background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: #374151;">
                 ← Back
               </button>
-              <div>
-                <h3 id="admin-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827;">Select a conversation</h3>
-                <span id="admin-chat-customer-email" style="font-size: 0.8rem; color: #6b7280;">Choose a customer from the left panel</span>
+              <div id="admin-chat-active-avatar" style="flex-shrink: 0;"></div>
+              <div style="min-width: 0;">
+                <h3 id="admin-chat-customer-name" style="margin: 0; font-size: 1rem; color: #111827; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Select a conversation</h3>
+                <span id="admin-chat-customer-email" style="font-size: 0.8rem; color: #6b7280; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Choose a customer from the left panel to begin</span>
+              </div>
+            </div>
+            <div id="admin-chat-header-actions" style="display: none; align-items: center; gap: 8px; flex-shrink: 0; position: relative;">
+              <button type="button" id="admin-chat-view-order-btn" class="messenger-header-action-btn" title="View Order Details" style="display: none; font-size: 0.8rem; padding: 6px 12px; border-radius: 8px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 600; cursor: pointer; align-items: center;">
+                View Order
+              </button>
+              <div class="messenger-header-dropdown-wrap" style="position: relative;">
+                <button type="button" id="admin-chat-options-menu-btn" class="messenger-header-dots-btn" title="Conversation Options" style="background: none; border: none; width: 28px; height: 28px; color: #475569; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+                <div id="admin-chat-options-dropdown" class="messenger-options-dropdown" style="display: none;">
+                  <button type="button" id="admin-chat-action-archive" class="messenger-dropdown-item">
+                    <span class="messenger-item-icon">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                    </span>
+                    <span id="admin-chat-archive-text">Archive Chat</span>
+                  </button>
+                  <button type="button" id="admin-chat-action-delete" class="messenger-dropdown-item destructive">
+                    <span class="messenger-item-icon">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                      </svg>
+                    </span>
+                    <span>Delete Conversation</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Message History Scroll Area -->
-          <div id="admin-chat-messages" style="flex: 1; overflow-y: auto; padding: 20px; background: #fafafa; display: flex; flex-direction: column; gap: 12px;">
+          <div id="admin-chat-messages">
             <div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.9rem;">
               Select a conversation from the left to start chatting.
             </div>
+          </div>
+
+          <!-- Reply / Quoting Preview Bar -->
+          <div id="admin-chat-reply-preview" style="display: none; padding: 6px 14px; background: #f8fafc; border-top: 1px solid #e2e8f0; border-left: 3px solid #6b4423; align-items: center; justify-content: space-between;">
+            <div style="font-size: 0.78rem; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%;">
+              <span style="font-weight: 700; color: #6b4423;">Replying to <span id="admin-chat-reply-sender">Customer</span>:</span>
+              <span id="admin-chat-reply-snippet" style="font-style: italic; color: #64748b; margin-left: 4px;"></span>
+            </div>
+            <button type="button" id="admin-chat-cancel-reply" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 0.9rem; font-weight: bold; padding: 0 4px;" title="Cancel reply">✕</button>
           </div>
 
           <!-- Attachment Preview -->
@@ -1065,13 +1264,13 @@
           </div>
 
           <!-- Reply Input Bar -->
-          <form id="admin-chat-form" style="padding: 12px 16px; background: #fff; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; align-items: center;">
+          <form id="admin-chat-form">
             <input type="file" id="admin-chat-file-input" accept="image/*" style="display: none;" />
-            <button type="button" id="admin-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 8px 12px; border-radius: 8px; cursor: pointer;" title="Attach photo or swatch">
+            <button type="button" id="admin-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 9px 12px; border-radius: 8px; cursor: pointer;" title="Attach photo or swatch">
               📎
             </button>
-            <input type="text" id="admin-chat-input" placeholder="Type a message or WIP photo update..." style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none;" />
-            <button type="submit" class="btn-primary" style="padding: 10px 18px; border-radius: 8px; white-space: nowrap;">
+            <input type="text" id="admin-chat-input" placeholder="Select a conversation to reply..." disabled style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; background: #f8fafc;" />
+            <button type="submit" id="admin-chat-submit-btn" class="btn-primary" disabled style="padding: 10px 18px; border-radius: 8px; white-space: nowrap; opacity: 0.6; cursor: not-allowed;">
               Send Reply
             </button>
           </form>
