@@ -3209,6 +3209,17 @@
   display: flex !important;
   flex-direction: column !important;
   background: #f8fafc !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.admin-chat-sidebar-header {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
   flex-shrink: 0 !important;
 }
 
