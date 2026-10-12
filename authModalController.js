@@ -9,6 +9,7 @@ import {
   sendPasswordReset,
   validatePasswordStrength,
 } from "./authService.js";
+import { showToast, showConfirmModal, showPromptModal } from "./uiFeedback.js";
 
 /**
  * Mobile-App Matched Enterprise Auth Modal Controller
@@ -293,15 +294,22 @@ export function initAuthModalController() {
       let email = loginEmailInput ? loginEmailInput.value.trim() : "";
 
       if (!email) {
-        email = prompt("Please enter your email address to receive a password reset link:");
+        email = await showPromptModal({
+          title: "Reset Password",
+          message: "Please enter your email address to receive a secure password reset link:",
+          placeholder: "e.g. yourname@example.com",
+          inputType: "email",
+          confirmText: "Send Reset Link",
+          cancelText: "Cancel",
+        });
       }
 
       if (email) {
         try {
           const res = await sendPasswordReset(email);
-          showAuthToast(res.message, "success");
+          showToast(res.message || "Password reset link sent to your email.", "success");
         } catch (err) {
-          showAuthToast(err.message, "error");
+          showToast(err.message || "Failed to send reset link.", "error");
         }
       }
     });
@@ -310,11 +318,26 @@ export function initAuthModalController() {
   // 9. Sign Out Button
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async () => {
-      await signOut(auth);
-      showAuthToast("Signed out successfully.", "info");
-      authModal?.classList.remove("active");
-      document.body.style.overflow = "";
-      window.location.reload();
+      const confirmed = await showConfirmModal({
+        title: "Sign Out",
+        message: "Are you sure you want to sign out of your Lanica account?",
+        confirmText: "Sign Out",
+        cancelText: "Stay Logged In",
+        icon: "logout",
+      });
+      if (!confirmed) return;
+
+      try {
+        await signOut(auth);
+        showToast("Signed out successfully.", "info");
+        authModal?.classList.remove("active");
+        document.body.style.overflow = "";
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } catch (err) {
+        showToast(err.message || "Failed to sign out.", "error");
+      }
     });
   }
 
@@ -391,9 +414,5 @@ export function initAuthModalController() {
 }
 
 function showAuthToast(msg, type = "info") {
-  if (window.showToast) {
-    window.showToast(msg, type);
-  } else {
-    alert(msg);
-  }
+  showToast(msg, type);
 }

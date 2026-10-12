@@ -21,6 +21,7 @@ import {
   validatePasswordStrength,
 } from "./authService.js";
 import { initAuthModalController } from "./authModalController.js";
+import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
 
 import {
   ensureAuth,
@@ -159,19 +160,7 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-function showToast(message, type = "info") {
-  const container = document.getElementById("toast-container");
-  if (!container) return;
-  const toast = document.createElement("div");
-  toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
-  container.appendChild(toast);
-  setTimeout(() => toast.classList.add("show"), 10);
-  setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
+
 
 function getProductThumbnails(product) {
   let thumbs = [];

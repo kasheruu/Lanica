@@ -2552,48 +2552,341 @@ footer {
   background: var(--clr-yellow);
 }
 
-/* Toast Notifications */
+/* ==========================================================================
+   Luxury UI/UX Toast Notifications & Feedback Dialogs
+   ========================================================================== */
 .toast-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 100000;
+  z-index: 99999999;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: column-reverse;
+  gap: 12px;
   pointer-events: none;
+  max-width: 440px;
+  width: calc(100% - 32px);
 }
 
+/* Base Toast Element */
+.ui-toast,
 .toast {
-  background: var(--clr-black);
-  color: var(--clr-white);
-  padding: 14px 22px;
-  border-radius: 100px;
-  font-size: 0.95rem;
-  font-weight: 500;
+  pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  transform: translateY(20px);
+  gap: 14px;
+  background: rgba(18, 20, 26, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #f9fafb;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 215, 0, 0.08);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.45;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  transform: translateX(110%);
   opacity: 0;
-  animation: toastIn 0.3s forwards ease;
-  pointer-events: auto;
 }
 
+.ui-toast.visible,
+.toast.visible {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.ui-toast.hiding,
+.toast.hiding {
+  transform: translateX(110%);
+  opacity: 0;
+}
+
+.ui-toast-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Toast Color Variants */
+.ui-toast.success,
 .toast.success {
-  border-left: 4px solid #10b981;
+  border-left: 3px solid #10b981;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.12);
+}
+.ui-toast.success .ui-toast-icon {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
 }
 
+.ui-toast.error,
 .toast.error {
-  border-left: 4px solid #ef4444;
+  border-left: 3px solid #ef4444;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 20px rgba(239, 68, 68, 0.12);
+}
+.ui-toast.error .ui-toast-icon {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
 }
 
+.ui-toast.warning,
+.toast.warning {
+  border-left: 3px solid #f59e0b;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.12);
+}
+.ui-toast.warning .ui-toast-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.ui-toast.info,
+.toast.info {
+  border-left: 3px solid #d4af37;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.15);
+}
+.ui-toast.info .ui-toast-icon {
+  background: rgba(212, 175, 55, 0.15);
+  color: #ffd700;
+}
+
+.ui-toast-content {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.ui-toast-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.ui-toast-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ui-toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.45;
+  width: 100%;
+  transform-origin: left;
+  animation: toastProgress linear forwards;
+}
+
+@keyframes toastProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Backward compatibility for legacy toast keyframes */
 @keyframes toastIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
   to {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* ==========================================================================
+   Luxury UI Confirmation / Alert / Prompt Modals
+   ========================================================================== */
+.ui-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 9, 12, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 100000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.ui-dialog-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ui-dialog-card {
+  background: #14171d;
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 35px rgba(212, 175, 55, 0.08);
+  overflow: hidden;
+  transform: scale(0.93) translateY(12px);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-dialog-backdrop.active .ui-dialog-card {
+  transform: scale(1) translateY(0);
+}
+
+.ui-dialog-header {
+  padding: 24px 24px 14px 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ui-dialog-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ui-dialog-avatar.destructive,
+.ui-dialog-avatar.warning {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.ui-dialog-avatar.info {
+  background: rgba(212, 175, 55, 0.15);
+  color: #ffd700;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.ui-dialog-header-text {
+  flex: 1;
+}
+
+.ui-dialog-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.25rem;
+  color: #f9fafb;
+  margin: 0 0 6px 0;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.ui-dialog-message {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.92rem;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-line;
+}
+
+.ui-dialog-input-wrap {
+  padding: 6px 24px 18px 24px;
+}
+
+.ui-dialog-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: #0f1115;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #f9fafb;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  box-sizing: border-box;
+}
+
+.ui-dialog-input:focus {
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18);
+}
+
+.ui-dialog-footer {
+  padding: 16px 24px 22px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 15, 19, 0.5);
+}
+
+.ui-dialog-btn {
+  padding: 10px 20px;
+  border-radius: 100px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ui-dialog-btn-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ui-dialog-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.ui-dialog-btn-confirm {
+  background: linear-gradient(135deg, #d4af37 0%, #b8972e 100%);
+  color: #0d0f12;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.25);
+}
+
+.ui-dialog-btn-confirm:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(212, 175, 55, 0.35);
+}
+
+.ui-dialog-btn-confirm.destructive {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+}
+
+.ui-dialog-btn-confirm.destructive:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.35);
 }
 
 /* Google Auth Button & Divider */

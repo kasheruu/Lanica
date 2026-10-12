@@ -34,6 +34,7 @@ import {
   markOrderMessagesAsRead,
 } from "./chatService.js";
 import { recordAuditLog } from "./auditService.js";
+import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb2kDAVp9N_afxgOw5hSzDIvQ3UAIZVNU",
@@ -617,7 +618,7 @@ function startVerificationStatusCheck() {
         if (currentUser.emailVerified) {
           console.log("✅ Email verification detected!");
           // Show success notification
-          alert("Email verified successfully! Your verification status has been updated.");
+          showToast("Email verified successfully! Your verification status has been updated.", "success");
         }
       }
     } catch (error) {
@@ -732,7 +733,15 @@ if (navMyAccount) {
 
 async function removeStaffProfilePhoto() {
   if (!currentUser) return;
-  if (!confirm("Remove your profile photo?")) return;
+  const confirmed = await showConfirmModal({
+    title: "Remove Profile Photo",
+    message: "Are you sure you want to remove your profile photo?",
+    confirmText: "Remove Photo",
+    cancelText: "Cancel",
+    isDestructive: true,
+    icon: "delete",
+  });
+  if (!confirmed) return;
   try {
     await setDoc(
       doc(db, "users", currentUser.uid),
@@ -745,9 +754,10 @@ async function removeStaffProfilePhoto() {
       { merge: true }
     );
     await loadMyProfile();
+    showToast("Profile photo removed.", "info");
   } catch (err) {
     console.error(err);
-    alert("Could not remove photo. Try again.");
+    showToast("Could not remove photo. Try again.", "error");
   }
 }
 
@@ -763,15 +773,16 @@ if (staffProfilePhotoInput) {
     if (!file || !currentUser) return;
     const validation = validateImageFile(file);
     if (!validation.isValid) {
-      alert(validation.error);
+      showToast(validation.error, "warning");
       return;
     }
     try {
       if (staffEditPhotoBtn) staffEditPhotoBtn.disabled = true;
       await uploadProfilePhoto(file);
       await loadMyProfile();
+      showToast("Profile photo updated successfully!", "success");
     } catch (err) {
-      alert(err.message || "Could not update photo");
+      showToast(err.message || "Could not update photo", "error");
     } finally {
       if (staffEditPhotoBtn) staffEditPhotoBtn.disabled = false;
     }
@@ -1547,7 +1558,7 @@ async function applyManualDeliveryDate(orderId, manualDate) {
     return true;
   } catch (e) {
     console.error("Failed to apply manual delivery date:", e);
-    alert("Failed to apply manual delivery date.");
+    showToast("Failed to apply manual delivery date.", "error");
     return false;
   }
 }
@@ -1641,7 +1652,7 @@ async function updateOrderStatus(orderId, newStatus) {
     }
   } catch (e) {
     console.error("Failed to update order:", e);
-    alert("Failed to update order status.");
+    showToast("Failed to update order status.", "error");
   }
 }
 
@@ -2209,7 +2220,7 @@ if (profileForm && displayNameEditInput) {
         profileHintEditEl.textContent = err.message || "Could not save profile.";
         profileHintEditEl.style.color = "#dc2626";
       }
-      alert(err.message || "Could not save profile.");
+      showToast(err.message || "Could not save profile.", "error");
     } finally {
       if (saveProfileBtn) {
         saveProfileBtn.disabled = false;
@@ -2325,7 +2336,7 @@ if (sendResetEmailBtn) {
 if (verifyEmailBtn) {
   verifyEmailBtn.addEventListener("click", async () => {
     if (!currentUser) {
-      alert("No authenticated user found");
+      showToast("No authenticated user found", "warning");
       return;
     }
 
@@ -2921,8 +2932,12 @@ async function sendVerificationEmail(email, code, type = "profile") {
         ? `Your verification code for photo change is: ${code}\n\nThis code will expire in 10 minutes.`
         : `Your verification code for email change is: ${code}\n\nThis code will expire in 10 minutes.`;
 
-  // For now, use alert to show the code (in production, you'd use a real email service)
-  alert(`${subject}\n\n${message}\n\n(Email would be sent to: ${email})`);
+  await showAlertModal({
+    title: subject,
+    message: `${message}\n\n(Verification code simulated for: ${email})`,
+    confirmText: "Got It",
+    type: "info",
+  });
 
   // Log the action
   await logStaffAction(
@@ -3028,9 +3043,10 @@ if (ordersListEl) {
           updatedAt: Timestamp.now(),
         });
         console.log(`Staff ${currentUser.uid} claimed order ${orderId}`);
+        showToast(`Order claimed successfully!`, "success");
       } catch (err) {
         console.error("Failed to claim order:", err);
-        alert("Failed to claim order: " + (err.message || ""));
+        showToast("Failed to claim order: " + (err.message || ""), "error");
         claimBtn.disabled = false;
         claimBtn.textContent = "Claim Order";
       }
@@ -3048,16 +3064,19 @@ if (ordersListEl) {
 
     const selectedDate = dateInput.value;
     if (!selectedDate) {
-      alert("Please select a delivery date first.");
+      showToast("Please select a delivery date first.", "warning");
       return;
     }
 
     // Confirm the manual override
-    if (
-      confirm(
-        `Set manual delivery date to ${selectedDate}?\n\nThis will override the automatic delivery estimate.`
-      )
-    ) {
+    const confirmed = await showConfirmModal({
+      title: "Set Delivery Date",
+      message: `Set manual delivery date to ${selectedDate}?\n\nThis will override the automatic delivery estimate.`,
+      confirmText: "Set Date",
+      cancelText: "Cancel",
+      icon: "info",
+    });
+    if (confirmed) {
       applyManualDeliveryDate(orderId, selectedDate);
     }
   });
@@ -3066,12 +3085,24 @@ if (ordersListEl) {
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async (e) => {
     e.preventDefault();
+    const confirmed = await showConfirmModal({
+      title: "Sign Out",
+      message: "Are you sure you want to log out of the Staff Portal?",
+      confirmText: "Log Out",
+      cancelText: "Stay",
+      icon: "logout",
+    });
+    if (!confirmed) return;
+
     try {
       await signOut(auth);
-      window.location.replace("/index.html");
+      showToast("Logged out successfully.", "info");
+      setTimeout(() => {
+        window.location.replace("/index.html");
+      }, 500);
     } catch (error) {
       console.error("Error signing out:", error);
-      alert("Failed to log out. Try again.");
+      showToast("Failed to log out. Try again.", "error");
     }
   });
 }
@@ -3192,7 +3223,7 @@ function setupStaffLiveChat() {
       const file = e.target.files?.[0];
       if (file) {
         if (file.size > 5 * 1024 * 1024) {
-          alert("Attachment must be under 5MB.");
+          showToast("Attachment must be under 5MB.", "warning");
           fileInput.value = "";
           return;
         }
@@ -3648,7 +3679,7 @@ function setupStaffLiveChat() {
       const text = chatInput?.value || "";
       if (!text.trim() && !attachedFile) return;
       if (!activeStaffChatSessionId) {
-        alert("Please select a conversation first.");
+        showToast("Please select a conversation first.", "info");
         return;
       }
 
@@ -3683,7 +3714,7 @@ function setupStaffLiveChat() {
         if (chatInput) chatInput.value = "";
       } catch (err) {
         console.error("Chat send error:", err);
-        alert(err.message || "Failed to send reply.");
+        showToast(err.message || "Failed to send reply.", "error");
       }
     });
   }

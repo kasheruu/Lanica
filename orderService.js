@@ -376,10 +376,10 @@ export function subscribeToUserOrders(userId, callback, errorCallback) {
   }
 
   const ordersRef = collection(db, "orders");
+  // Query by userId without composite index requirements
   const q = query(
     ordersRef,
-    where("userId", "==", userId),
-    orderBy("createdAt", "desc")
+    where("userId", "==", userId)
   );
 
   return onSnapshot(
@@ -400,6 +400,18 @@ export function subscribeToUserOrders(userId, callback, errorCallback) {
             canonicalStatus: canonicalStatus,
           };
         });
+
+      // Sort in-memory by createdAt descending
+      orders.sort((a, b) => {
+        const getT = (val) => {
+          if (!val) return 0;
+          if (typeof val.toMillis === "function") return val.toMillis();
+          if (val.seconds) return val.seconds * 1000;
+          return new Date(val).getTime() || 0;
+        };
+        return getT(b.createdAt) - getT(a.createdAt);
+      });
+
       if (typeof callback === "function") callback(orders);
     },
     (error) => {

@@ -50,6 +50,7 @@ import {
   logActivity,
   fetchAuditLogs,
 } from "./auditService.js";
+import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -1073,7 +1074,7 @@ if (btnInlineSubmitNewCategory && inlineNewCategoryInput) {
 // Deleting category
 const categoryManagerList = document.getElementById("category-manager-list");
 if (categoryManagerList) {
-  categoryManagerList.addEventListener("click", (e) => {
+  categoryManagerList.addEventListener("click", async (e) => {
     const delBtn = e.target.closest(".btn-category-delete");
     if (!delBtn) return;
     const catToDelete = delBtn.dataset.cat;
@@ -1083,20 +1084,25 @@ if (categoryManagerList) {
       ? allProducts.filter((p) => (p.category || "").toLowerCase() === catToDelete.toLowerCase()).length
       : 0;
 
-    if (count > 0) {
-      const confirmDelete = confirm(
-        `Category "${catToDelete}" currently has ${count} product(s) assigned to it.\n\nAre you sure you want to remove this category option? (Existing products will keep their category value until edited.)`
-      );
-      if (!confirmDelete) return;
-    } else {
-      if (!confirm(`Are you sure you want to remove category "${catToDelete}"?`)) return;
-    }
+    const msg = count > 0
+      ? `Category "${catToDelete}" currently has ${count} product(s) assigned to it.\n\nAre you sure you want to remove this category option? (Existing products will keep their category value until edited.)`
+      : `Are you sure you want to remove category "${catToDelete}"?`;
+
+    const confirmDelete = await showConfirmModal({
+      title: "Remove Category",
+      message: msg,
+      confirmText: "Remove Category",
+      cancelText: "Cancel",
+      isDestructive: true,
+      icon: "delete",
+    });
+    if (!confirmDelete) return;
 
     let cats = getStoredCategories().filter((c) => c.toLowerCase() !== catToDelete.toLowerCase());
     saveStoredCategories(cats);
     renderCategoryDropdowns();
     renderCategoryManagerList();
-    showInlineCategoryFeedback(`Category "${catToDelete}" removed.`, true);
+    showToast(`Category "${catToDelete}" removed.`, "info");
     triggerDraftAutosave();
   });
 }
@@ -1274,8 +1280,16 @@ function clearFormDraft() {
 }
 
 if (btnDiscardDraft) {
-  btnDiscardDraft.addEventListener("click", () => {
-    if (confirm("Discard this saved draft and clear the form?")) {
+  btnDiscardDraft.addEventListener("click", async () => {
+    const confirmed = await showConfirmModal({
+      title: "Discard Draft",
+      message: "Are you sure you want to discard this saved draft and clear the form?",
+      confirmText: "Discard Draft",
+      cancelText: "Cancel",
+      isDestructive: true,
+      icon: "warning",
+    });
+    if (confirmed) {
       clearFormDraft();
       window.closeModal();
       window.openModal();
@@ -1399,10 +1413,17 @@ function hasUnsavedFormChanges() {
   }
 }
 
-function handleModalCloseAttempt() {
+async function handleModalCloseAttempt() {
   if (isSavingProduct) return;
   if (hasUnsavedFormChanges()) {
-    const confirmDiscard = confirm("You have unsaved changes. Are you sure you want to discard them and exit?");
+    const confirmDiscard = await showConfirmModal({
+      title: "Unsaved Changes",
+      message: "You have unsaved changes in this form. Are you sure you want to discard them and exit?",
+      confirmText: "Discard & Exit",
+      cancelText: "Keep Editing",
+      isDestructive: true,
+      icon: "warning",
+    });
     if (!confirmDiscard) return;
   }
   window.closeModal();
@@ -1483,12 +1504,24 @@ const logoutBtn = document.getElementById("logout-btn");
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async (e) => {
     e.preventDefault();
+    const confirmed = await showConfirmModal({
+      title: "Sign Out",
+      message: "Are you sure you want to log out of the Admin Dashboard?",
+      confirmText: "Log Out",
+      cancelText: "Stay",
+      icon: "logout",
+    });
+    if (!confirmed) return;
+
     try {
       await signOut(auth);
-      window.location.replace("/index.html");
+      showToast("Logged out successfully.", "info");
+      setTimeout(() => {
+        window.location.replace("/index.html");
+      }, 500);
     } catch (error) {
       console.error("Error signing out:", error);
-      alert("Failed to log out. Try again.");
+      showToast("Failed to log out. Try again.", "error");
     }
   });
 }
@@ -1701,7 +1734,7 @@ productForm.addEventListener("submit", async (e) => {
       closeModalBtn.disabled = false;
       isSavingProduct = false;
       hideSaveProgress();
-      alert("Please add at least one product thumbnail image.");
+      showToast("Please add at least one product thumbnail image.", "warning");
       return;
     }
 
@@ -1834,7 +1867,7 @@ productForm.addEventListener("submit", async (e) => {
         }
       } catch (err) {
         console.error("Failed to generate 3D model", err);
-        alert("Failed to generate 3D model: " + err.message);
+        showToast("Failed to generate 3D model: " + err.message, "error");
         submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
         submitBtn.disabled = false;
         cancelBtn.disabled = false;
@@ -1996,7 +2029,7 @@ productForm.addEventListener("submit", async (e) => {
   } catch (e) {
     console.error("Error saving product: ", e);
     updateSaveProgress(0, "Error: " + e.message);
-    alert("Failed to save product. See console for details.");
+    showToast("Failed to save product: " + (e?.message || "An error occurred."), "error");
   } finally {
     isSavingProduct = false;
     submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
@@ -3006,26 +3039,7 @@ let adminTransMethodFilter = "all";
 let activeReceiptOrder = null;
 let activeReceiptTab = "voucher";
 
-function showToast(message, type = "success") {
-  let container = document.getElementById("toast-container");
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "toast-container";
-    container.style.cssText = "position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;";
-    document.body.appendChild(container);
-  }
 
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.style.cssText = `background: ${type === "error" ? "#ef4444" : "#10b981"}; color: #fff; padding: 12px 20px; border-radius: 8px; font-weight: 500; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; z-index: 10000;`;
-  toast.innerHTML = `<span>${type === "error" ? "⚠️" : "✓"}</span> <span>${escapeHtml(message)}</span>`;
-
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
 
 const ORDERS_COLLECTION = collection(db, "orders");
 
@@ -3814,7 +3828,7 @@ function materialHint(m) {
 
 function exportInventoryCsv() {
   if (!allProducts || !allProducts.length) {
-    alert("No inventory data available to export.");
+    showToast("No inventory data available to export.", "info");
     return;
   }
 
@@ -4364,6 +4378,43 @@ function initLanicaReceiptModalListeners() {
       renderLanicaDocumentContent();
     });
   }
+
+  const area = document.getElementById("lanica-printable-area");
+  if (area && !area.dataset.bound) {
+    area.dataset.bound = "true";
+
+    // Track real-time edits to signatories or dates
+    area.addEventListener("input", (e) => {
+      const fieldEl = e.target.closest("[data-sig-field]");
+      if (!fieldEl || !activeReceiptOrder) return;
+      const field = fieldEl.getAttribute("data-sig-field");
+      if (field) {
+        if (!activeReceiptOrder._voucherSignatories) {
+          activeReceiptOrder._voucherSignatories = {};
+        }
+        activeReceiptOrder._voucherSignatories[field] = fieldEl.innerText.trim();
+      }
+    });
+
+    // Prevent multiline breaks on Enter in editable signature/date spans
+    area.addEventListener("keydown", (e) => {
+      const fieldEl = e.target.closest("[data-sig-field]");
+      if (fieldEl && e.key === "Enter") {
+        e.preventDefault();
+        fieldEl.blur();
+      }
+    });
+
+    // Reset signatories button handler
+    area.addEventListener("click", (e) => {
+      const resetBtn = e.target.closest("#btn-reset-voucher-sig");
+      if (resetBtn && activeReceiptOrder) {
+        delete activeReceiptOrder._voucherSignatories;
+        renderLanicaDocumentContent();
+        showToast("Signatories reset to default.", "info");
+      }
+    });
+  }
 }
 
 /**
@@ -4466,8 +4517,23 @@ function renderLanicaDocumentContent() {
     const firstItem = (order.items && order.items[0]) || null;
     const firstItemName = firstItem ? (firstItem.name || firstItem.title || "SEMI ELEGANT") : "SEMI ELEGANT";
     const particulars = `PAYMENT FOR ${escapeHtml(firstItemName.toUpperCase())} SOFA SET`;
-    const staffSignatory = escapeHtml(order.assignedStaffName || "Joanna (Staff)");
+    const staffSignatory = order.assignedStaffName || "Joanna (Staff)";
     const signDate = purchaseDate;
+
+    // Use preserved custom edits on the order if any exist, or defaults
+    if (!order._voucherSignatories) {
+      order._voucherSignatories = {
+        preparedBy: staffSignatory,
+        preparedDate: signDate,
+        checkedBy: "Artisan Lead",
+        checkedDate: signDate,
+        approvedBy: "SUPERVISOR",
+        approvedDate: signDate,
+        receivedBy: "OWNER/REPRESENTATIVE",
+        receivedDate: signDate,
+      };
+    }
+    const sigs = order._voucherSignatories;
 
     area.innerHTML = `
       <div style="max-width: 760px; margin: 0 auto; color: #000;">
@@ -4518,28 +4584,74 @@ function renderLanicaDocumentContent() {
           </tbody>
         </table>
 
-        <div style="font-size: 0.9rem; font-weight: 700; color: #000; margin-bottom: 8px;">2. APPROVAL &amp; CHECK/PAYMENT RELEASE SIGNATORIES</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <div style="font-size: 0.9rem; font-weight: 700; color: #000;">2. APPROVAL &amp; CHECK/PAYMENT RELEASE SIGNATORIES</div>
+          <div class="modal-no-print" style="display: flex; align-items: center; gap: 8px;">
+            <span class="voucher-edit-hint" style="font-size: 0.74rem; font-weight: 600; color: #1d4ed8; background: #eff6ff; padding: 3px 10px; border-radius: 6px; border: 1px solid #bfdbfe;">
+              ✎ Click any name/signature or date to edit
+            </span>
+            <button type="button" id="btn-reset-voucher-sig" title="Reset signatories to default" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.72rem; font-weight: 600; color: #475569; padding: 3px 8px; cursor: pointer; transition: all 0.15s ease;">
+              ↺ Reset
+            </button>
+          </div>
+        </div>
         <div style="border-top: 2px solid #000; padding-top: 14px; margin-bottom: 24px;">
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; font-size: 0.78rem;">
             <div>
               <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">PREPARED BY</div>
-              <div style="margin: 22px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 600; font-family: cursive; font-size: 0.95rem; color: #1e293b;">${staffSignatory}</div>
-              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+              <div
+                contenteditable="true"
+                spellcheck="false"
+                class="voucher-editable-signatory"
+                data-sig-field="preparedBy"
+                title="Click to edit name / signature"
+                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 600; font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b; padding: 2px 4px; text-align: center; cursor: text;"
+              >${escapeHtml(sigs.preparedBy)}</div>
+              <div style="font-size: 0.72rem; color: #475569;">
+                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="preparedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.preparedDate)}</span>
+              </div>
             </div>
             <div>
               <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECKED BY</div>
-              <div style="margin: 22px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 600; font-family: cursive; font-size: 0.95rem; color: #1e293b;">Artisan Lead</div>
-              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+              <div
+                contenteditable="true"
+                spellcheck="false"
+                class="voucher-editable-signatory"
+                data-sig-field="checkedBy"
+                title="Click to edit name / signature"
+                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 600; font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b; padding: 2px 4px; text-align: center; cursor: text;"
+              >${escapeHtml(sigs.checkedBy)}</div>
+              <div style="font-size: 0.72rem; color: #475569;">
+                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="checkedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.checkedDate)}</span>
+              </div>
             </div>
             <div>
               <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">APPROVED AND CHECK<br/>SIGNATORY</div>
-              <div style="margin: 12px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 800; color: #000; font-size: 0.76rem;">SUPERVISOR</div>
-              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+              <div
+                contenteditable="true"
+                spellcheck="false"
+                class="voucher-editable-signatory"
+                data-sig-field="approvedBy"
+                title="Click to edit name / signature"
+                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 800; font-size: 0.78rem; color: #000; padding: 2px 4px; text-align: center; cursor: text;"
+              >${escapeHtml(sigs.approvedBy)}</div>
+              <div style="font-size: 0.72rem; color: #475569;">
+                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="approvedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.approvedDate)}</span>
+              </div>
             </div>
             <div>
-              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECK PAYMENT<br/>RECIVE</div>
-              <div style="margin: 12px auto 4px; border-bottom: 1.5px solid #000; width: 85%; font-weight: 800; color: #000; font-size: 0.76rem;">OWNER/REPRESENTATIVE</div>
-              <div style="font-size: 0.72rem; color: #475569;">DATE: ${escapeHtml(signDate)}</div>
+              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECK PAYMENT<br/>RECEIVE</div>
+              <div
+                contenteditable="true"
+                spellcheck="false"
+                class="voucher-editable-signatory"
+                data-sig-field="receivedBy"
+                title="Click to edit name / signature"
+                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 800; font-size: 0.78rem; color: #000; padding: 2px 4px; text-align: center; cursor: text;"
+              >${escapeHtml(sigs.receivedBy)}</div>
+              <div style="font-size: 0.72rem; color: #475569;">
+                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="receivedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.receivedDate)}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -5658,7 +5770,7 @@ if (usersListEl) {
       loadStaffMembers();
     } catch (err) {
       console.error("Failed updating user account:", err);
-      alert(err.message || "Failed to update user account.");
+      showToast(err.message || "Failed to update user account.", "error");
       t.textContent = "Save";
     } finally {
       t.removeAttribute("disabled");
@@ -5774,12 +5886,12 @@ if (ordersDateStartEl && ordersDateEndEl) {
 
 async function exportAnalyticsAsPdf() {
   if (!analyticsExportArea) {
-    alert("Analytics content is not available.");
+    showToast("Analytics content is not available.", "warning");
     return;
   }
 
   if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
-    alert("PDF export library is not ready. Please refresh and try again.");
+    showToast("PDF export library is not ready. Please refresh and try again.", "warning");
     return;
   }
 
@@ -5824,9 +5936,10 @@ async function exportAnalyticsAsPdf() {
       now.getDate()
     ).padStart(2, "0")}`;
     pdf.save(`lanica-analytics-${stamp}.pdf`);
+    showToast("Analytics exported successfully as PDF!", "success");
   } catch (err) {
     console.error("PDF export failed:", err);
-    alert("Failed to export analytics as PDF.");
+    showToast("Failed to export analytics as PDF.", "error");
   } finally {
     if (exportAnalyticsPdfBtn) {
       exportAnalyticsPdfBtn.disabled = false;
@@ -6055,7 +6168,7 @@ if (batchDeleteDeclinedBtn) {
   batchDeleteDeclinedBtn.addEventListener("click", () => {
     handleBatchDeleteDeclined().catch((e) => {
       console.error(e);
-      alert(e.message || "Batch delete failed.");
+      showToast(e.message || "Batch delete failed.", "error");
       syncBatchDeleteUi();
     });
   });
@@ -6474,8 +6587,9 @@ async function handleOrderStatusChange(orderId, newStatus) {
   if (shouldDeductStock) {
     for (const it of items) {
       if (!it.productId) {
-        alert(
-          "This order has a line without productId. Add productId on each line in the app before leaving Pending."
+        showToast(
+          "This order has a line without productId. Add productId on each line in the app before leaving Pending.",
+          "warning"
         );
         applyOrdersFilter();
         return;
@@ -7310,7 +7424,7 @@ document.addEventListener("click", async (e) => {
     console.log(`Advanced order ${orderId} to ${nextStatus}`);
   } catch (err) {
     console.error("Failed to advance crafting stage:", err);
-    alert(err.message || "Failed to update order status.");
+    showToast(err.message || "Failed to update order status.", "error");
   } finally {
     btn.disabled = false;
   }
@@ -7432,7 +7546,7 @@ function setupAdminLiveChat() {
       const file = e.target.files?.[0];
       if (file) {
         if (file.size > 5 * 1024 * 1024) {
-          alert("Attachment must be under 5MB.");
+          showToast("Attachment must be under 5MB.", "warning");
           fileInput.value = "";
           return;
         }
@@ -7896,7 +8010,7 @@ function setupAdminLiveChat() {
       const text = chatInput?.value || "";
       if (!text.trim() && !attachedFile) return;
       if (!activeChatSessionId) {
-        alert("Please select a customer conversation first.");
+        showToast("Please select a customer conversation first.", "info");
         return;
       }
 
@@ -7931,7 +8045,7 @@ function setupAdminLiveChat() {
         if (chatInput) chatInput.value = "";
       } catch (err) {
         console.error("Chat send error:", err);
-        alert(err.message || "Failed to send reply.");
+        showToast(err.message || "Failed to send reply.", "error");
       }
     });
   }

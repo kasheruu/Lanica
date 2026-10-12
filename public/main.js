@@ -21,6 +21,7 @@ import {
   validatePasswordStrength,
 } from "./authService.js";
 import { initAuthModalController } from "./authModalController.js";
+import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
 
 import {
   ensureAuth,
@@ -96,24 +97,7 @@ function updateAuthNavVisibility(user) {
   });
 }
 
-// Helper: Toast Notifications
-function showToast(message, type = "success") {
-  const container = document.getElementById("toast-container");
-  if (!container) return;
 
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <span>${type === "success" ? "✓" : "⚠️"}</span>
-    <span>${message}</span>
-  `;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.animation = "toastIn 0.3s reverse forwards";
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
 
 document.addEventListener("DOMContentLoaded", async () => {
   initAuthModalController();

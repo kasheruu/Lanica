@@ -3522,5 +3522,52 @@
   #lanica-printable-area table {
     page-break-inside: avoid;
   }
+
+  .voucher-editable-signatory,
+  .voucher-editable-date {
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .voucher-edit-hint,
+  #btn-reset-voucher-sig {
+    display: none !important;
+  }
 }
+
+/* ==========================================================================
+   Voucher Signatory In-Place Editing UI/UX
+   ========================================================================== */
+.voucher-editable-signatory,
+.voucher-editable-date {
+  border-radius: 4px;
+  transition: background-color 0.15s ease, outline 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media screen {
+  .voucher-editable-signatory:hover {
+    background: rgba(37, 99, 235, 0.06) !important;
+    outline: 1.5px dashed #2563eb !important;
+  }
+  .voucher-editable-signatory:focus {
+    background: #ffffff !important;
+    outline: 2px solid #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
+  }
+  .voucher-editable-date:hover {
+    background: rgba(37, 99, 235, 0.06) !important;
+    outline: 1px dashed #2563eb !important;
+  }
+  .voucher-editable-date:focus {
+    background: #ffffff !important;
+    outline: 1.5px solid #2563eb !important;
+  }
+  #btn-reset-voucher-sig:hover {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
+    border-color: #94a3b8 !important;
+  }
+}
+
 

@@ -35,30 +35,13 @@ import {
 import { app, db, auth, storage } from "./firebaseConfig.js";
 import { initAuthModalController } from "./authModalController.js";
 import { fetchWishlist, updateCartItemQuantity, removeCartItem, renderCartDrawerComponent } from "./cartService.js";
+import { classifyOrderScope, getOrderCanonicalStatus } from "./orderService.js";
+import { showToast, showConfirmModal } from "./uiFeedback.js";
 
 let currentUser = null;
 let addressesUnsubscribe = null;
 let ordersUnsubscribe = null;
 let pendingAvatarFile = null;
-
-// Clean Single Toast Notification Helper
-function showToast(message, type = "info") {
-  const container = document.getElementById("toast-container");
-  if (!container) return;
-
-  // Remove previous toasts to avoid stacking
-  container.querySelectorAll(".toast").forEach((t) => t.remove());
-
-  const toast = document.createElement("div");
-  toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
-  container.appendChild(toast);
-  setTimeout(() => toast.classList.add("show"), 10);
-  setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
 
 function escapeHtml(str) {
   if (!str) return "";
@@ -153,15 +136,23 @@ function subscribeUserMetrics(uid) {
   ordersUnsubscribe = onSnapshot(q, (snapshot) => {
     let activeCount = 0;
     let completedCount = 0;
-    let totalHistory = snapshot.size;
+    let historyCount = 0;
 
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      const status = (data.status || "").toLowerCase();
-      if (status === "delivered" || status === "completed") {
-        completedCount++;
-      } else if (["pending", "confirmed", "processing", "manufacturing", "in_transit", "out_for_delivery"].includes(status)) {
+      if (data.isDeleted || data.action === "delete") return;
+
+      const scope = classifyOrderScope(data);
+      const canonicalStatus = getOrderCanonicalStatus(data);
+
+      if (scope === "active") {
         activeCount++;
+      } else {
+        historyCount++;
+      }
+
+      if (canonicalStatus === "Delivered" || canonicalStatus === "Completed") {
+        completedCount++;
       }
     });
 
@@ -171,7 +162,7 @@ function subscribeUserMetrics(uid) {
 
     if (activeEl) activeEl.textContent = String(activeCount).padStart(2, "0");
     if (completedEl) completedEl.textContent = String(completedCount).padStart(2, "0");
-    if (historyEl) historyEl.textContent = String(totalHistory).padStart(2, "0");
+    if (historyEl) historyEl.textContent = String(historyCount).padStart(2, "0");
   });
 
   fetchWishlist(uid).then((wl) => {
@@ -289,9 +280,17 @@ function renderAddressCards(addresses) {
     btn.addEventListener("click", async () => {
       const addressId = btn.getAttribute("data-id");
       if (addressId && currentUser) {
-        if (confirm("Are you sure you want to delete this shipping address?")) {
+        const confirmed = await showConfirmModal({
+          title: "Delete Shipping Address",
+          message: "Are you sure you want to delete this shipping address? This action cannot be undone.",
+          confirmText: "Delete",
+          cancelText: "Cancel",
+          isDestructive: true,
+          icon: "delete",
+        });
+        if (confirmed) {
           await deleteDoc(doc(db, "users", currentUser.uid, "addresses", addressId));
-          showToast("Shipping address deleted", "info");
+          showToast("Shipping address deleted.", "info");
         }
       }
     });
@@ -632,12 +631,19 @@ function setupSettingsAndPreferences() {
   const signOutBtn = document.getElementById("profile-sign-out-btn");
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async () => {
-      if (confirm("Are you sure you want to sign out?")) {
+      const confirmed = await showConfirmModal({
+        title: "Sign Out",
+        message: "Are you sure you want to sign out of your Lanica account?",
+        confirmText: "Sign Out",
+        cancelText: "Stay Logged In",
+        icon: "logout",
+      });
+      if (confirmed) {
         await signOut(auth);
-        showToast("Signed out successfully", "info");
+        showToast("Signed out successfully.", "info");
         setTimeout(() => {
           window.location.href = "index.html";
-        }, 800);
+        }, 600);
       }
     });
   }

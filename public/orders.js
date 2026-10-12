@@ -11,6 +11,7 @@ import {
   validatePasswordStrength,
 } from "./authService.js";
 import { initAuthModalController } from "./authModalController.js";
+import { showToast, showConfirmModal } from "./uiFeedback.js";
 
 import {
   subscribeToUserOrders,
@@ -105,24 +106,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Helper: Toast Notifications
-function showToast(message, type = "success") {
-  const container = document.getElementById("toast-container");
-  if (!container) return;
 
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <span>${type === "success" ? "✓" : "⚠️"}</span>
-    <span>${message}</span>
-  `;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.animation = "toastIn 0.3s reverse forwards";
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
 
 document.addEventListener("DOMContentLoaded", async () => {
   initAuthModalController();
@@ -206,11 +190,20 @@ function setupHeaderAndAuthUI() {
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async (e) => {
       e.preventDefault();
+      const confirmed = await showConfirmModal({
+        title: "Sign Out",
+        message: "Are you sure you want to sign out of your Lanica account?",
+        confirmText: "Sign Out",
+        cancelText: "Stay Logged In",
+        icon: "logout",
+      });
+      if (!confirmed) return;
+
       try {
         signOutBtn.disabled = true;
         signOutBtn.textContent = "Signing out...";
         await signOut(auth);
-        showToast("Signed out successfully!");
+        showToast("Signed out successfully.", "info");
         authModal?.classList.remove("active");
         setTimeout(() => {
           window.location.href = "index.html";
@@ -364,22 +357,33 @@ function setupOrdersSubscription(userId) {
 }
 
 function updateTabBadges(orders) {
-  const activeOrders = (orders || []).filter((o) => classifyOrderScope(o) === "active");
+  const allList = orders || [];
+  const activeOrders = allList.filter((o) => classifyOrderScope(o) === "active");
   const counts = {
     all: activeOrders.length,
     placed: 0,
     inProduction: 0,
     shipped: 0,
     delivered: 0,
-    cancelled: (orders || []).filter((o) => classifyOrderScope(o) === "history").length,
+    cancelled: 0,
   };
 
-  activeOrders.forEach((o) => {
+  allList.forEach((o) => {
     const st = getOrderCanonicalStatus(o);
-    if (st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed") counts.placed++;
-    else if (st === "In Production" || st === "Quality Checked") counts.inProduction++;
-    else if (st === "Shipped") counts.shipped++;
-    else if (st === "Delivered") counts.delivered++;
+    const rawSt = String(o.status || "").toLowerCase();
+    const rawOrdSt = String(o.orderStatus || "").toLowerCase();
+
+    if (st === "Cancelled" || rawSt === "cancelled" || rawSt === "canceled" || rawOrdSt === "cancelled" || rawOrdSt === "canceled") {
+      counts.cancelled++;
+    } else if (st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") {
+      counts.delivered++;
+    } else if (st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed") {
+      counts.placed++;
+    } else if (st === "In Production" || st === "Quality Checked") {
+      counts.inProduction++;
+    } else if (st === "Shipped") {
+      counts.shipped++;
+    }
   });
 
   if (document.getElementById("badge-all")) document.getElementById("badge-all").textContent = counts.all;
@@ -390,49 +394,83 @@ function updateTabBadges(orders) {
   if (document.getElementById("badge-cancelled")) document.getElementById("badge-cancelled").textContent = counts.cancelled;
 }
 
-function setupTabListeners() {
+function switchMainCategoryTab(targetTab) {
   const btnOrders = document.getElementById("tab-nav-orders");
   const btnTransactions = document.getElementById("tab-nav-transactions");
   const secOrders = document.getElementById("section-orders-view");
   const secTransactions = document.getElementById("section-transactions-view");
 
-  if (btnOrders && btnTransactions && secOrders && secTransactions) {
-    btnOrders.addEventListener("click", () => {
-      btnOrders.classList.add("active");
-      btnOrders.style.borderBottom = "3px solid var(--clr-yellow)";
-      btnOrders.style.color = "var(--clr-black)";
-      btnTransactions.classList.remove("active");
-      btnTransactions.style.borderBottom = "none";
-      btnTransactions.style.color = "var(--clr-text-muted)";
-      secOrders.style.display = "block";
-      secTransactions.style.display = "none";
-    });
+  if (!btnOrders || !btnTransactions || !secOrders || !secTransactions) return;
 
-    btnTransactions.addEventListener("click", () => {
-      btnTransactions.classList.add("active");
-      btnTransactions.style.borderBottom = "3px solid var(--clr-yellow)";
-      btnTransactions.style.color = "var(--clr-black)";
-      btnOrders.classList.remove("active");
-      btnOrders.style.borderBottom = "none";
-      btnOrders.style.color = "var(--clr-text-muted)";
-      secTransactions.style.display = "block";
-      secOrders.style.display = "none";
-      renderCustomerTransactionsList(allOrders);
-    });
+  if (targetTab === "transactions" || targetTab === "history" || targetTab === "payment") {
+    btnTransactions.classList.add("active");
+    btnTransactions.style.borderBottom = "3px solid var(--clr-yellow)";
+    btnTransactions.style.color = "var(--clr-black)";
+    btnOrders.classList.remove("active");
+    btnOrders.style.borderBottom = "none";
+    btnOrders.style.color = "var(--clr-text-muted)";
+    secTransactions.style.display = "block";
+    secOrders.style.display = "none";
+    renderCustomerTransactionsList(allOrders);
+  } else {
+    btnOrders.classList.add("active");
+    btnOrders.style.borderBottom = "3px solid var(--clr-yellow)";
+    btnOrders.style.color = "var(--clr-black)";
+    btnTransactions.classList.remove("active");
+    btnTransactions.style.borderBottom = "none";
+    btnTransactions.style.color = "var(--clr-text-muted)";
+    secOrders.style.display = "block";
+    secTransactions.style.display = "none";
+    renderOrdersList();
+  }
+}
+
+function setupTabListeners() {
+  const btnOrders = document.getElementById("tab-nav-orders");
+  const btnTransactions = document.getElementById("tab-nav-transactions");
+
+  if (btnOrders && btnTransactions) {
+    btnOrders.addEventListener("click", () => switchMainCategoryTab("orders"));
+    btnTransactions.addEventListener("click", () => switchMainCategoryTab("transactions"));
   }
 
   const tabsContainer = document.getElementById("orders-status-tabs");
-  if (!tabsContainer) return;
-
-  tabsContainer.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      tabsContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      activeTabStatus = btn.getAttribute("data-status") || "all";
-      ordersCurrentPage = 1;
-      renderOrdersList();
+  if (tabsContainer) {
+    tabsContainer.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        tabsContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeTabStatus = btn.getAttribute("data-status") || "all";
+        ordersCurrentPage = 1;
+        renderOrdersList();
+      });
     });
-  });
+  }
+
+  // Handle URL query parameters (e.g. orders.html?tab=transactions or orders.html?status=cancelled)
+  const urlTab = (getURLParam("tab", "") || getURLParam("view", "")).toLowerCase();
+  const urlStatus = (getURLParam("status", "") || getURLParam("filter", "")).toLowerCase();
+
+  if (urlTab === "transactions" || urlTab === "history" || urlTab === "payment") {
+    switchMainCategoryTab("transactions");
+  } else if (urlStatus) {
+    if (urlStatus === "cancelled") {
+      const cancelBtn = document.querySelector(`.tab-btn[data-status="cancelled"]`);
+      if (cancelBtn && tabsContainer) {
+        tabsContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        cancelBtn.classList.add("active");
+        activeTabStatus = "cancelled";
+      }
+    } else {
+      const targetBtn = document.querySelector(`.tab-btn[data-status="${urlStatus}"]`);
+      if (targetBtn && tabsContainer) {
+        tabsContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        targetBtn.classList.add("active");
+        activeTabStatus = urlStatus;
+      }
+    }
+    switchMainCategoryTab("orders");
+  }
 }
 
 function renderCustomerTransactionsList(orders) {
@@ -626,15 +664,20 @@ function setupOrderSearchListener() {
 }
 
 function filterOrdersByTab(orders, tabStatus) {
-  if (tabStatus === "all") return orders;
+  if (tabStatus === "all") {
+    return (orders || []).filter((o) => classifyOrderScope(o) === "active");
+  }
 
-  return orders.filter((o) => {
+  return (orders || []).filter((o) => {
     const st = getOrderCanonicalStatus(o);
+    const rawSt = String(o.status || "").toLowerCase();
+    const rawOrdSt = String(o.orderStatus || "").toLowerCase();
+
     if (tabStatus === "placed") return st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed";
     if (tabStatus === "in-production") return st === "In Production" || st === "Quality Checked";
     if (tabStatus === "shipped") return st === "Shipped";
-    if (tabStatus === "delivered") return st === "Delivered";
-    if (tabStatus === "cancelled") return st === "Cancelled";
+    if (tabStatus === "delivered") return st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered";
+    if (tabStatus === "cancelled") return st === "Cancelled" || rawSt === "cancelled" || rawSt === "canceled" || rawOrdSt === "cancelled" || rawOrdSt === "canceled";
     return true;
   });
 }
@@ -643,12 +686,13 @@ function renderOrdersList() {
   const container = document.getElementById("orders-list-container");
   if (!container) return;
 
-  const activeOrders = (allOrders || []).filter((o) => classifyOrderScope(o) === "active");
-  const tabFiltered = filterOrdersByTab(activeOrders, activeTabStatus);
+  const tabFiltered = filterOrdersByTab(allOrders || [], activeTabStatus);
   const filteredOrders = tabFiltered.filter((o) => matchesOrderSearch(o, orderSearchQuery));
 
   if (filteredOrders.length === 0) {
     const isSearching = !!orderSearchQuery.trim();
+    const hasHistoryOrders = (allOrders || []).some((o) => classifyOrderScope(o) === "history");
+
     container.innerHTML = `
       <div class="orders-empty-state">
         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -662,11 +706,18 @@ function renderOrdersList() {
             ? `No orders match your search "${escapeHtml(orderSearchQuery)}" in the ${getTabDisplayName(activeTabStatus)} filter.`
             : `You don't have any orders matching the "${getTabDisplayName(activeTabStatus)}" filter.`
         }</p>
-        ${
-          isSearching
-            ? `<button type="button" id="btn-reset-order-search" class="btn-secondary" style="display: inline-block; cursor: pointer; padding: 10px 20px;">Clear Search</button>`
-            : `<a href="index.html#collections" class="btn-secondary" style="display: inline-block;">Browse Furniture Catalog</a>`
-        }
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
+          ${
+            isSearching
+              ? `<button type="button" id="btn-reset-order-search" class="btn-secondary" style="display: inline-block; cursor: pointer; padding: 10px 20px;">Clear Search</button>`
+              : `<a href="index.html#collections" class="btn-secondary" style="display: inline-block;">Browse Furniture Catalog</a>`
+          }
+          ${
+            !isSearching && hasHistoryOrders && activeTabStatus === "all"
+              ? `<button type="button" id="btn-empty-goto-history" class="btn-primary" style="display: inline-block; cursor: pointer; padding: 10px 20px;">View Transaction History</button>`
+              : ""
+          }
+        </div>
       </div>
     `;
 
@@ -680,6 +731,13 @@ function renderOrdersList() {
         orderSearchQuery = "";
         ordersCurrentPage = 1;
         renderOrdersList();
+      });
+    }
+
+    const historyBtn = container.querySelector("#btn-empty-goto-history");
+    if (historyBtn) {
+      historyBtn.addEventListener("click", () => {
+        switchMainCategoryTab("transactions");
       });
     }
     return;
