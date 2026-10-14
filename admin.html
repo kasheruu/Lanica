@@ -871,6 +871,44 @@
             </div>
           </div>
 
+          <!-- Dynamic Bed Sizes & Price Delta Repeater (Bed Category Only) -->
+          <div id="bed-sizes-repeater-container" class="form-group" style="margin-top: 16px; display: none;">
+            <div class="bed-size-header-bar">
+              <div class="bed-size-header-title">
+                <label style="font-weight: 600; margin: 0;">Bed Sizes &amp; Variant Pricing</label>
+                <span class="bed-category-badge">BED CATEGORY</span>
+              </div>
+              <span class="bed-size-subtitle">Dynamic sizes, dimensions &amp; price deltas</span>
+            </div>
+            <div class="bed-size-box-wrapper">
+              <div class="bed-size-repeater-header">
+                <span style="flex: 1.4; min-width: 0;">Size Name</span>
+                <span style="flex: 0.9; min-width: 0;">Width (<span class="bed-size-unit-indicator">in</span>)</span>
+                <span style="flex: 0.9; min-width: 0;">Length (<span class="bed-size-unit-indicator">in</span>)</span>
+                <span style="flex: 1.1; min-width: 0;">Price Delta (₱)</span>
+                <span style="width: 38px; flex-shrink: 0;"></span>
+              </div>
+              <div id="bed-sizes-repeater-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Dynamically populated bed size rows -->
+              </div>
+              <div class="bed-size-actions-bar" style="display: flex; gap: 8px; margin-top: 10px;">
+                <button type="button" id="btn-add-bed-size-row" style="flex: 1; font-size: 0.82rem; font-weight: 600; padding: 9px 14px; background: #ffffff; color: #0f172a; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>Add Bed Size</span>
+                </button>
+                <button type="button" id="btn-reset-default-bed-sizes" style="font-size: 0.78rem; font-weight: 600; padding: 9px 12px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Reset to standard bed sizes (Single, Double, Queen, King)">
+                  Reset Defaults
+                </button>
+              </div>
+            </div>
+            <div style="font-size: 0.73rem; color: #6b7280; margin-top: 6px;">
+              Price Delta will be added to product's base price when customer selects that size.
+            </div>
+          </div>
+
           <!-- Add-ons / Optional Upgrades Repeater Section -->
           <div class="form-group" style="margin-top: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">

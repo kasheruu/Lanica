@@ -243,6 +243,41 @@
                 </div>
               </div>
 
+              <!-- Sofa Chaise Orientation Flip Section (Sofa Category Only) -->
+              <div id="pv-orientation-section" class="variant-section pdp-orientation-section" style="margin-top: 10px; margin-bottom: 12px; display: none;">
+                <div class="variant-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-weight: 700; color: #111827; font-size: 0.82rem; letter-spacing: 0.04em;">CHAISE ORIENTATION</span>
+                  <span id="pv-selected-orientation-badge" style="font-size: 0.78rem; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 12px;">Facing Left (Standard)</span>
+                </div>
+                <div class="pdp-orientation-toggle-group" style="display: flex; gap: 8px;">
+                  <button type="button" id="pv-orient-left-btn" class="pdp-orientation-btn active" data-orientation="left" style="flex: 1; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    <span>Facing Left (Standard)</span>
+                  </button>
+                  <button type="button" id="pv-orient-right-btn" class="pdp-orientation-btn" data-orientation="right" style="flex: 1; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>Facing Right (Flipped)</span>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Dynamic Bed Size Selection Section (Bed Category Only) -->
+              <div id="pv-bed-size-section" class="variant-section pdp-bed-size-section" style="margin-top: 10px; margin-bottom: 12px; display: none;">
+                <div class="variant-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-weight: 700; color: #111827; font-size: 0.82rem; letter-spacing: 0.04em;">CHOOSE BED SIZE</span>
+                  <span id="pv-selected-bed-size-badge" style="font-size: 0.78rem; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 12px;">Selected: —</span>
+                </div>
+                <div class="bed-size-select-wrapper" style="position: relative;">
+                  <select id="pv-bed-size-select" style="width: 100%; padding: 10px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.88rem; font-weight: 600; color: #0f172a; background: #ffffff; cursor: pointer; outline: none; transition: border-color 0.2s;">
+                    <!-- Dynamically populated options from product.bedSizes -->
+                  </select>
+                </div>
+              </div>
+
               <!-- Dedicated SIZE Card -->
               <div id="pv-dimensions-card" class="pdp-spec-card pdp-size-card">
                 <div class="pdp-spec-title">

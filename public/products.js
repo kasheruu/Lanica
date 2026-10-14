@@ -757,6 +757,99 @@ function bindProductCardButtons() {
 }
 
 let selectedModalAddons = [];
+let currentOrientation = "left";
+let selectedBedSize = null;
+
+const DEFAULT_BED_SIZES = [
+  { name: "Single", dimensions: "36 × 75 in", priceDelta: 0 },
+  { name: "Double / Full", dimensions: "54 × 75 in", priceDelta: 2500 },
+  { name: "Queen", dimensions: "60 × 75 in", priceDelta: 4500 },
+  { name: "King", dimensions: "72 × 78 in", priceDelta: 7000 },
+];
+
+function formatDimensionsDisplay(product, orientation = "left") {
+  if (!product) return "";
+  const isRight = orientation === "right";
+  let html = "";
+  const rightBadge = isRight
+    ? ` <span class="pdp-badge-orientation" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-left: 6px; vertical-align: 1px; display: inline-block;">RIGHT ORIENTATION</span>`
+    : "";
+
+  if (product.dimensions && typeof product.dimensions.height === "number") {
+    const d = product.dimensions;
+    const u = d.unit || "in";
+    const len = d.length;
+    const wid = d.width;
+    const hgt = d.height;
+
+    if (d.isLType && d.length2) {
+      if (isRight) {
+        html = `W: <strong>${wid} ${u}</strong> · L: <strong>${len} × ${d.length2} ${u}</strong> <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin: 0 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span> · H: <strong>${hgt} ${u}</strong>${rightBadge}`;
+      } else {
+        html = `L: <strong>${len} × ${d.length2} ${u}</strong> <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin: 0 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span> · W: <strong>${wid} ${u}</strong> · H: <strong>${hgt} ${u}</strong>`;
+      }
+    } else if (len && wid && hgt) {
+      if (isRight) {
+        html = `${wid} × ${len} × ${hgt} ${u}${rightBadge}`;
+      } else {
+        html = `${len} × ${wid} × ${hgt} ${u}`;
+      }
+    } else if (len && wid) {
+      if (isRight) {
+        html = `${wid} × ${len} ${u}${rightBadge}`;
+      } else {
+        html = `${len} × ${wid} ${u}`;
+      }
+    } else {
+      html = `${wid} × ${hgt} ${u}${rightBadge}`;
+    }
+  } else if (product.size) {
+    const s = String(product.size);
+    const isLShape = s.includes("L-Type");
+    const cleaned = s.replace("(L-Type)", "").replace(/\s+/g, " ").trim();
+    const lShapeBadge = isLShape
+      ? ` <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-left: 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span>`
+      : "";
+
+    if (isRight) {
+      const parts = cleaned.split(/\s*[×x]\s*/);
+      if (parts.length >= 2) {
+        const temp = parts[0];
+        parts[0] = parts[1];
+        parts[1] = temp;
+        html = `${escapeHtml(parts.join(" × "))}${lShapeBadge}${rightBadge}`;
+      } else {
+        html = `${escapeHtml(cleaned)}${lShapeBadge}${rightBadge}`;
+      }
+    } else {
+      html = `${escapeHtml(cleaned)}${lShapeBadge}`;
+    }
+  }
+
+  return html;
+}
+
+function updateModalDimensionsUI() {
+  const dimsEl = document.getElementById("pv-dimensions-info");
+  const dimsCard = document.getElementById("pv-dimensions-card");
+  if (!dimsEl || !currentModalProduct) return;
+
+  const isBed = (currentModalProduct.category || "").toLowerCase().includes("bed");
+  if (isBed && selectedBedSize) {
+    const dimsStr = selectedBedSize.dimensions || (selectedBedSize.width && selectedBedSize.length ? `${selectedBedSize.width} × ${selectedBedSize.length}` : "");
+    dimsEl.innerHTML = `<strong>${escapeHtml(dimsStr)}</strong> <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-left: 6px; vertical-align: 1px; display: inline-block;">${escapeHtml((selectedBedSize.name || "").toUpperCase())}</span>`;
+    if (dimsCard) dimsCard.style.display = "block";
+    return;
+  }
+
+  const htmlContent = formatDimensionsDisplay(currentModalProduct, currentOrientation);
+  if (htmlContent) {
+    dimsEl.innerHTML = htmlContent;
+    if (dimsCard) dimsCard.style.display = "block";
+  } else {
+    if (dimsCard) dimsCard.style.display = "none";
+  }
+}
 
 function recalculatePdpTotals() {
   if (!currentModalProduct) return;
@@ -771,11 +864,14 @@ function recalculatePdpTotals() {
     addonsTotal += price;
   });
 
-  const unitPrice = basePrice + addonsTotal;
+  const isBed = (currentModalProduct.category || "").toLowerCase().includes("bed");
+  const sizePriceDelta = isBed && selectedBedSize ? (parseFloat(selectedBedSize.priceDelta) || 0) : 0;
+
+  const unitPrice = basePrice + sizePriceDelta + addonsTotal;
   const totalPrice = unitPrice * currentSelectedQty;
 
   const priceEl = document.getElementById("pv-price");
-  if (priceEl) priceEl.textContent = `₱${basePrice.toLocaleString()}`;
+  if (priceEl) priceEl.textContent = `₱${(basePrice + sizePriceDelta).toLocaleString()}`;
 
   const totalDisplay = document.getElementById("pv-total-price-display");
   if (totalDisplay) totalDisplay.textContent = `₱${totalPrice.toLocaleString()}`;
@@ -823,40 +919,57 @@ async function openProductQuickViewModal(productId) {
       paginationEl.textContent = `1/${modalThumbs.length}`;
     }
 
-    // Dimensions display card
-    const dimsEl = document.getElementById("pv-dimensions-info");
-    const dimsCard = document.getElementById("pv-dimensions-card");
-    if (dimsEl) {
-      let htmlContent = "";
-      if (
-        currentModalProduct.dimensions &&
-        typeof currentModalProduct.dimensions.height === "number"
-      ) {
-        const d = currentModalProduct.dimensions;
-        const u = d.unit || "in";
-        if (d.isLType && d.length2) {
-          htmlContent = `L: <strong>${d.length} × ${d.length2} ${u}</strong> <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin: 0 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span> · W: <strong>${d.width} ${u}</strong> · H: <strong>${d.height} ${u}</strong>`;
-        } else if (d.length) {
-          htmlContent = `${d.length} × ${d.width} × ${d.height} ${u}`;
-        } else {
-          htmlContent = `${d.width} × ${d.height} ${u}`;
+    // Feature 1: Sofa Chaise Orientation Section
+    currentOrientation = "left";
+    const orientSection = document.getElementById("pv-orientation-section");
+    const orientLeftBtn = document.getElementById("pv-orient-left-btn");
+    const orientRightBtn = document.getElementById("pv-orient-right-btn");
+    const orientBadge = document.getElementById("pv-selected-orientation-badge");
+    const mainImgEl = document.getElementById("pv-image");
+
+    if (mainImgEl) mainImgEl.style.transform = "none";
+    if (orientLeftBtn) orientLeftBtn.classList.add("active");
+    if (orientRightBtn) orientRightBtn.classList.remove("active");
+    if (orientBadge) orientBadge.textContent = "Facing Left (Standard)";
+
+    const isSofa = (currentModalProduct.category || "").toLowerCase().includes("sofa");
+    if (orientSection) {
+      orientSection.style.display = isSofa ? "block" : "none";
+    }
+
+    // Feature 2: Bed Sizes Section
+    selectedBedSize = null;
+    const bedSection = document.getElementById("pv-bed-size-section");
+    const bedSelect = document.getElementById("pv-bed-size-select");
+    const bedBadge = document.getElementById("pv-selected-bed-size-badge");
+    const isBed = (currentModalProduct.category || "").toLowerCase().includes("bed");
+
+    if (bedSection) {
+      if (isBed) {
+        bedSection.style.display = "block";
+        const bedSizesToUse = Array.isArray(currentModalProduct.bedSizes) && currentModalProduct.bedSizes.length > 0
+          ? currentModalProduct.bedSizes
+          : DEFAULT_BED_SIZES;
+
+        if (bedSelect) {
+          bedSelect.innerHTML = bedSizesToUse
+            .map((s, idx) => {
+              const delta = parseFloat(s.priceDelta) || 0;
+              const deltaText = delta > 0 ? ` (+₱${delta.toLocaleString()})` : (delta < 0 ? ` (-₱${Math.abs(delta).toLocaleString()})` : "");
+              const dimsStr = s.dimensions || (s.width && s.length ? `${s.width} × ${s.length}` : "");
+              return `<option value="${idx}">${escapeHtml(s.name)}${dimsStr ? ` — ${escapeHtml(dimsStr)}` : ""}${deltaText}</option>`;
+            })
+            .join("");
+          bedSelect.value = "0";
+          selectedBedSize = bedSizesToUse[0];
+          if (bedBadge) bedBadge.textContent = `Selected: ${selectedBedSize.name}`;
         }
-      } else if (currentModalProduct.size) {
-        const s = currentModalProduct.size;
-        if (s.includes("L-Type")) {
-          const cleaned = s.replace("(L-Type)", "").replace(/\s+/g, " ").trim();
-          htmlContent = `${escapeHtml(cleaned)} <span style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-left: 4px; vertical-align: 1px; display: inline-block;">L-SHAPE</span>`;
-        } else {
-          htmlContent = escapeHtml(s);
-        }
-      }
-      if (htmlContent) {
-        dimsEl.innerHTML = htmlContent;
-        if (dimsCard) dimsCard.style.display = "block";
       } else {
-        if (dimsCard) dimsCard.style.display = "none";
+        bedSection.style.display = "none";
       }
     }
+
+    updateModalDimensionsUI();
 
     // Modal multi-thumbnail selector strip
     const thumbStrip = document.getElementById("pv-thumbnails");
@@ -1368,7 +1481,56 @@ function setupStorefrontUI() {
   const addToCartBtn = document.getElementById("pv-add-to-cart-btn");
 
   if (closePvBtn && pvModal) {
-    closePvBtn.addEventListener("click", () => pvModal.classList.remove("active"));
+    closePvBtn.addEventListener("click", () => {
+      pvModal.classList.remove("active");
+      const pvImg = document.getElementById("pv-image");
+      if (pvImg) pvImg.style.transform = "none";
+    });
+  }
+
+  // Feature 1: Chaise Orientation Toggle listeners
+  const orientLeftBtn = document.getElementById("pv-orient-left-btn");
+  const orientRightBtn = document.getElementById("pv-orient-right-btn");
+  const orientBadge = document.getElementById("pv-selected-orientation-badge");
+  const pvMainImage = document.getElementById("pv-image");
+
+  if (orientLeftBtn) {
+    orientLeftBtn.addEventListener("click", () => {
+      currentOrientation = "left";
+      if (pvMainImage) pvMainImage.style.transform = "none";
+      orientLeftBtn.classList.add("active");
+      if (orientRightBtn) orientRightBtn.classList.remove("active");
+      if (orientBadge) orientBadge.textContent = "Facing Left (Standard)";
+      updateModalDimensionsUI();
+    });
+  }
+
+  if (orientRightBtn) {
+    orientRightBtn.addEventListener("click", () => {
+      currentOrientation = "right";
+      if (pvMainImage) pvMainImage.style.transform = "scaleX(-1)";
+      orientRightBtn.classList.add("active");
+      if (orientLeftBtn) orientLeftBtn.classList.remove("active");
+      if (orientBadge) orientBadge.textContent = "Facing Right (Flipped)";
+      updateModalDimensionsUI();
+    });
+  }
+
+  // Feature 2: Bed Size Selection dropdown listener
+  const bedSelect = document.getElementById("pv-bed-size-select");
+  const bedBadge = document.getElementById("pv-selected-bed-size-badge");
+  if (bedSelect) {
+    bedSelect.addEventListener("change", (e) => {
+      if (!currentModalProduct) return;
+      const bedSizesToUse = Array.isArray(currentModalProduct.bedSizes) && currentModalProduct.bedSizes.length > 0
+        ? currentModalProduct.bedSizes
+        : DEFAULT_BED_SIZES;
+      const idx = parseInt(e.target.value, 10);
+      selectedBedSize = bedSizesToUse[idx] || bedSizesToUse[0];
+      if (bedBadge && selectedBedSize) bedBadge.textContent = `Selected: ${selectedBedSize.name}`;
+      updateModalDimensionsUI();
+      recalculatePdpTotals();
+    });
   }
 
   document.querySelectorAll(".material-btn").forEach((btn) => {
@@ -1410,12 +1572,20 @@ function setupStorefrontUI() {
       if (!currentModalProduct) return;
       const customNotes = document.getElementById("pv-custom-notes")?.value || "";
       const basePrice = parseFloat(currentModalProduct.price || 0);
+      const isBed = (currentModalProduct.category || "").toLowerCase().includes("bed");
+      const sizePriceDelta = isBed && selectedBedSize ? (parseFloat(selectedBedSize.priceDelta) || 0) : 0;
       const addonsTotal = selectedModalAddons.reduce((sum, a) => sum + (parseFloat(a.price) || 0), 0);
-      const unitPriceWithAddons = basePrice + addonsTotal;
+      const unitPriceWithAddons = basePrice + sizePriceDelta + addonsTotal;
 
       requireAuth(async () => {
         try {
           currentModalProduct.selectedColor = currentSelectedColor || "";
+          if (isBed && selectedBedSize) {
+            currentModalProduct.selectedBedSize = selectedBedSize.name;
+          }
+          if (currentOrientation === "right") {
+            currentModalProduct.selectedOrientation = "Facing Right";
+          }
           await addToCart(
             currentUser.uid,
             currentModalProduct,
@@ -1436,6 +1606,8 @@ function setupStorefrontUI() {
           const notesBox = document.getElementById("pv-custom-notes");
           if (notesBox) notesBox.value = "";
           pvModal.classList.remove("active");
+          const pvImg = document.getElementById("pv-image");
+          if (pvImg) pvImg.style.transform = "none";
           cartOverlay?.classList.add("active");
         } catch (err) {
           showToast(err.message, "error");

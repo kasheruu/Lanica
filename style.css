@@ -5146,6 +5146,14 @@ body.modal-open {
     box-sizing: border-box !important;
   }
 
+  #inventory-section .inventory-table tbody td:nth-child(4) .materials-cell-compact {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+
   #inventory-section .inventory-table tbody td:nth-child(4) .materials-list-wrapper {
     width: 100% !important;
     max-width: 100% !important;
@@ -6876,4 +6884,66 @@ textarea.auth-input-field {
 
 .messenger-btn-confirm:hover {
   background: #52341b;
+}
+
+/* ==========================================================================
+   FEATURE 1 & FEATURE 2: Sofa Orientation & Bed Sizes Styles
+   ========================================================================== */
+.pdp-orientation-section,
+.pdp-bed-size-section {
+  animation: fadeInPdpVariant 0.25s ease;
+}
+
+@keyframes fadeInPdpVariant {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pdp-orientation-btn {
+  background: #f8fafc;
+  color: #475569;
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  font-family: inherit;
+}
+
+.pdp-orientation-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.pdp-orientation-btn.active {
+  background: #1e40af !important;
+  color: #ffffff !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.28) !important;
+}
+
+.pdp-orientation-btn.active svg {
+  stroke: #ffffff !important;
+}
+
+#pv-bed-size-select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+.pdp-badge-orientation {
+  animation: pulseBadge 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes pulseBadge {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.04);
+  }
 }

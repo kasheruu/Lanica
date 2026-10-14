@@ -650,6 +650,11 @@ function openProductModal(product) {
   document.getElementById("pv-price").textContent = `₱${parseFloat(product.price || 0).toLocaleString()}`;
   document.getElementById("pv-category-badge").textContent = (product.category || "SOFA").toUpperCase();
 
+  const orientSection = document.getElementById("pv-orientation-section");
+  if (orientSection) orientSection.style.display = "none";
+  const bedSection = document.getElementById("pv-bed-size-section");
+  if (bedSection) bedSection.style.display = "none";
+
   const isMTO = (product.inventory_status || "made_to_order") === "made_to_order";
   const stockQty = getAvailableStock(product);
 

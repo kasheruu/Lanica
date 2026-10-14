@@ -779,6 +779,47 @@ function convertDimension(val, fromUnit, toUnit) {
   return Math.round(targetVal * 100) / 100;
 }
 
+function parseDimensionsToWidthLength(dimsStr) {
+  if (!dimsStr || typeof dimsStr !== "string") return { width: "", length: "" };
+  const matches = dimsStr.match(/(\d+(?:\.\d+)?)\s*(?:[×xX*]|\bby\b)\s*(\d+(?:\.\d+)?)/);
+  if (matches) {
+    return {
+      width: parseFloat(matches[1]) || "",
+      length: parseFloat(matches[2]) || "",
+    };
+  }
+  const parts = dimsStr.split(/[×xX*]/).map((p) => parseFloat(p.trim())).filter((n) => !isNaN(n));
+  if (parts.length >= 2) {
+    return { width: parts[0], length: parts[1] };
+  }
+  return { width: "", length: "" };
+}
+
+const BASE_DEFAULT_BED_SIZES_INCHES = [
+  { name: "Single", width: 36, length: 75, priceDelta: 0 },
+  { name: "Double / Full", width: 54, length: 75, priceDelta: 2500 },
+  { name: "Queen", width: 60, length: 75, priceDelta: 4500 },
+  { name: "King", width: 72, length: 78, priceDelta: 7000 },
+];
+
+function getDefaultBedSizes(unit = "in") {
+  return BASE_DEFAULT_BED_SIZES_INCHES.map((b) => {
+    const wCm = b.width * UNIT_TO_CM["in"];
+    const lCm = b.length * UNIT_TO_CM["in"];
+    const w = unit === "in" ? b.width : Math.round((wCm / UNIT_TO_CM[unit]) * 100) / 100;
+    const l = unit === "in" ? b.length : Math.round((lCm / UNIT_TO_CM[unit]) * 100) / 100;
+    return {
+      name: b.name,
+      width: w,
+      length: l,
+      widthCm: wCm,
+      lengthCm: lCm,
+      dimensions: `${w} × ${l} ${unit}`,
+      priceDelta: b.priceDelta,
+    };
+  });
+}
+
 const heightInput = document.getElementById("product-height");
 const widthInput = document.getElementById("product-width");
 const lengthInput = document.getElementById("product-length");
@@ -788,6 +829,40 @@ const length1Label = document.getElementById("label-product-length");
 const isLTypeSelect = document.getElementById("product-is-ltype");
 const unitSelect = document.getElementById("product-unit");
 let currentDimensionUnit = unitSelect ? unitSelect.value : "in";
+
+function getCanonicalCm(input, unit) {
+  if (input && input.dataset && input.dataset.canonicalCm && !isNaN(parseFloat(input.dataset.canonicalCm))) {
+    return parseFloat(input.dataset.canonicalCm);
+  }
+  if (!input) return null;
+  const val = parseFloat(input.value);
+  if (!isNaN(val) && val > 0 && UNIT_TO_CM[unit]) {
+    const cm = val * UNIT_TO_CM[unit];
+    input.dataset.canonicalCm = cm;
+    return cm;
+  }
+  return null;
+}
+
+function setCanonicalCm(input, val, unit) {
+  if (!input) return;
+  const num = parseFloat(val);
+  if (!isNaN(num) && num > 0 && UNIT_TO_CM[unit]) {
+    input.dataset.canonicalCm = num * UNIT_TO_CM[unit];
+  } else {
+    delete input.dataset.canonicalCm;
+  }
+}
+
+// Track typed inputs on main dimension fields to update canonical cm
+[heightInput, widthInput, lengthInput, length2Input].forEach((inp) => {
+  if (inp) {
+    inp.addEventListener("input", () => {
+      const u = unitSelect ? unitSelect.value : currentDimensionUnit || "in";
+      setCanonicalCm(inp, inp.value, u);
+    });
+  }
+});
 
 function toggleLTypeFields(isLType) {
   if (length2Field) {
@@ -818,22 +893,64 @@ if (unitSelect) {
     const newUnit = unitSelect.value;
     const oldUnit = currentDimensionUnit;
     if (newUnit !== oldUnit) {
-      const h = parseFloat(heightInput.value);
-      const w = parseFloat(widthInput.value);
-      const l = parseFloat(lengthInput ? lengthInput.value : 0);
-      const l2 = parseFloat(length2Input ? length2Input.value : 0);
-      if (!isNaN(h) && h > 0) {
-        heightInput.value = convertDimension(h, oldUnit, newUnit);
+      [heightInput, widthInput, lengthInput, length2Input].forEach((inp) => {
+        if (!inp) return;
+        const cm = getCanonicalCm(inp, oldUnit);
+        if (cm != null && UNIT_TO_CM[newUnit]) {
+          const converted = cm / UNIT_TO_CM[newUnit];
+          inp.value = Math.round(converted * 100) / 100;
+          // IMPORTANT: dataset.canonicalCm is preserved to prevent roundoff drift!
+        }
+      });
+
+      // Auto-convert bed size dimensions using canonical cm as well
+      if (Array.isArray(currentBedSizesList) && currentBedSizesList.length > 0) {
+        currentBedSizesList.forEach((size) => {
+          let wCm = size.widthCm;
+          let lCm = size.lengthCm;
+
+          // If widthCm or lengthCm not yet set, initialize from existing width/length/dimensions & oldUnit
+          if (wCm == null || isNaN(wCm)) {
+            let bw = parseFloat(size.width);
+            if ((isNaN(bw) || bw <= 0) && size.dimensions) {
+              const parsed = parseDimensionsToWidthLength(size.dimensions);
+              if (!isNaN(parsed.width) && parsed.width > 0) bw = parsed.width;
+            }
+            if (!isNaN(bw) && bw > 0 && UNIT_TO_CM[oldUnit]) {
+              wCm = bw * UNIT_TO_CM[oldUnit];
+              size.widthCm = wCm;
+            }
+          }
+
+          if (lCm == null || isNaN(lCm)) {
+            let bl = parseFloat(size.length);
+            if ((isNaN(bl) || bl <= 0) && size.dimensions) {
+              const parsed = parseDimensionsToWidthLength(size.dimensions);
+              if (!isNaN(parsed.length) && parsed.length > 0) bl = parsed.length;
+            }
+            if (!isNaN(bl) && bl > 0 && UNIT_TO_CM[oldUnit]) {
+              lCm = bl * UNIT_TO_CM[oldUnit];
+              size.lengthCm = lCm;
+            }
+          }
+
+          if (wCm != null && !isNaN(wCm) && UNIT_TO_CM[newUnit]) {
+            size.width = Math.round((wCm / UNIT_TO_CM[newUnit]) * 100) / 100;
+          }
+          if (lCm != null && !isNaN(lCm) && UNIT_TO_CM[newUnit]) {
+            size.length = Math.round((lCm / UNIT_TO_CM[newUnit]) * 100) / 100;
+          }
+          if (size.width && size.length) {
+            size.dimensions = `${size.width} × ${size.length} ${newUnit}`;
+          }
+        });
+        renderBedSizesRepeater();
       }
-      if (!isNaN(w) && w > 0) {
-        widthInput.value = convertDimension(w, oldUnit, newUnit);
-      }
-      if (!isNaN(l) && l > 0 && lengthInput) {
-        lengthInput.value = convertDimension(l, oldUnit, newUnit);
-      }
-      if (!isNaN(l2) && l2 > 0 && length2Input) {
-        length2Input.value = convertDimension(l2, oldUnit, newUnit);
-      }
+
+      document.querySelectorAll(".bed-size-unit-indicator").forEach((el) => {
+        el.textContent = newUnit;
+      });
+
       currentDimensionUnit = newUnit;
       if (typeof triggerDraftAutosave === "function") {
         triggerDraftAutosave();
@@ -1259,6 +1376,8 @@ function renderCategoryDropdowns(selectedCategory = null) {
       filterCatSelect.value = currentFilter;
     }
   }
+
+  updateBedSizesVisibility(currentVal);
 }
 
 function renderCategoryManagerList() {
@@ -1568,6 +1687,7 @@ function saveFormDraft() {
     freebies: [...currentFreebiesList],
     materials: currentMaterialTags,
     thumbnailData,
+    bedSizes: currentBedSizesList,
     savedAt: Date.now(),
   };
 
@@ -1626,10 +1746,22 @@ function restoreFormDraft() {
       isLTypeSelect.value = draft.isLType ? "true" : "false";
       toggleLTypeFields(draft.isLType);
     }
-    if (draft.height !== undefined && heightInput) heightInput.value = draft.height;
-    if (draft.width !== undefined && widthInput) widthInput.value = draft.width;
-    if (draft.length !== undefined && lengthInput) lengthInput.value = draft.length;
-    if (draft.length2 !== undefined && length2Input) length2Input.value = draft.length2;
+    if (draft.height !== undefined && heightInput) {
+      heightInput.value = draft.height;
+      setCanonicalCm(heightInput, draft.height, draft.unit || "in");
+    }
+    if (draft.width !== undefined && widthInput) {
+      widthInput.value = draft.width;
+      setCanonicalCm(widthInput, draft.width, draft.unit || "in");
+    }
+    if (draft.length !== undefined && lengthInput) {
+      lengthInput.value = draft.length;
+      setCanonicalCm(lengthInput, draft.length, draft.unit || "in");
+    }
+    if (draft.length2 !== undefined && length2Input) {
+      length2Input.value = draft.length2;
+      setCanonicalCm(length2Input, draft.length2, draft.unit || "in");
+    }
     if (draft.unit !== undefined && unitSelect) {
       unitSelect.value = draft.unit;
       currentDimensionUnit = draft.unit;
@@ -1665,6 +1797,28 @@ function restoreFormDraft() {
         }
       });
       renderThumbnailPreviews();
+    }
+
+    if (Array.isArray(draft.bedSizes) && draft.bedSizes.length > 0) {
+      const currentU = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+      currentBedSizesList = draft.bedSizes.map((s) => {
+        let w = s.width;
+        let l = s.length;
+        if ((w == null || w === "") && s.dimensions) {
+          const parsed = parseDimensionsToWidthLength(s.dimensions);
+          w = parsed.width;
+          l = parsed.length;
+        }
+        return {
+          name: s.name || "",
+          width: w != null ? w : "",
+          length: l != null ? l : "",
+          dimensions: s.dimensions || (w && l ? `${w} × ${l} ${currentU}` : ""),
+          priceDelta: s.priceDelta != null ? s.priceDelta : 0,
+        };
+      });
+      renderBedSizesRepeater();
+      updateBedSizesVisibility(draft.category);
     }
 
     const timeFormatted = draft.savedAt
@@ -1873,10 +2027,12 @@ window.closeModal = () => {
   renderCategoryDropdowns();
   clearThumbnailItems();
   clearAddonsRepeater();
-  if (heightInput) heightInput.value = "72";
-  if (widthInput) widthInput.value = "72";
-  if (lengthInput) lengthInput.value = "72";
-  if (length2Input) length2Input.value = "72";
+  clearBedSizesRepeater();
+  updateBedSizesVisibility("");
+  if (heightInput) { heightInput.value = "72"; setCanonicalCm(heightInput, 72, "in"); }
+  if (widthInput) { widthInput.value = "72"; setCanonicalCm(widthInput, 72, "in"); }
+  if (lengthInput) { lengthInput.value = "72"; setCanonicalCm(lengthInput, 72, "in"); }
+  if (length2Input) { length2Input.value = "72"; setCanonicalCm(length2Input, 72, "in"); }
   if (isLTypeSelect) isLTypeSelect.value = "false";
   toggleLTypeFields(false);
   if (unitSelect) unitSelect.value = "in";
@@ -2326,10 +2482,10 @@ productForm.addEventListener("submit", async (e) => {
       length,
       length2: isLType ? length2 : null,
       unit,
-      heightCm: convertDimension(height, unit, "cm"),
-      widthCm: convertDimension(width, unit, "cm"),
-      lengthCm: convertDimension(length, unit, "cm"),
-      length2Cm: isLType && length2 ? convertDimension(length2, unit, "cm") : null,
+      heightCm: getCanonicalCm(heightInput, unit) || convertDimension(height, unit, "cm"),
+      widthCm: getCanonicalCm(widthInput, unit) || convertDimension(width, unit, "cm"),
+      lengthCm: getCanonicalCm(lengthInput, unit) || convertDimension(length, unit, "cm"),
+      length2Cm: isLType && length2 ? (getCanonicalCm(length2Input, unit) || convertDimension(length2, unit, "cm")) : null,
     };
     let size = "";
     if (isLType && length2) {
@@ -2374,6 +2530,23 @@ productForm.addEventListener("submit", async (e) => {
         backBgImage: backBgImage || "",
       },
       addons: currentAddonsList.filter((a) => a && (a.name || "").trim() !== ""),
+      bedSizes: currentBedSizesList
+        .filter((s) => s && (s.name || "").trim() !== "")
+        .map((s) => {
+          const w = s.width != null && s.width !== "" ? parseFloat(s.width) || s.width : null;
+          const l = s.length != null && s.length !== "" ? parseFloat(s.length) || s.length : null;
+          const currentU = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+          const dims = (w && l) ? `${w} × ${l} ${currentU}` : (s.dimensions || "").trim();
+          return {
+            name: (s.name || "").trim(),
+            width: w,
+            length: l,
+            widthCm: s.widthCm != null ? s.widthCm : (w && UNIT_TO_CM[currentU] ? w * UNIT_TO_CM[currentU] : null),
+            lengthCm: s.lengthCm != null ? s.lengthCm : (l && UNIT_TO_CM[currentU] ? l * UNIT_TO_CM[currentU] : null),
+            dimensions: dims,
+            priceDelta: parseFloat(s.priceDelta) || 0,
+          };
+        }),
       meshyTaskId: meshyTaskId,
       modelUrl: modelUrl,
       meshyStatus: meshyStatus,
@@ -2728,6 +2901,207 @@ if (viewerModal)
     if (e.target === viewerModal) window.closeViewer();
   });
 
+// Dynamic Bed Sizes Repeater State & Logic (Bed Category)
+const DEFAULT_BED_SIZES = getDefaultBedSizes("in");
+let currentBedSizesList = [];
+
+function clearBedSizesRepeater() {
+  currentBedSizesList = [];
+  renderBedSizesRepeater();
+}
+
+function updateBedSizesVisibility(category) {
+  const container = document.getElementById("bed-sizes-repeater-container");
+  if (!container) return;
+  const isBed = (category || "").toLowerCase().includes("bed");
+  if (isBed) {
+    container.style.display = "block";
+    const currentUnit = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+    document.querySelectorAll(".bed-size-unit-indicator").forEach((el) => {
+      el.textContent = currentUnit;
+    });
+    if (currentBedSizesList.length === 0) {
+      currentBedSizesList = getDefaultBedSizes(currentUnit);
+      renderBedSizesRepeater();
+    }
+  } else {
+    container.style.display = "none";
+  }
+}
+
+function renderBedSizesRepeater() {
+  const container = document.getElementById("bed-sizes-repeater-list");
+  if (!container) return;
+
+  if (currentBedSizesList.length === 0) {
+    container.innerHTML = `<p style="font-size: 0.78rem; color: #9ca3af; margin: 4px 0; font-style: italic;">No bed sizes configured. Click "Add Bed Size" or "Reset Defaults".</p>`;
+    return;
+  }
+
+  const currentUnit = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+
+  container.innerHTML = currentBedSizesList
+    .map((size, index) => {
+      let w = size.width;
+      let l = size.length;
+      if ((w == null || w === "") && size.dimensions) {
+        const parsed = parseDimensionsToWidthLength(size.dimensions);
+        w = parsed.width;
+        l = parsed.length;
+      }
+      return `
+    <div class="bed-size-repeater-row" data-index="${index}">
+      <div class="bed-size-field-group bed-size-name-col">
+        <label class="bed-size-field-sublabel">Size Name</label>
+        <input type="text" class="bed-size-input-name" placeholder="Size Name (e.g. Queen)" value="${escapeHtml(size.name || "")}" />
+      </div>
+
+      <div class="bed-size-field-group bed-size-width-col">
+        <label class="bed-size-field-sublabel">Width (<span class="bed-size-unit-indicator">${escapeHtml(currentUnit)}</span>)</label>
+        <input type="number" class="bed-size-input-width" placeholder="Width" min="0.01" step="any" value="${w != null ? w : ""}" />
+      </div>
+
+      <div class="bed-size-field-group bed-size-length-col">
+        <label class="bed-size-field-sublabel">Length (<span class="bed-size-unit-indicator">${escapeHtml(currentUnit)}</span>)</label>
+        <input type="number" class="bed-size-input-length" placeholder="Length" min="0.01" step="any" value="${l != null ? l : ""}" />
+      </div>
+
+      <div class="bed-size-field-group bed-size-price-col">
+        <label class="bed-size-field-sublabel">Price Delta</label>
+        <div class="bed-size-price-input-wrapper">
+          <span class="bed-size-price-prefix">+₱</span>
+          <input type="number" class="bed-size-input-price" placeholder="Delta Price" min="0" step="any" value="${size.priceDelta != null ? size.priceDelta : 0}" style="border: none !important; outline: none !important; box-shadow: none !important; background: transparent !important; padding: 0 4px !important; margin: 0 !important; border-radius: 0 !important; width: 100% !important; height: 100% !important; min-width: 0 !important;" />
+        </div>
+      </div>
+
+      <div class="bed-size-delete-col">
+        <button type="button" class="btn-remove-bed-size-row" data-index="${index}" title="Remove Bed Size">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"></path>
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+    })
+    .join("");
+
+  container.querySelectorAll(".bed-size-repeater-row").forEach((row) => {
+    const idx = parseInt(row.dataset.index, 10);
+    const nameInp = row.querySelector(".bed-size-input-name");
+    const widthInp = row.querySelector(".bed-size-input-width");
+    const lengthInp = row.querySelector(".bed-size-input-length");
+    const priceInp = row.querySelector(".bed-size-input-price");
+    const removeBtn = row.querySelector(".btn-remove-bed-size-row");
+
+    if (nameInp) {
+      nameInp.addEventListener("input", (e) => {
+        if (currentBedSizesList[idx]) currentBedSizesList[idx].name = e.target.value;
+        if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+      });
+    }
+
+    if (widthInp) {
+      widthInp.addEventListener("input", (e) => {
+        if (currentBedSizesList[idx]) {
+          const val = parseFloat(e.target.value);
+          currentBedSizesList[idx].width = !isNaN(val) ? val : e.target.value;
+          const u = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+          if (!isNaN(val) && val > 0 && UNIT_TO_CM[u]) {
+            currentBedSizesList[idx].widthCm = val * UNIT_TO_CM[u];
+          } else {
+            delete currentBedSizesList[idx].widthCm;
+          }
+          const w = currentBedSizesList[idx].width;
+          const l = currentBedSizesList[idx].length;
+          if (w && l) {
+            currentBedSizesList[idx].dimensions = `${w} × ${l} ${u}`;
+          }
+          if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+        }
+      });
+    }
+
+    if (lengthInp) {
+      lengthInp.addEventListener("input", (e) => {
+        if (currentBedSizesList[idx]) {
+          const val = parseFloat(e.target.value);
+          currentBedSizesList[idx].length = !isNaN(val) ? val : e.target.value;
+          const u = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+          if (!isNaN(val) && val > 0 && UNIT_TO_CM[u]) {
+            currentBedSizesList[idx].lengthCm = val * UNIT_TO_CM[u];
+          } else {
+            delete currentBedSizesList[idx].lengthCm;
+          }
+          const w = currentBedSizesList[idx].width;
+          const l = currentBedSizesList[idx].length;
+          if (w && l) {
+            currentBedSizesList[idx].dimensions = `${w} × ${l} ${u}`;
+          }
+          if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+        }
+      });
+    }
+
+    if (priceInp) {
+      priceInp.addEventListener("input", (e) => {
+        if (currentBedSizesList[idx]) {
+          currentBedSizesList[idx].priceDelta = parseFloat(e.target.value) || 0;
+          if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+        }
+      });
+    }
+
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        currentBedSizesList.splice(idx, 1);
+        renderBedSizesRepeater();
+        if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+      });
+    }
+  });
+}
+
+function setupBedSizesRepeaterUI() {
+  document.addEventListener("click", (e) => {
+    const addBtn = e.target && e.target.closest ? e.target.closest("#btn-add-bed-size-row") : null;
+    if (addBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      currentBedSizesList.push({
+        name: "",
+        width: "",
+        length: "",
+        dimensions: "",
+        priceDelta: 0,
+      });
+      renderBedSizesRepeater();
+      if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+    }
+
+    const resetBtn = e.target && e.target.closest ? e.target.closest("#btn-reset-default-bed-sizes") : null;
+    if (resetBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const currentUnit = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+      currentBedSizesList = getDefaultBedSizes(currentUnit);
+      renderBedSizesRepeater();
+      if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
+    }
+  });
+
+  const catSelect = document.getElementById("product-category");
+  if (catSelect) {
+    catSelect.addEventListener("change", (e) => {
+      updateBedSizesVisibility(e.target.value);
+    });
+  }
+}
+
 // Add-ons / Optional Upgrades Repeater State & Logic
 let currentAddonsList = [];
 
@@ -2935,10 +3309,10 @@ window.editProduct = (id, productJsonBase64) => {
       else if (product.size.includes("m")) unit = "m";
       else unit = "in";
     }
-    if (heightInput) heightInput.value = height;
-    if (widthInput) widthInput.value = width;
-    if (lengthInput) lengthInput.value = length;
-    if (length2Input) length2Input.value = length2;
+    if (heightInput) { heightInput.value = height; setCanonicalCm(heightInput, height, unit); }
+    if (widthInput) { widthInput.value = width; setCanonicalCm(widthInput, width, unit); }
+    if (lengthInput) { lengthInput.value = length; setCanonicalCm(lengthInput, length, unit); }
+    if (length2Input) { length2Input.value = length2; setCanonicalCm(length2Input, length2, unit); }
     if (unitSelect) unitSelect.value = unit;
     currentDimensionUnit = unit;
 
@@ -2965,6 +3339,37 @@ window.editProduct = (id, productJsonBase64) => {
       currentAddonsList = product.addons.map((a) => ({ ...a }));
     }
     renderAddonsRepeater();
+
+    // Bed Sizes Repeater
+    currentBedSizesList = [];
+    if (Array.isArray(product.bedSizes) && product.bedSizes.length > 0) {
+      currentBedSizesList = product.bedSizes.map((s) => {
+        let w = s.width;
+        let l = s.length;
+        if ((w == null || w === "") && s.dimensions) {
+          const parsed = parseDimensionsToWidthLength(s.dimensions);
+          w = parsed.width;
+          l = parsed.length;
+        }
+        const wNum = parseFloat(w);
+        const lNum = parseFloat(l);
+        const wCm = s.widthCm != null ? s.widthCm : (!isNaN(wNum) && wNum > 0 && UNIT_TO_CM[unit] ? wNum * UNIT_TO_CM[unit] : null);
+        const lCm = s.lengthCm != null ? s.lengthCm : (!isNaN(lNum) && lNum > 0 && UNIT_TO_CM[unit] ? lNum * UNIT_TO_CM[unit] : null);
+        return {
+          name: s.name || "",
+          width: w != null ? w : "",
+          length: l != null ? l : "",
+          widthCm: wCm,
+          lengthCm: lCm,
+          dimensions: s.dimensions || (w && l ? `${w} × ${l} ${unit}` : ""),
+          priceDelta: s.priceDelta != null ? s.priceDelta : 0,
+        };
+      });
+    } else if ((product.category || "").toLowerCase().includes("bed")) {
+      currentBedSizesList = getDefaultBedSizes(unit);
+    }
+    renderBedSizesRepeater();
+    updateBedSizesVisibility(product.category);
 
     // When editing, front bg is not required unless replacing
     document.getElementById("img-bg").required = false;
@@ -3040,31 +3445,182 @@ function formatProductDate(createdAt) {
 }
 
 function formatMaterialsListHtml(materialRaw) {
-  if (!materialRaw) return '<span style="color:#9ca3af;">—</span>';
+  if (!materialRaw) return '<span style="color:#9ca3af; font-size: 0.82rem;">—</span>';
   let items = [];
   if (Array.isArray(materialRaw)) {
     items = materialRaw.map((s) => String(s).trim()).filter(Boolean);
   } else if (typeof materialRaw === "string") {
     items = materialRaw.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
   }
-  if (items.length === 0) return '<span style="color:#9ca3af;">—</span>';
+  if (items.length === 0) return '<span style="color:#9ca3af; font-size: 0.82rem;">—</span>';
+
+  const firstItem = items[0];
+  const remainingCount = items.length - 1;
+  const jsonEncoded = escapeHtml(JSON.stringify(items));
+
+  if (items.length === 1) {
+    return `
+      <div class="materials-cell-compact">
+        <span class="material-pill-single" title="${escapeHtml(firstItem)}">
+          <svg viewBox="0 0 24 24" class="material-pill-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span class="material-pill-label">${escapeHtml(firstItem)}</span>
+        </span>
+      </div>
+    `;
+  }
 
   return `
-    <div class="materials-list-wrapper">
+    <div class="materials-cell-compact">
+      <span class="material-pill-single" title="${escapeHtml(firstItem)}">
+        <svg viewBox="0 0 24 24" class="material-pill-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span class="material-pill-label">${escapeHtml(firstItem)}</span>
+      </span>
+      <button type="button" class="material-more-badge" data-materials='${jsonEncoded}' title="View all ${items.length} materials">
+        +${remainingCount} more
+      </button>
+    </div>
+  `;
+}
+
+// Enterprise Materials Floating Popover Manager
+let activeMaterialsPopover = null;
+let popoverHideTimeout = null;
+
+function createMaterialsPopover(triggerEl, items) {
+  closeMaterialsPopover();
+
+  const popover = document.createElement("div");
+  popover.className = "materials-floating-popover";
+  popover.innerHTML = `
+    <div class="popover-header">
+      <div class="popover-title-row">
+        <span class="popover-title">Materials &amp; Specs</span>
+        <span class="popover-count-badge">${items.length} specifications</span>
+      </div>
+    </div>
+    <div class="popover-body">
       ${items
         .map(
           (item) => `
-        <div class="material-chip-item">
-          <svg viewBox="0 0 24 24" class="material-chip-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <div class="popover-item">
+          <svg viewBox="0 0 24 24" class="popover-check-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          <span class="material-chip-text">${escapeHtml(item)}</span>
+          <span class="popover-item-text">${escapeHtml(item)}</span>
         </div>
       `
         )
         .join("")}
     </div>
   `;
+
+  document.body.appendChild(popover);
+  activeMaterialsPopover = popover;
+
+  const rect = triggerEl.getBoundingClientRect();
+  const popoverRect = popover.getBoundingClientRect();
+
+  let top = rect.bottom + 6;
+  if (top + popoverRect.height > window.innerHeight - 10) {
+    top = Math.max(10, rect.top - popoverRect.height - 6);
+  }
+
+  let left = rect.left;
+  if (left + popoverRect.width > window.innerWidth - 16) {
+    left = window.innerWidth - popoverRect.width - 16;
+  }
+  if (left < 16) left = 16;
+
+  popover.style.top = `${top}px`;
+  popover.style.left = `${left}px`;
+
+  requestAnimationFrame(() => {
+    popover.classList.add("visible");
+  });
+
+  popover.addEventListener("mouseenter", () => {
+    if (popoverHideTimeout) {
+      clearTimeout(popoverHideTimeout);
+      popoverHideTimeout = null;
+    }
+  });
+
+  popover.addEventListener("mouseleave", () => {
+    closeMaterialsPopover();
+  });
+}
+
+function closeMaterialsPopover() {
+  if (popoverHideTimeout) {
+    clearTimeout(popoverHideTimeout);
+    popoverHideTimeout = null;
+  }
+  if (activeMaterialsPopover) {
+    activeMaterialsPopover.remove();
+    activeMaterialsPopover = null;
+  }
+}
+
+if (typeof window !== "undefined" && !window.__materialsPopoverInitialized) {
+  window.__materialsPopoverInitialized = true;
+
+  document.addEventListener(
+    "mouseenter",
+    (e) => {
+      const trigger = e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
+      if (trigger) {
+        if (popoverHideTimeout) clearTimeout(popoverHideTimeout);
+        try {
+          const items = JSON.parse(trigger.getAttribute("data-materials") || "[]");
+          if (Array.isArray(items) && items.length > 0) {
+            createMaterialsPopover(trigger, items);
+          }
+        } catch (err) {}
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "mouseleave",
+    (e) => {
+      const trigger = e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
+      if (trigger) {
+        popoverHideTimeout = setTimeout(() => {
+          closeMaterialsPopover();
+        }, 220);
+      }
+    },
+    true
+  );
+
+  document.addEventListener("click", (e) => {
+    const trigger = e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
+    if (trigger) {
+      e.stopPropagation();
+      if (activeMaterialsPopover) {
+        closeMaterialsPopover();
+      } else {
+        try {
+          const items = JSON.parse(trigger.getAttribute("data-materials") || "[]");
+          if (Array.isArray(items) && items.length > 0) {
+            createMaterialsPopover(trigger, items);
+          }
+        } catch (err) {}
+      }
+      return;
+    }
+
+    if (activeMaterialsPopover && !e.target.closest(".materials-floating-popover")) {
+      closeMaterialsPopover();
+    }
+  });
+
+  window.addEventListener("scroll", () => closeMaterialsPopover(), { passive: true });
 }
 
   if (pagedProducts.length === 0) {
@@ -3103,7 +3659,7 @@ function formatMaterialsListHtml(materialRaw) {
               </td>
               <td>${escapeHtml(product.category)}</td>
               <td>₱${priceFormatted}</td>
-              <td>${formatMaterialsListHtml(product.material)}</td>
+              <td>${formatMaterialsListHtml(product.materials || product.material)}</td>
               <td id="stock-cell-${product.id}">
                   ${product.stock !== undefined ? product.stock : 0}
               </td>
@@ -9976,6 +10532,7 @@ function setupAdminLiveChat() {
 
 setupAdminLiveChat();
 setupAddonsRepeaterUI();
+setupBedSizesRepeaterUI();
 
 syncBatchDeleteUi();
 
