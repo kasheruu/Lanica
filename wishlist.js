@@ -394,11 +394,13 @@ function bindProductCardButtons() {
   document.querySelectorAll(".product-card").forEach((card) => {
     card.addEventListener("click", (e) => {
       if (
+        card.dataset.wasSwiping === "true" ||
         e.target.closest(".btn-ar-view") ||
         e.target.closest(".btn-wishlist-heart") ||
         e.target.closest(".btn-move-cart") ||
         e.target.closest(".card-slideshow-btn") ||
-        e.target.closest(".card-slideshow-dot")
+        e.target.closest(".card-slideshow-dot") ||
+        e.target.closest(".card-slideshow-dots")
       ) {
         return;
       }
@@ -471,6 +473,9 @@ function bindProductCardButtons() {
 
 function initCardSlideshows() {
   document.querySelectorAll(".card-slideshow").forEach((container) => {
+    if (container.dataset.slideshowInitialized === "true") return;
+    container.dataset.slideshowInitialized = "true";
+
     const track = container.querySelector(".card-slideshow-track");
     const slides = container.querySelectorAll(".card-slideshow-slide");
     const dots = container.querySelectorAll(".card-slideshow-dot");
@@ -479,10 +484,10 @@ function initCardSlideshows() {
     if (!track || slides.length < 2) return;
 
     let currentIndex = 0;
-    let autoInterval = null;
 
     function goToSlide(index) {
       currentIndex = (index + slides.length) % slides.length;
+      track.style.transform = `translateX(-${currentIndex * 100}%)`;
       slides.forEach((s, i) => s.classList.toggle("active", i === currentIndex));
       dots.forEach((d, i) => d.classList.toggle("active", i === currentIndex));
     }
@@ -509,18 +514,54 @@ function initCardSlideshows() {
       });
     });
 
-    function startAutoSlide() {
-      if (autoInterval) clearInterval(autoInterval);
-      autoInterval = setInterval(() => goToSlide(currentIndex + 1), 4000);
-    }
+    // Touch swipe support - Strictly horizontal swipe only
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isTouchActive = false;
 
-    function stopAutoSlide() {
-      if (autoInterval) clearInterval(autoInterval);
-    }
+    container.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        isTouchActive = true;
+      },
+      { passive: true }
+    );
 
-    container.addEventListener("mouseenter", stopAutoSlide);
-    container.addEventListener("mouseleave", startAutoSlide);
-    startAutoSlide();
+    container.addEventListener(
+      "touchend",
+      (e) => {
+        if (!isTouchActive) return;
+        isTouchActive = false;
+        if (!e.changedTouches || e.changedTouches.length === 0) return;
+
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+        const elapsed = Date.now() - touchStartTime;
+
+        if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY) * 1.5 && elapsed < 800) {
+          const card = container.closest(".product-card");
+          if (card) {
+            card.dataset.wasSwiping = "true";
+            setTimeout(() => {
+              if (card) card.dataset.wasSwiping = "false";
+            }, 300);
+          }
+          if (diffX < 0) {
+            goToSlide(currentIndex + 1);
+          } else {
+            goToSlide(currentIndex - 1);
+          }
+        }
+      },
+      { passive: true }
+    );
   });
 }
 

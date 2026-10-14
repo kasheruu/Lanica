@@ -223,7 +223,8 @@ export function classifyOrderScope(order) {
     rawStatus === "completed" ||
     rawOrderStatus === "completed" ||
     order.orderReceived === true ||
-    Boolean(order.completedAt)
+    Boolean(order.completedAt) ||
+    Boolean(order.orderReceivedAt)
   ) {
     return "history";
   }
@@ -596,6 +597,7 @@ export async function completeCustomerOrder(orderId, userInfo = null) {
     status: "completed",
     orderStatus: "completed",
     orderReceived: true,
+    orderReceivedAt: now,
     completedAt: now,
     updatedAt: now,
   });
@@ -644,4 +646,76 @@ export async function completeCustomerOrder(orderId, userInfo = null) {
   } catch (_) {}
 
   return { success: true, orderId };
+}
+
+export function getStatusNotificationMessage(orderId, newStatus) {
+  const norm = normalizeOrderStatus(newStatus);
+  const ref = orderId ? `#${String(orderId).slice(0, 8)}` : "your order";
+  switch (norm) {
+    case "slot reserved":
+      return `✨ Order Reservation Confirmed (${ref}): Your reservation has been recorded. Our workshop team will review your custom specifications.`;
+    case "downpayment confirmed":
+      return `💰 Deposit Confirmed (${ref}): 30% downpayment received and verified. Your order is now queued for workshop fabrication!`;
+    case "in production":
+      return `🔨 In Production (${ref}): Our master artisans have officially begun woodworking, assembly, and upholstery for your handcrafted furniture!`;
+    case "quality checked":
+      return `🔍 Quality Inspection Passed (${ref}): Your custom furniture has passed final workshop quality control and is being packaged for dispatch!`;
+    case "shipped":
+      return `🚚 Out for Delivery (${ref}): Your order has been dispatched with our logistics team and is on its way to your delivery address!`;
+    case "delivered":
+      return `🎉 Order Delivered (${ref}): Your handcrafted furniture has arrived! Please inspect your piece and tap "Order Received" in your orders page to finalize.`;
+    case "completed":
+      return `🎉 Order Completed (${ref}): Thank you for trusting Lanica Furniture! Your official receipt is ready in your Completed Transactions History.`;
+    case "cancelled":
+      return `❌ Order Cancelled (${ref}): This order has been cancelled. Please contact workshop support if you need assistance.`;
+    default:
+      return `📢 Status Update (${ref}): Your order status is now ${newStatus.toUpperCase()}.`;
+  }
+}
+
+export async function broadcastOrderStatusUpdate(orderId, newStatus, customNote = "") {
+  if (!orderId || !newStatus) return;
+  const orderDocRef = doc(db, "orders", orderId);
+  const now = serverTimestamp();
+  const textMsg = customNote
+    ? `${getStatusNotificationMessage(orderId, newStatus)}\n${customNote}`
+    : getStatusNotificationMessage(orderId, newStatus);
+
+  const payload = {
+    text: textMsg,
+    message: textMsg,
+    content: textMsg,
+    sender: "system",
+    senderId: "system",
+    senderName: "Lanica System",
+    senderRole: "system",
+    role: "system",
+    isSystem: true,
+    type: 0,
+    timestamp: now,
+    createdAt: now,
+  };
+
+  try {
+    const webCol = collection(db, "orders", orderId, "messages");
+    await addDoc(webCol, payload);
+  } catch (err) {
+    console.warn("Could not write status update to orders/{id}/messages:", err);
+  }
+
+  try {
+    const mobileCol = collection(db, "order_chats", orderId, "messages");
+    await addDoc(mobileCol, payload);
+  } catch (err) {
+    console.warn("Could not write status update to order_chats/{id}/messages:", err);
+  }
+
+  try {
+    await updateDoc(orderDocRef, {
+      lastMessage: textMsg,
+      lastMessageAt: now,
+      lastSenderRole: "system",
+      lastSenderName: "Lanica System",
+    });
+  } catch (_) {}
 }

@@ -183,9 +183,12 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Total Sales (Gross)</h3>
+            <h3>Total Sales</h3>
             <p class="stat-value" id="dash-total-revenue">₱0.00</p>
-            <span class="kpi-subtitle" id="dash-revenue-collected">₱0.00 Collected • ₱0.00 Balance</span>
+            <div class="kpi-revenue-pills" id="dash-revenue-collected">
+              <span class="kpi-pill kpi-pill-collected"><span class="kpi-pill-icon">✓</span> Collected: ₱0</span>
+              <span class="kpi-pill kpi-pill-balance"><span class="kpi-pill-icon">⚠</span> Unpaid Balance: ₱0</span>
+            </div>
           </div>
         </div>
 
@@ -198,7 +201,7 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Pending / Placed</h3>
+            <h3>Pending Orders</h3>
             <p class="stat-value" id="dash-pending-orders">0</p>
             <span class="kpi-subtitle">Needs downpayment / review</span>
           </div>
@@ -212,7 +215,7 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Workshop Pipeline</h3>
+            <h3>Workshop Queue</h3>
             <p class="stat-value" id="dash-low-stock">0</p>
             <span class="kpi-subtitle">In Production &amp; QC stage</span>
           </div>
@@ -229,7 +232,7 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Delivered / Complete</h3>
+            <h3>Delivered Orders</h3>
             <p class="stat-value" id="dash-fulfilled-orders">0</p>
             <span class="kpi-subtitle">Shipped &amp; successfully handed over</span>
           </div>
@@ -245,7 +248,7 @@
             </svg>
           </div>
           <div class="kpi-content">
-            <h3>Active Products</h3>
+            <h3>Active Catalog</h3>
             <p class="stat-value" id="dash-total-products">0</p>
             <span class="kpi-subtitle" id="dash-low-stock-sub">All stock levels normal</span>
           </div>
@@ -263,7 +266,7 @@
             <span style="font-size: 0.78rem; color: #64748b;">Click any stage below to jump to orders filtered by stage</span>
           </div>
           <a href="#" id="dash-link-workshop-all" style="font-size: 0.82rem; font-weight: 600; color: #2563eb; text-decoration: none;">
-            Open Workshop Queue &rarr;
+            Open Workshop Queue
           </a>
         </div>
         <div class="dashboard-pipeline-steps" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;">
@@ -312,10 +315,10 @@
             <div style="display: flex; align-items: center; gap: 10px;">
               <div style="position: relative; display: flex; align-items: center;">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-                <input type="text" id="dash-orders-search-input" placeholder="Search recent orders..." style="padding: 6px 12px 6px 30px; font-size: 0.82rem; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; width: 200px;" />
+                <input type="text" id="dash-orders-search-input" placeholder="Search recent orders..." maxlength="80" style="padding: 6px 12px 6px 30px; font-size: 0.82rem; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; width: 200px;" />
               </div>
               <a href="#" id="dash-link-all-orders" style="font-size: 0.86rem; font-weight: 600; color: #d97706; text-decoration: none; white-space: nowrap;">
-                View All Orders &rarr;
+                View All Orders
               </a>
             </div>
           </div>
@@ -356,30 +359,11 @@
               Communicate directly with customers, answer order inquiries, and share attachments in real-time.
             </p>
             <button type="button" id="dash-btn-open-chat" style="width: 100%; background: #0f172a; color: #ffffff; border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;">
-              Open Chat Workspace &rarr;
+              Open Chat Workspace
             </button>
           </div>
 
-          <!-- Widget 2: Inventory & Restock Watchlist -->
-          <div class="dash-widget-card" style="background: #ffffff; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                Stock Attention Watchlist
-              </h4>
-              <span id="dash-widget-lowstock-badge" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #fef2f2; color: #dc2626;">0 Items</span>
-            </div>
-            <div id="dash-watchlist-items" style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-              <div style="font-size: 0.8rem; color: #10b981; text-align: center; padding: 12px 0;">
-                ✓ All inventory items are adequately stocked.
-              </div>
-            </div>
-            <button type="button" id="dash-btn-view-inventory" style="width: 100%; margin-top: 14px; background: #f8fafc; color: #334155; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 8px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-              Manage Inventory &rarr;
-            </button>
-          </div>
-
-          <!-- Widget 3: Official Document & Voucher Generator Shortcut -->
+          <!-- Widget 2: Official Document & Voucher Generator Shortcut -->
           <div class="dash-widget-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; border-radius: 14px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
@@ -389,7 +373,7 @@
               Instantly create, customize signatories, and print authentic Lanica Payment Vouchers and Quotations.
             </p>
             <button type="button" id="dash-btn-open-transactions" style="width: 100%; background: #d97706; color: #ffffff; border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;">
-              View Financial Ledger &rarr;
+              View Financial Ledger
             </button>
           </div>
         </div>
@@ -717,6 +701,7 @@
                 id="product-price"
                 inputmode="decimal"
                 placeholder="0.00"
+                maxlength="15"
                 required
                 autocomplete="off"
               />
@@ -738,7 +723,7 @@
             </label>
             <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 4px;">
               <label for="product-lead-time" style="font-size: 0.8rem; font-weight: 500; color: #4b5563;">Estimated Production Lead Time</label>
-              <input type="text" id="product-lead-time" placeholder="e.g. 14-21 Business Days" value="14-21 Business Days" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.84rem; outline: none; background: #fff;" />
+              <input type="text" id="product-lead-time" placeholder="e.g. 14-21 Business Days" value="14-21 Business Days" maxlength="50" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.84rem; outline: none; background: #fff;" />
             </div>
           </div>
 
@@ -751,7 +736,7 @@
             <div class="material-tags-container" id="material-tags-container">
               <div class="material-tags-list" id="material-tags-list"></div>
               <div class="material-tags-input-row">
-                <input type="text" id="product-material-input" placeholder="e.g. Solid Oak, Tempered Glass, Linen blend..." />
+                <input type="text" id="product-material-input" placeholder="e.g. Solid Oak, Tempered Glass, Linen blend..." maxlength="80" />
                 <button type="button" id="btn-add-material-tag" class="btn-tag-add">Add</button>
               </div>
             </div>
@@ -780,7 +765,7 @@
             <div class="material-tags-container" id="color-tags-container">
               <div class="material-tags-list" id="color-tags-list"></div>
               <div class="material-tags-input-row">
-                <input type="text" id="product-color-input" placeholder="e.g. Gamusa Bailey Mustang, Emerald Green, Charcoal Grey..." />
+                <input type="text" id="product-color-input" placeholder="e.g. Gamusa Bailey Mustang, Emerald Green, Charcoal Grey..." maxlength="80" />
                 <button type="button" id="btn-add-color-tag" class="btn-tag-add">Add</button>
               </div>
             </div>
@@ -812,7 +797,7 @@
             <div class="material-tags-container" id="freebie-tags-container">
               <div class="material-tags-list" id="freebie-tags-list"></div>
               <div class="material-tags-input-row">
-                <input type="text" id="product-freebie-input" placeholder="e.g. 5 Pillows, Footstool (Class A Foam), Wood Footings..." />
+                <input type="text" id="product-freebie-input" placeholder="e.g. 5 Pillows, Footstool (Class A Foam), Wood Footings..." maxlength="80" />
                 <button type="button" id="btn-add-freebie-tag" class="btn-tag-add">Add</button>
               </div>
             </div>
@@ -1093,12 +1078,12 @@
             </div>
             <div>
               <label for="refund-tx-id-input" style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Transaction Reference ID *</label>
-              <input type="text" id="refund-tx-id-input" required style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:0.9rem;" placeholder="e.g. REF-849201" />
+              <input type="text" id="refund-tx-id-input" required maxlength="60" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:0.9rem;" placeholder="e.g. REF-849201" />
               <small style="color:#6b7280; font-size:0.78rem;">Required payment reference ID generated by admin/bank.</small>
             </div>
             <div>
               <label for="refund-admin-note-input" style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Admin Note (Optional)</label>
-              <textarea id="refund-admin-note-input" rows="2" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:0.88rem;" placeholder="Approval or rejection notes for customer..."></textarea>
+              <textarea id="refund-admin-note-input" rows="2" maxlength="300" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:0.88rem;" placeholder="Approval or rejection notes for customer..."></textarea>
             </div>
 
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; border-top:1px solid #e5e7eb; padding-top:14px;">
@@ -1240,6 +1225,7 @@
                 type="text"
                 id="admin-chat-search-input"
                 placeholder="Search customers, orders, messages..."
+                maxlength="80"
                 style="width: 100%; padding: 8px 30px 8px 32px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
                 autocomplete="off"
                 aria-label="Search conversations"
@@ -1352,7 +1338,7 @@
             <button type="button" id="admin-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 9px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Attach photo or swatch">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #4b5563;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
             </button>
-            <input type="text" id="admin-chat-input" placeholder="Select a conversation to reply..." disabled style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; background: #f8fafc;" />
+            <input type="text" id="admin-chat-input" placeholder="Select a conversation to reply..." disabled maxlength="500" style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; background: #f8fafc;" />
             <button type="submit" id="admin-chat-submit-btn" class="btn-primary" disabled style="padding: 10px 18px; border-radius: 8px; white-space: nowrap; opacity: 0.6; cursor: not-allowed;">
               Send Reply
             </button>
@@ -1405,6 +1391,7 @@
               type="text"
               id="admin-orders-search-input"
               placeholder="Search Order ID, customer, item, or status..."
+              maxlength="80"
               style="width: 100%; padding: 9px 32px 9px 36px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
               autocomplete="off"
               aria-label="Search Orders"
@@ -1549,7 +1536,7 @@
               <circle cx="11" cy="11" r="8"></circle>
               <path d="m21 21-4.3-4.3"></path>
             </svg>
-            <input type="text" id="users-search-input" placeholder="Search user name, email, or UID..." style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit;" autocomplete="off" />
+            <input type="text" id="users-search-input" placeholder="Search user name, email, or UID..." maxlength="80" style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit;" autocomplete="off" />
           </div>
           <label for="users-role-filter" class="orders-filter-label">Status Filter</label>
           <select id="users-role-filter" class="orders-filter-select">
@@ -1631,6 +1618,7 @@
                 type="text"
                 id="admin-trans-search"
                 placeholder="Search transaction ID, order ref, customer name..."
+                maxlength="80"
                 style="width: 100%; padding: 9px 12px 9px 36px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.86rem; outline: none;"
               />
             </div>
@@ -1711,6 +1699,7 @@
                 type="text"
                 id="audit-log-search"
                 placeholder="Search staff name, email, target ID, or action..."
+                maxlength="80"
                 style="width: 100%; padding: 9px 12px 9px 36px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.86rem; outline: none;"
               />
             </div>

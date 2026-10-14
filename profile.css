@@ -522,6 +522,8 @@
   font-weight: 800;
   color: #0f1115;
   font-family: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field-divider {

@@ -220,6 +220,7 @@
                   type="text"
                   id="staff-chat-search-input"
                   placeholder="Search customers or messages..."
+                  maxlength="80"
                   style="width: 100%; padding: 8px 30px 8px 32px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
                   autocomplete="off"
                   aria-label="Search conversations"
@@ -326,7 +327,7 @@
               <button type="button" id="staff-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Attach photo or swatch">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #4b5563;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
               </button>
-              <input type="text" id="staff-chat-input" placeholder="Type workshop update or reply to customer..." style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none;" />
+              <input type="text" id="staff-chat-input" placeholder="Type workshop update or reply to customer..." maxlength="500" style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none;" />
               <button type="submit" class="btn-primary" style="padding: 10px 18px; border-radius: 8px; white-space: nowrap;">
                 Send Reply
               </button>
@@ -400,11 +401,11 @@
               <div class="profile-fields-grid">
                 <div class="form-group">
                   <label for="staff-first-name">First Name</label>
-                  <input id="staff-first-name" class="profile-input" placeholder="Herald" />
+                  <input id="staff-first-name" class="profile-input" placeholder="Herald" maxlength="40" />
                 </div>
                 <div class="form-group">
                   <label for="staff-last-name">Last Name</label>
-                  <input id="staff-last-name" class="profile-input" placeholder="Zontix" />
+                  <input id="staff-last-name" class="profile-input" placeholder="Zontix" maxlength="40" />
                 </div>
                 <div class="form-group full-width">
                   <label for="staff-email-address">Email Address</label>
@@ -412,7 +413,7 @@
                 </div>
                 <div class="form-group">
                   <label for="staff-phone-edit">Phone Number</label>
-                  <input id="staff-phone-edit" class="profile-input" type="tel" placeholder="0945 751 0291" />
+                  <input id="staff-phone-edit" class="profile-input" type="tel" placeholder="0945 751 0291" maxlength="16" />
                 </div>
               </div>
 

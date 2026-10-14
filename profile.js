@@ -684,6 +684,26 @@ function setupBugReportingModal() {
     closeBtn.addEventListener("click", () => modal.classList.remove("active"));
   }
 
+  const titleInput = document.getElementById("bug-title");
+  const titleCount = document.getElementById("bug-title-count");
+  const descInput = document.getElementById("bug-description");
+  const descCount = document.getElementById("bug-desc-count");
+
+  function bindCounter(input, counterEl, max) {
+    if (!input || !counterEl) return;
+    const update = () => {
+      const len = input.value.length;
+      counterEl.textContent = `${len} / ${max}`;
+      counterEl.classList.toggle("near-limit", len >= max * 0.85 && len < max);
+      counterEl.classList.toggle("at-limit", len >= max);
+    };
+    input.addEventListener("input", update);
+    update();
+  }
+
+  bindCounter(titleInput, titleCount, 100);
+  bindCounter(descInput, descCount, 1000);
+
   let selectedSeverity = "Medium";
   const severityPills = document.querySelectorAll(".severity-pill");
   severityPills.forEach((pill) => {

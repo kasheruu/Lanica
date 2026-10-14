@@ -1065,15 +1065,18 @@ function normalizeOrderStatus(raw) {
   if (s === "accepted" || s === "deposit confirmed" || s === "deposit verified" || s === "payment verified") return "downpayment confirmed";
   if (s === "processing" || s === "packed") return "in production";
   if (s === "declined") return "cancelled";
-  if (s === "completed" || s === "received" || s === "arrived") return "delivered";
+  if (s === "completed" || s === "order completed") return "completed";
+  if (s === "received" || s === "arrived") return "delivered";
   if (
     [
       "placed",
+      "slot reserved",
       "downpayment confirmed",
       "in production",
       "quality checked",
       "shipped",
       "delivered",
+      "completed",
       "cancelled",
     ].includes(s)
   )
@@ -1082,10 +1085,16 @@ function normalizeOrderStatus(raw) {
 }
 
 function isOrderCompleted(order) {
+  if (!order) return false;
   const status = normalizeOrderStatus(order.status);
+  const orderStatus = normalizeOrderStatus(order.orderStatus);
+  const rawStatus = String(order.status || "").toLowerCase().trim();
+  const rawOrderStatus = String(order.orderStatus || "").toLowerCase().trim();
   return (
     status === "completed" ||
-    status === "received" ||
+    orderStatus === "completed" ||
+    rawStatus === "completed" ||
+    rawOrderStatus === "completed" ||
     order.orderReceived === true ||
     !!order.orderReceivedAt ||
     !!order.receivedAt ||
@@ -1222,7 +1231,7 @@ function renderOrders() {
         <strong>${escapeHtml(String(customer))}</strong>
         ${landmarkHtml}
       </td>
-      <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
+      <td class="order-items-cell"><div class="order-items-summary">${escapeHtml(formatOrderItemsSummary(order.items))}</div></td>
       <td>${totalStr}</td>
       <td>
         <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml(
@@ -1280,7 +1289,7 @@ function renderCompletedHistory() {
     tr.innerHTML = `
       <td><strong style="font-size:0.9rem;">${escapeHtml(order.id.slice(0, 8))}…</strong></td>
       <td>${escapeHtml(String(customer))}</td>
-      <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
+      <td class="order-items-cell"><div class="order-items-summary">${escapeHtml(formatOrderItemsSummary(order.items))}</div></td>
       <td>${totalStr}</td>
       <td>${escapeHtml(assignedStaff)}</td>
       <td>${escapeHtml(getCompletedAtLabel(order))}</td>
@@ -1570,6 +1579,76 @@ async function applyManualDeliveryDate(orderId, manualDate) {
   }
 }
 
+function getStatusNotificationMessage(orderId, newStatus) {
+  const norm = normalizeOrderStatus(newStatus);
+  const ref = orderId ? `#${String(orderId).slice(0, 8)}` : "your order";
+  switch (norm) {
+    case "slot reserved":
+      return `✨ Order Reservation Confirmed (${ref}): Your reservation has been recorded. Our workshop team will review your custom specifications.`;
+    case "downpayment confirmed":
+      return `💰 Deposit Confirmed (${ref}): 30% downpayment received and verified. Your order is now queued for workshop fabrication!`;
+    case "in production":
+      return `🔨 In Production (${ref}): Our master artisans have officially begun woodworking, assembly, and upholstery for your handcrafted furniture!`;
+    case "quality checked":
+      return `🔍 Quality Inspection Passed (${ref}): Your custom furniture has passed final workshop quality control and is being packaged for dispatch!`;
+    case "shipped":
+      return `🚚 Out for Delivery (${ref}): Your order has been dispatched with our logistics team and is on its way to your delivery address!`;
+    case "delivered":
+      return `🎉 Order Delivered (${ref}): Your handcrafted furniture has arrived! Please inspect your piece and tap "Order Received" in your orders page to finalize.`;
+    case "completed":
+      return `🎉 Order Completed (${ref}): Thank you for trusting Lanica Furniture! Your official receipt is ready in your Completed Transactions History.`;
+    case "cancelled":
+      return `❌ Order Cancelled (${ref}): This order has been cancelled. Please contact workshop support if you need assistance.`;
+    default:
+      return `📢 Status Update (${ref}): Your order status is now ${newStatus.toUpperCase()}.`;
+  }
+}
+
+async function broadcastOrderStatusUpdate(orderId, newStatus) {
+  if (!orderId || !newStatus) return;
+  const orderDocRef = doc(db, "orders", orderId);
+  const now = Timestamp.now();
+  const textMsg = getStatusNotificationMessage(orderId, newStatus);
+
+  const payload = {
+    text: textMsg,
+    message: textMsg,
+    content: textMsg,
+    sender: "system",
+    senderId: "system",
+    senderName: "Lanica System",
+    senderRole: "system",
+    role: "system",
+    isSystem: true,
+    type: 0,
+    timestamp: now,
+    createdAt: now,
+  };
+
+  try {
+    const webCol = collection(db, "orders", orderId, "messages");
+    await addDoc(webCol, payload);
+  } catch (err) {
+    console.warn("Could not write status update to orders/{id}/messages:", err);
+  }
+
+  try {
+    const mobileCol = collection(db, "order_chats", orderId, "messages");
+    await addDoc(mobileCol, payload);
+  } catch (err) {
+    console.warn("Could not write status update to order_chats/{id}/messages:", err);
+  }
+
+  try {
+    await updateDoc(orderDocRef, {
+      lastMessage: textMsg,
+      lastMessageAt: now,
+      lastSenderRole: "system",
+      lastSenderName: "Lanica System",
+    });
+  } catch (_) {}
+}
+
 // Function to update order status in Firestore
 async function updateOrderStatus(orderId, newStatus) {
   try {
@@ -1624,6 +1703,7 @@ async function updateOrderStatus(orderId, newStatus) {
     }
 
     await updateDoc(orderRef, updateData);
+    broadcastOrderStatusUpdate(orderId, newStatus).catch((err) => console.warn("Broadcast err:", err));
 
     if (updateData.paymentStatus === "downpayment_paid") {
       await recordAuditLog({
@@ -3814,17 +3894,28 @@ function setupStaffLiveChat() {
       }
 
       visibleMsgs.forEach((m) => {
+        const isSystem =
+          Boolean(m.isSystem) ||
+          m.senderRole === "system" ||
+          m.senderRole === "bot" ||
+          m.sender === "system" ||
+          m.senderId === "system" ||
+          (typeof m.senderName === "string" && (m.senderName.toLowerCase().includes("system") || m.senderName.toLowerCase().includes("bot")));
+
         const isStaff =
-          m.senderRole === "admin" ||
-          m.senderRole === "staff" ||
-          m.senderId === "support_admin";
+          !isSystem &&
+          (m.senderRole === "admin" ||
+           m.senderRole === "staff" ||
+           m.senderId === "support_admin");
 
         const row = document.createElement("div");
-        row.className = `chat-message-row ${isStaff ? "is-staff" : "is-customer"}`;
+        row.className = `chat-message-row ${isSystem ? "is-system" : isStaff ? "is-staff" : "is-customer"}`;
 
-        const senderLabel = isStaff
-          ? "Workshop Artisan & Staff"
-          : session.customerName || m.senderName || "Customer";
+        const senderLabel = isSystem
+          ? (m.senderName || "Lanica System")
+          : isStaff
+            ? "Workshop Artisan & Staff"
+            : (session.customerName || m.senderName || "Customer");
 
         const timeVal = m.timestamp || m.createdAt;
         const timeStr = timeVal?.toDate
@@ -3833,10 +3924,12 @@ function setupStaffLiveChat() {
 
         const { mediaUrl, displayText } = parseChatMessageContent(m);
 
-        // Avatar for customer message
-        const avatarCol = !isStaff
-          ? renderAvatarHtml(session.photoURL, senderLabel, isSupport, 32)
-          : "";
+        // Avatar: system has robot icon, customer has photo/initials, staff has none
+        const avatarCol = isSystem
+          ? `<div class="chat-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700; flex-shrink: 0; border: 1.5px solid #fde68a;" title="Lanica System Notification">🤖</div>`
+          : !isStaff
+            ? renderAvatarHtml(session.photoURL, senderLabel, isSupport, 32)
+            : "";
 
         // Quoted Reply HTML
         const quotedHtml = m.replyTo && m.replyTo.text
@@ -3851,7 +3944,7 @@ function setupStaffLiveChat() {
         row.innerHTML = `
           ${avatarCol}
           <div class="chat-message-content-wrap">
-            <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
+            <span style="font-size: 0.72rem; color: ${isSystem ? '#b45309' : '#6b7280'}; margin-bottom: 2px; font-weight: ${isSystem ? '700' : '500'};">
               ${escapeHtml(senderLabel)} • ${timeStr}
             </span>
             <div class="chat-bubble-with-actions">
@@ -3859,10 +3952,10 @@ function setupStaffLiveChat() {
                 m.isUnsent
                   ? `<div class="chat-bubble-unsent">${isStaff ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}</div>`
                   : `
-                <div class="chat-bubble-${isStaff ? "staff" : "customer"}" style="padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
-                  isStaff ? "#6b4423" : "#ffffff"
-                }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
-                  isStaff ? "#6b4423" : "#e5e7eb"
+                <div class="chat-bubble-${isSystem ? "system" : isStaff ? "staff" : "customer"}" style="padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
+                  isSystem ? "#fffbeb" : isStaff ? "#6b4423" : "#ffffff"
+                }; color: ${isSystem ? "#92400e" : isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
+                  isSystem ? "#fde68a" : isStaff ? "#6b4423" : "#e5e7eb"
                 }; box-shadow: 0 1px 2px rgba(0,0,0,0.05); max-width: 100%;">
                   ${quotedHtml}
                   ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}

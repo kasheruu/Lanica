@@ -200,10 +200,19 @@ export function subscribeToUserSupportMessages(userId, callback, errorCallback) 
         const d = docSnap.data();
         const textContent = d.content || d.text || d.message || "";
         const fileUrl = d.attachmentUrl || d.imageUrl || (d.type === 1 ? d.content : "") || "";
+        const isSystem =
+          Boolean(d.isSystem) ||
+          d.senderRole === "system" ||
+          d.senderRole === "bot" ||
+          d.sender === "system" ||
+          d.senderId === "system" ||
+          (typeof d.senderName === "string" && (d.senderName.toLowerCase().includes("system") || d.senderName.toLowerCase().includes("bot")));
+
         const isFromStaff =
-          d.senderRole === "admin" ||
+          !isSystem &&
+          (d.senderRole === "admin" ||
           d.senderRole === "staff" ||
-          d.senderId === "support_admin";
+          d.senderId === "support_admin");
 
         messages.push({
           id: docSnap.id,
@@ -215,8 +224,9 @@ export function subscribeToUserSupportMessages(userId, callback, errorCallback) 
           attachmentUrl: fileUrl,
           imageUrl: fileUrl,
           senderId: d.senderId,
-          senderName: d.senderName || (isFromStaff ? "Lanica Support" : "Customer"),
-          senderRole: d.senderRole || (isFromStaff ? "admin" : "customer"),
+          senderName: isSystem ? (d.senderName || "Lanica System") : (d.senderName || (isFromStaff ? "Lanica Support" : "Customer")),
+          senderRole: isSystem ? "system" : (d.senderRole || (isFromStaff ? "admin" : "customer")),
+          isSystem,
           receiverId: d.receiverId || "",
           type: d.type ?? (fileUrl ? 1 : 0),
           isRead: d.isRead ?? true,
@@ -415,10 +425,19 @@ export function subscribeToMessages(targetId, callback, errorCallback, isUserSup
         const d = docSnap.data();
         const textContent = d.content || d.text || d.message || "";
         const fileUrl = d.attachmentUrl || d.imageUrl || (d.type === 1 ? d.content : "") || "";
+        const isSystem =
+          Boolean(d.isSystem) ||
+          d.senderRole === "system" ||
+          d.senderRole === "bot" ||
+          d.sender === "system" ||
+          d.senderId === "system" ||
+          (typeof d.senderName === "string" && (d.senderName.toLowerCase().includes("system") || d.senderName.toLowerCase().includes("bot")));
+
         const isFromStaff =
-          d.senderRole === "admin" ||
+          !isSystem &&
+          (d.senderRole === "admin" ||
           d.senderRole === "staff" ||
-          d.senderId === "support_admin";
+          d.senderId === "support_admin");
 
         messages.push({
           id: docSnap.id,
@@ -430,8 +449,9 @@ export function subscribeToMessages(targetId, callback, errorCallback, isUserSup
           attachmentUrl: fileUrl,
           imageUrl: fileUrl,
           senderId: d.senderId,
-          senderName: d.senderName || (isFromStaff ? "Lanica Workshop" : "Customer"),
-          senderRole: d.senderRole || (isFromStaff ? "admin" : "customer"),
+          senderName: isSystem ? (d.senderName || "Lanica System") : (d.senderName || (isFromStaff ? "Lanica Workshop" : "Customer")),
+          senderRole: isSystem ? "system" : (d.senderRole || (isFromStaff ? "admin" : "customer")),
+          isSystem,
           receiverId: d.receiverId || "",
           type: d.type ?? (fileUrl ? 1 : 0),
           isRead: d.isRead ?? true,

@@ -1025,7 +1025,8 @@
   background: #f3e8fd;
   color: #7b1fa2;
 }
-.order-status-delivered {
+.order-status-delivered,
+.order-status-completed {
   background: #e6f4ea;
   color: #137333;
 }
@@ -1165,36 +1166,35 @@
 
 /* Dashboard & Overhauled Analytics Styling */
 .dashboard-kpi-grid {
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 20px;
-  margin-bottom: 28px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
 .kpi-card {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 12px;
   background-color: #ffffff;
-  padding: 22px 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  padding: 18px 16px;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .kpi-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .revenue-icon {
@@ -1217,26 +1217,97 @@
   color: #9333ea;
 }
 
+.kpi-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
 .kpi-content h3 {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.74rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
-  margin: 0 0 4px 0;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin: 0 0 6px 0;
+  line-height: 1.25;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 .kpi-content .stat-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 2px 0;
-  line-height: 1.2;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+  line-height: 1.1;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#dash-total-revenue {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .kpi-subtitle {
-  font-size: 0.78rem;
-  color: #9ca3af;
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.3;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  min-height: 28px;
+}
+
+.kpi-revenue-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+}
+
+.kpi-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 0.71rem;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.kpi-pill-collected {
+  background: #dcfce7;
+  color: #14532d;
+  border: 1px solid rgba(22, 101, 52, 0.12);
+}
+
+.kpi-pill-balance {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid rgba(146, 64, 14, 0.12);
+}
+
+.kpi-pill-icon {
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-block;
+  line-height: 1;
 }
 
 /* Quick Actions */
@@ -1645,11 +1716,6 @@
 }
 
 .multiview-slot-card {
-  transition: all 0.2s ease;
-}
-
-.multiview-slot-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 @media (max-width: 600px) {
@@ -1852,16 +1918,9 @@
   border-radius: 10px;
   padding: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.kanban-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #cbd5e1;
 }
 
 .kanban-card-header {
@@ -4086,8 +4145,8 @@
 
 .dashboard-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr) !important;
-  gap: 16px;
+  grid-template-columns: 1.25fr 1fr 1fr 1fr 1fr !important;
+  gap: 14px;
   margin-bottom: 24px;
 }
 
@@ -4095,14 +4154,8 @@
   position: relative;
   overflow: hidden;
   border-radius: 14px;
-  padding: 20px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 18px 16px;
   border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.kpi-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .pipeline-step-item {

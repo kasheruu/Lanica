@@ -338,6 +338,8 @@ function renderCartDrawerUI(items) {
 }
 
 let currentSubscribedUserId = null;
+let previousOrderStatuses = new Map();
+let isInitialOrderLoad = true;
 
 function setupOrdersSubscription(userId) {
   if (currentSubscribedUserId === userId && ordersUnsubscribe) return;
@@ -348,9 +350,42 @@ function setupOrdersSubscription(userId) {
   }
 
   currentSubscribedUserId = userId;
+  previousOrderStatuses.clear();
+  isInitialOrderLoad = true;
+
   if (!userId) return;
 
   ordersUnsubscribe = subscribeToUserOrders(userId, (orders) => {
+    // Detect real-time status transitions and notify the customer immediately
+    if (!isInitialOrderLoad && Array.isArray(orders)) {
+      orders.forEach((o) => {
+        const oId = o.id || o.orderId;
+        const currentSt = getOrderCanonicalStatus(o);
+        const prevSt = previousOrderStatuses.get(oId);
+        if (prevSt && prevSt !== currentSt) {
+          const shortId = (o.orderId || o.id || "").slice(0, 8);
+          const notifMsg = `Order #${shortId} status updated: ${currentSt}!`;
+          showToast(notifMsg, "info", 8000);
+
+          if ("Notification" in window && Notification.permission === "granted") {
+            try {
+              new Notification(`Order #${shortId} Update 📦`, {
+                body: `Your order status is now ${currentSt}. Tap to view details.`,
+                icon: "assets/logo.png",
+              });
+            } catch (_) {}
+          }
+        }
+      });
+    }
+
+    if (Array.isArray(orders)) {
+      orders.forEach((o) => {
+        previousOrderStatuses.set(o.id || o.orderId, getOrderCanonicalStatus(o));
+      });
+    }
+    isInitialOrderLoad = false;
+
     allOrders = orders;
     updateTabBadges(orders);
     renderOrdersList();
@@ -531,16 +566,28 @@ function renderCustomerTransactionsList(orders) {
       (order.paymentMethod === "walk_in_cash" || order.paymentType === "walk_in_cash") &&
       order.paymentStatus === "awaiting_counter_downpayment";
 
-    const payStatus = isPaidDownpayment
-      ? (isDownpayment ? "Downpayment Paid (PayMongo)" : "Paid in Full")
-      : isWalkInPending
-        ? "Counter Downpayment Pending"
-        : (isDownpayment ? "Downpayment Pending" : "Payment Pending");
+    const isCompletedOrder =
+      order.status === "completed" ||
+      order.orderStatus === "completed" ||
+      order.orderReceived === true ||
+      Boolean(order.completedAt) ||
+      Boolean(order.orderReceivedAt);
+
+    const payStatus = isCompletedOrder
+      ? "Completed · Order Received"
+      : isPaidDownpayment
+        ? (isDownpayment ? "Downpayment Paid (PayMongo)" : "Paid in Full")
+        : isWalkInPending
+          ? "Counter Downpayment Pending"
+          : (isDownpayment ? "Downpayment Pending" : "Payment Pending");
     const pMethod = order.paymentMethod === "walk_in_cash"
       ? "Walk-in Workshop Cash"
       : (order.paymentMethod || "QR Ph (PayMongo)");
     const refNum = order.orderId || order.id || "N/A";
     const dateStr = formatOrderDate(order.createdAt || order.timestamp);
+    const itemsSummary = (order.items || [])
+      .map((it) => `${it.name || it.title || "Custom Furniture"} × ${it.quantity || 1}`)
+      .join(", ") || "Custom Handcrafted Furniture";
 
     const card = document.createElement("div");
     card.className = "order-card";
@@ -551,10 +598,11 @@ function renderCustomerTransactionsList(orders) {
           <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600;">Transaction Reference</span>
           <h4 style="margin: 2px 0 0; font-size: 1.05rem; font-weight: 700; color: #0f172a;">${escapeHtml(refNum)}</h4>
           <span style="font-size: 0.8rem; color: #94a3b8;">Issued on ${escapeHtml(dateStr)}</span>
+          <div style="font-size: 0.82rem; color: #475569; font-weight: 500; margin-top: 4px;">📦 ${escapeHtml(itemsSummary)}</div>
         </div>
         <div style="text-align: right;">
-          <span class="status-badge" style="background: ${isPaidDownpayment ? '#eff6ff' : isWalkInPending ? '#fffbeb' : '#fef2f2'}; color: ${isPaidDownpayment ? '#1d4ed8' : isWalkInPending ? '#b45309' : '#dc2626'}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">
-            ${escapeHtml(payStatus)}
+          <span class="status-badge" style="background: ${isCompletedOrder ? '#ecfdf5' : isPaidDownpayment ? '#eff6ff' : isWalkInPending ? '#fffbeb' : '#fef2f2'}; color: ${isCompletedOrder ? '#059669' : isPaidDownpayment ? '#1d4ed8' : isWalkInPending ? '#b45309' : '#dc2626'}; border: 1px solid ${isCompletedOrder ? '#a7f3d0' : isPaidDownpayment ? '#bfdbfe' : isWalkInPending ? '#fde68a' : '#fecaca'}; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">
+            ${isCompletedOrder ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ''}${escapeHtml(payStatus)}
           </span>
         </div>
       </div>
@@ -1329,8 +1377,21 @@ function createOrderCardElement(order) {
           status: "completed",
           orderStatus: "completed",
           orderReceived: true,
+          orderReceivedAt: new Date(),
           completedAt: new Date(),
         };
+
+        // Update local memory so UI immediately transitions to Completed Transactions History
+        if (Array.isArray(allOrders)) {
+          allOrders = allOrders.map((o) => ((o.id || o.orderId) === orderId ? { ...o, ...updatedOrder } : o));
+          updateTabBadges(allOrders);
+          renderOrdersList();
+          renderCustomerTransactionsList(allOrders);
+        }
+
+        // Switch to Completed Transactions History tab immediately
+        switchMainCategoryTab("transactions");
+
         openLanicaCustomerReceiptModal(updatedOrder);
       } catch (err) {
         console.error("Failed to complete order:", err);
@@ -1584,30 +1645,74 @@ function setupLiveChatWidget() {
 
     allOrders.forEach((o) => {
       const oId = o.id;
-      const orderNum = o.orderId || o.id;
+      const orderNum = o.orderId || o.id || "";
+      const rawNum = String(orderNum);
+      const shortNum = rawNum.length > 15 ? (rawNum.startsWith("ORD-") ? "#" + rawNum.slice(0, 14) + "…" : "#" + rawNum.slice(0, 10) + "…") : "#" + rawNum;
+      const st = (o.orderStatus || o.status || "").toLowerCase();
+      const stTag = st === "delivered" ? " · Delivered" : st === "completed" ? " · Completed" : st === "shipped" ? " · Shipped" : "";
       const isSel = currentChannel === "order" && activeChatOrderId === oId;
+
       barHtml += `
-        <button type="button" class="chat-channel-pill ${isSel ? 'active' : ''}" data-channel="order" data-order-id="${oId}">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>#${orderNum}
+        <button type="button" class="chat-channel-pill ${isSel ? 'active' : ''}" data-channel="order" data-order-id="${oId}" title="#${escapeHtml(rawNum)} (${escapeHtml(st || 'Active')})">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>${escapeHtml(shortNum)}${stTag ? `<span style="font-size:0.7rem; opacity:0.85; margin-left:3px;">${escapeHtml(stTag)}</span>` : ''}
         </button>
       `;
     });
 
     channelBar.innerHTML = barHtml;
 
-    if (!channelBar.dataset.listenerAttached) {
-      channelBar.dataset.listenerAttached = "true";
+    if (!channelBar.dataset.dragAttached) {
+      channelBar.dataset.dragAttached = "true";
+      let isDown = false;
+      let startX = 0;
+      let scrollLeft = 0;
+      let hasDragged = false;
+
+      channelBar.addEventListener("mousedown", (e) => {
+        isDown = true;
+        hasDragged = false;
+        startX = e.pageX - channelBar.offsetLeft;
+        scrollLeft = channelBar.scrollLeft;
+      });
+      channelBar.addEventListener("mouseleave", () => {
+        isDown = false;
+      });
+      channelBar.addEventListener("mouseup", () => {
+        isDown = false;
+      });
+      channelBar.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        const x = e.pageX - channelBar.offsetLeft;
+        const walk = (x - startX) * 1.5;
+        if (Math.abs(walk) > 4) hasDragged = true;
+        channelBar.scrollLeft = scrollLeft - walk;
+      });
+
       channelBar.addEventListener("click", (e) => {
+        if (hasDragged) {
+          e.preventDefault();
+          e.stopPropagation();
+          hasDragged = false;
+          return;
+        }
         const btn = e.target.closest(".chat-channel-pill");
         if (!btn) return;
         const ch = btn.getAttribute("data-channel");
         const oId = btn.getAttribute("data-order-id");
+        btn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
         if (ch === "support") {
           switchChannel("support");
         } else if (oId) {
           switchChannel("order", oId);
         }
       });
+    }
+
+    const activePill = channelBar.querySelector(".chat-channel-pill.active");
+    if (activePill) {
+      setTimeout(() => {
+        activePill.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }, 50);
     }
   }
 
@@ -1699,14 +1804,43 @@ function setupLiveChatWidget() {
       html += `<div style="text-align: center; color: #9ca3af; font-size: 0.82rem; margin: 30px auto;">No messages in this conversation yet. Say hello to start!</div>`;
     } else {
       messages.forEach((m) => {
-        const isMe = currentUser && m.senderId === currentUser.uid;
-        const roleClass = isMe ? "customer" : (m.senderRole || "staff");
-        const senderLabel = isMe ? "You" : (m.senderName || (channelType === "support" ? "Lanica Support" : "Workshop Support"));
+        const isSystem =
+          Boolean(m.isSystem) ||
+          m.senderRole === "system" ||
+          m.senderRole === "bot" ||
+          m.sender === "system" ||
+          m.senderId === "system" ||
+          (typeof m.senderName === "string" && (m.senderName.toLowerCase().includes("system") || m.senderName.toLowerCase().includes("bot")));
+
+        const isMe = !isSystem && currentUser && m.senderId === currentUser.uid;
+        const roleClass = isSystem ? "system" : isMe ? "customer" : (m.senderRole || "staff");
+        const senderLabel = isSystem
+          ? (m.senderName || "Lanica System")
+          : isMe
+            ? "You"
+            : (m.senderName || (channelType === "support" ? "Lanica Support" : "Workshop Support"));
 
         const timeDate = m.timestamp?.toDate
           ? m.timestamp.toDate()
           : (m.createdAt?.toDate ? m.createdAt.toDate() : (m.timestamp || m.createdAt ? new Date(m.timestamp || m.createdAt) : null));
         const timeStr = timeDate ? timeDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+
+        if (isSystem) {
+          const { displayText } = parseChatMessageContent(m);
+          html += `
+            <div class="chat-msg-row system" data-msg-id="${m.id}">
+              <div class="chat-system-card">
+                <div class="chat-system-card-header">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  <span>${escapeHtml(senderLabel)}</span>
+                  ${timeStr ? `<span style="font-weight: 400; opacity: 0.8; font-size: 0.7rem; margin-left: auto;">${timeStr}</span>` : ""}
+                </div>
+                <div>${displayText ? `<p style="margin: 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}</div>
+              </div>
+            </div>
+          `;
+          return;
+        }
 
         if (m.isUnsent) {
           html += `

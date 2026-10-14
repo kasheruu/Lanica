@@ -212,11 +212,6 @@ body {
   border-radius: var(--border-radius-lg);
   padding: 28px;
   box-shadow: var(--shadow-md);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.order-card:hover {
-  box-shadow: 0 12px 36px rgba(15, 17, 21, 0.1);
 }
 
 .order-card-header {

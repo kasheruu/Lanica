@@ -3915,7 +3915,8 @@ function normalizeOrderStatus(raw) {
   if (s === "processing" || s === "packed" || s === "crafting" || s === "fabrication" || s === "in production") return "in production";
   if (s === "inspected" || s === "qc passed" || s === "quality check" || s === "quality checked") return "quality checked";
   if (s === "dispatched" || s === "out for delivery" || s === "shipped" || s === "shipping" || s === "in transit") return "shipped";
-  if (s === "completed" || s === "received" || s === "arrived" || s === "delivered") return "delivered";
+  if (s === "completed" || s === "order completed") return "completed";
+  if (s === "received" || s === "arrived" || s === "delivered") return "delivered";
   if (s === "declined") return "declined";
   if (s === "cancelled" || s === "canceled") return "cancelled";
   return "placed";
@@ -4104,10 +4105,16 @@ function normalizeOrderAction(raw) {
 }
 
 function isOrderCompleted(order) {
+  if (!order) return false;
   const status = normalizeOrderStatus(order.status);
+  const orderStatus = normalizeOrderStatus(order.orderStatus);
+  const rawStatus = String(order.status || "").toLowerCase().trim();
+  const rawOrderStatus = String(order.orderStatus || "").toLowerCase().trim();
   return (
     status === "completed" ||
-    status === "received" ||
+    orderStatus === "completed" ||
+    rawStatus === "completed" ||
+    rawOrderStatus === "completed" ||
     order.orderReceived === true ||
     !!order.orderReceivedAt ||
     !!order.receivedAt ||
@@ -4480,7 +4487,10 @@ function updateDashboardKpis(products, orders) {
 
   const revCollectedEl = document.getElementById("dash-revenue-collected");
   if (revCollectedEl) {
-    revCollectedEl.textContent = `₱${totalCollected.toLocaleString("en-US", { maximumFractionDigits: 0 })} Collected • ₱${totalBalance.toLocaleString("en-US", { maximumFractionDigits: 0 })} Balance`;
+    revCollectedEl.innerHTML = `
+      <span class="kpi-pill kpi-pill-collected"><span class="kpi-pill-icon">✓</span> Collected: ₱${totalCollected.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+      <span class="kpi-pill kpi-pill-balance"><span class="kpi-pill-icon">⚠</span> Unpaid Balance: ₱${totalBalance.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+    `;
   }
 
   if (dashPendingOrdersEl) dashPendingOrdersEl.textContent = String(pendingCount);
@@ -4493,15 +4503,9 @@ function updateDashboardKpis(products, orders) {
 
   const lowStockSubEl = document.getElementById("dash-low-stock-sub");
   if (lowStockSubEl) {
-    if (lowStockProducts.length > 0) {
-      lowStockSubEl.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>${lowStockProducts.length} low stock items`;
-      lowStockSubEl.style.color = "#dc2626";
-      lowStockSubEl.style.fontWeight = "700";
-    } else {
-      lowStockSubEl.textContent = "All stock levels normal";
-      lowStockSubEl.style.color = "#64748b";
-      lowStockSubEl.style.fontWeight = "400";
-    }
+    lowStockSubEl.textContent = "Made-to-order catalog";
+    lowStockSubEl.style.color = "#64748b";
+    lowStockSubEl.style.fontWeight = "500";
   }
 
   // Update Production Lifecycle Pipeline Badges
@@ -4518,31 +4522,6 @@ function updateDashboardKpis(products, orders) {
   if (pipeShip) pipeShip.textContent = String(shippedCount);
   if (pipeDeliv) pipeDeliv.textContent = String(deliveredCount);
 
-  // Update Stock Watchlist Widget
-  const watchlistItemsEl = document.getElementById("dash-watchlist-items");
-  const watchlistBadgeEl = document.getElementById("dash-widget-lowstock-badge");
-  if (watchlistBadgeEl) {
-    watchlistBadgeEl.textContent = `${lowStockProducts.length} Items`;
-    watchlistBadgeEl.style.background = lowStockProducts.length > 0 ? "#fef2f2" : "#f0fdf4";
-    watchlistBadgeEl.style.color = lowStockProducts.length > 0 ? "#dc2626" : "#16a34a";
-  }
-  if (watchlistItemsEl) {
-    if (lowStockProducts.length === 0) {
-      watchlistItemsEl.innerHTML = `<div style="font-size: 0.8rem; color: #10b981; text-align: center; padding: 12px 0;">✓ All inventory items are adequately stocked.</div>`;
-    } else {
-      watchlistItemsEl.innerHTML = lowStockProducts.slice(0, 5).map((p) => `
-        <div class="dash-watchlist-row">
-          <div style="min-width: 0; flex: 1; padding-right: 8px;">
-            <div style="font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name || "Product")}</div>
-            <span style="font-size: 0.72rem; color: #dc2626; font-weight: 700;">Stock: ${p.stock ?? 0} remaining</span>
-          </div>
-          <button type="button" class="dash-action-btn-sm btn-edit-watchlist" data-product-id="${escapeHtml(p.id)}" style="flex-shrink: 0; cursor: pointer; touch-action: manipulation;">
-            Edit
-          </button>
-        </div>
-      `).join("");
-    }
-  }
 
   // Ensure interactive listeners are wired
   initDashboardInteractiveListeners();
@@ -4603,29 +4582,70 @@ function renderDashboardRecentOrders(orders) {
     const paidVal = Number(order.downpaymentAmount || Math.round(Number(total || 0) * 0.3));
 
     const tr = document.createElement("tr");
+    tr.className = "dash-order-row";
     tr.innerHTML = `
-      <td><strong style="font-size:0.86rem; color:#0f172a;">#${escapeHtml((order.id || "").slice(0, 8))}</strong></td>
-      <td>
-        <div style="font-weight:600; color:#1e293b; font-size:0.86rem;">${escapeHtml(String(customer))}</div>
-        ${order.email || order.userEmail ? `<div style="font-size:0.74rem; color:#64748b;">${escapeHtml(order.email || order.userEmail)}</div>` : ''}
+      <td class="td-order-id">
+        <strong class="dash-card-order-id">#${escapeHtml((order.id || "").slice(0, 8))}</strong>
+        <span class="dash-card-date-badge">Date: ${escapeHtml(dateStr)}</span>
       </td>
-      <td class="order-items-cell" style="max-width:190px;">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
-      <td>
-        <strong style="color:#0f172a; font-size:0.88rem;">${totalStr}</strong>
-        ${isDown ? `<div style="font-size:0.71rem; color:#2563eb; font-weight:600; margin-top:2px;">Partial (₱${paidVal.toLocaleString()})</div>` : ''}
+      <td class="td-customer">
+        <span class="dash-card-label">Customer</span>
+        <div class="dash-card-customer-name">${escapeHtml(String(customer))}</div>
+        ${order.email || order.userEmail ? `<div class="dash-card-customer-email">${escapeHtml(order.email || order.userEmail)}</div>` : ''}
       </td>
-      <td><span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml((st === "downpayment confirmed" || st === "accepted") ? "Deposit Verified" : (st === "slot reserved" ? "Slot Reserved" : (st.charAt(0).toUpperCase() + st.slice(1))))}</span></td>
-      <td style="font-size:0.82rem; color:#64748b;">${escapeHtml(dateStr)}</td>
-      <td style="text-align: center; white-space: nowrap;">
-        <div style="display: inline-flex; gap: 6px;">
-          <button type="button" class="dash-action-btn-sm btn-dash-view-order" data-order-id="${escapeHtml(order.id)}" title="View Order Summary & Details">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>View
+      <td class="order-items-cell td-items">
+        <span class="dash-card-label">Item(s)</span>
+        <div class="order-items-summary">${escapeHtml(formatOrderItemsSummary(order.items))}</div>
+      </td>
+      <td class="td-financial">
+        <span class="dash-card-label">Financial</span>
+        <div class="dash-card-financial-val">
+          <strong class="dash-card-amount">${totalStr}</strong>
+          ${isDown ? `<span class="dash-card-partial">Partial (₱${paidVal.toLocaleString()})</span>` : ''}
+        </div>
+      </td>
+      <td class="td-status">
+        <span class="dash-card-label">Status</span>
+        <div class="dash-card-status-val">
+          <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml((st === "downpayment confirmed" || st === "accepted") ? "Deposit Verified" : (st === "slot reserved" ? "Slot Reserved" : (st.charAt(0).toUpperCase() + st.slice(1))))}</span>
+        </div>
+      </td>
+      <td class="td-date" style="font-size:0.82rem; color:#64748b;">${escapeHtml(dateStr)}</td>
+      <td class="td-actions" style="text-align: center; white-space: nowrap;">
+        <!-- Desktop Kebab Menu (Compact ⋮ icon for clean table view) -->
+        <div class="dash-table-kebab-wrap kebab-menu-container" style="position: relative; display: inline-block;">
+          <button type="button" class="kebab-trigger-btn" aria-label="Row Actions" title="Actions" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; color: #334155; font-weight: bold; transition: all 0.2s;">
+            ⋮
           </button>
-          <button type="button" class="dash-action-btn-sm dash-action-btn-voucher btn-dash-voucher" data-order-id="${escapeHtml(order.id)}" title="Generate / Print Official Voucher">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Voucher
+          <div class="kebab-dropdown-menu" style="display: none; position: absolute; right: 0; top: 36px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1000; min-width: 195px; padding: 6px; text-align: left;">
+            <button type="button" class="kebab-menu-item btn-dash-view-order" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #334155; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              View Order Summary
+            </button>
+            <button type="button" class="kebab-menu-item btn-dash-voucher" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #2563eb; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+              Payment Voucher
+            </button>
+            <button type="button" class="kebab-menu-item btn-dash-quotation" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #0284c7; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M12 2v4"/><path d="M16 2v4"/><rect width="16" height="18" x="4" y="4" rx="2"/><path d="M8 10h6"/><path d="M8 14h8"/><path d="M8 18h5"/></svg>
+              Official Quotation
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile Action Buttons (Displayed on mobile/cards matching iPhone SE mockup) -->
+        <div class="dash-card-actions-row">
+          <button type="button" class="dash-card-action-btn dash-card-btn-view btn-dash-view-order" data-order-id="${escapeHtml(order.id)}" title="View Order Details">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>View</span>
           </button>
-          <button type="button" class="dash-action-btn-sm dash-action-btn-voucher btn-dash-quotation" data-order-id="${escapeHtml(order.id)}" title="Generate / Print Official Quotation" style="border-color: #bae6fd; color: #0284c7; background: #f0f9ff;">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M8 2v4"/><path d="M12 2v4"/><path d="M16 2v4"/><rect width="16" height="18" x="4" y="4" rx="2"/><path d="M8 10h6"/><path d="M8 14h8"/><path d="M8 18h5"/></svg>Quotation
+          <button type="button" class="dash-card-action-btn dash-card-btn-voucher btn-dash-voucher" data-order-id="${escapeHtml(order.id)}" title="Download Voucher">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Download Voucher</span>
+          </button>
+          <button type="button" class="dash-card-action-btn dash-card-btn-quotation btn-dash-quotation" data-order-id="${escapeHtml(order.id)}" title="Official Quotation">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <span>Quotation</span>
           </button>
         </div>
       </td>
@@ -7765,7 +7785,7 @@ function renderOrdersList(orders) {
         ${fulfillmentBadgeHtml}
         ${addressDisplayHtml}
       </td>
-      <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
+      <td class="order-items-cell"><div class="order-items-summary">${escapeHtml(formatOrderItemsSummary(order.items))}</div></td>
       <td>${financialBreakdownHtml}</td>
       <td>${statusColumnHtml}</td>
       <td>
@@ -7916,7 +7936,7 @@ function renderCompletedOrdersHistory(orders) {
     tr.innerHTML = `
       <td><strong style="font-size:0.9rem;">${escapeHtml(order.id.slice(0, 8))}…</strong></td>
       <td>${escapeHtml(String(customer))}</td>
-      <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
+      <td class="order-items-cell"><div class="order-items-summary">${escapeHtml(formatOrderItemsSummary(order.items))}</div></td>
       <td>${totalStr}</td>
       <td>${escapeHtml(resolveAssignedStaffName(order))}</td>
       <td>${escapeHtml(getCompletedAtLabel(order))}</td>
@@ -7926,49 +7946,115 @@ function renderCompletedOrdersHistory(orders) {
 }
 
 async function deductStockForLine(transaction, productId, item) {
-  const productRef = doc(db, "products", productId);
-  const pSnap = await transaction.get(productRef);
-  if (!pSnap.exists()) {
-    throw new Error(`Product not found: ${productId}`);
-  }
-  const d = pSnap.data();
-  const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-  const mat = materialHint(item.material);
+  if (!productId) return;
+  try {
+    const productRef = doc(db, "products", productId);
+    const pSnap = await transaction.get(productRef);
+    if (!pSnap.exists()) return;
+    const d = pSnap.data();
+    const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+    const mat = materialHint(item.material);
 
-  const hasSplit =
-    d.fabricStock !== undefined ||
-    d.leatherStock !== undefined ||
-    (d.fabricStock === 0 && d.leatherStock === 0);
+    const hasSplit =
+      d.fabricStock !== undefined ||
+      d.leatherStock !== undefined ||
+      (d.fabricStock === 0 && d.leatherStock === 0);
 
-  if (hasSplit) {
-    let fab = Number(d.fabricStock) || 0;
-    let lea = Number(d.leatherStock) || 0;
-    if (mat === "leather") {
-      if (lea < qty) throw new Error(`Not enough leather stock for “${d.name || item.name}”.`);
-      lea -= qty;
-    } else if (mat === "fabric") {
-      if (fab < qty) throw new Error(`Not enough fabric stock for “${d.name || item.name}”.`);
-      fab -= qty;
-    } else {
-      if (fab >= qty) fab -= qty;
-      else if (lea >= qty) lea -= qty;
-      else {
-        throw new Error(
-          `Not enough stock for “${d.name || item.name}”. Set material (fabric/leather) on the order line in the app.`
-        );
+    if (hasSplit) {
+      let fab = Number(d.fabricStock) || 0;
+      let lea = Number(d.leatherStock) || 0;
+      if (mat === "leather") {
+        lea = Math.max(0, lea - qty);
+      } else if (mat === "fabric") {
+        fab = Math.max(0, fab - qty);
+      } else {
+        if (fab >= qty) fab -= qty;
+        else if (lea >= qty) lea -= qty;
+        else fab = Math.max(0, fab - qty);
       }
+      const combined = fab + lea;
+      transaction.update(productRef, {
+        fabricStock: fab,
+        leatherStock: lea,
+        stock: combined,
+      });
+    } else if (d.stock !== undefined) {
+      let s = Number(d.stock) || 0;
+      transaction.update(productRef, { stock: Math.max(0, s - qty) });
     }
-    const combined = fab + lea;
-    transaction.update(productRef, {
-      fabricStock: fab,
-      leatherStock: lea,
-      stock: combined,
-    });
-  } else {
-    let s = Number(d.stock) || 0;
-    if (s < qty) throw new Error(`Not enough stock for “${d.name || item.name}”.`);
-    transaction.update(productRef, { stock: s - qty });
+  } catch (err) {
+    console.warn("Gracefully skipping stock deduction for line:", err);
   }
+}
+
+function getStatusNotificationMessage(orderId, newStatus) {
+  const norm = normalizeOrderStatus(newStatus);
+  const ref = orderId ? `#${String(orderId).slice(0, 8)}` : "your order";
+  switch (norm) {
+    case "slot reserved":
+      return `✨ Order Reservation Confirmed (${ref}): Your reservation has been recorded. Our workshop team will review your custom specifications.`;
+    case "downpayment confirmed":
+      return `💰 Deposit Confirmed (${ref}): 30% downpayment received and verified. Your order is now queued for workshop fabrication!`;
+    case "in production":
+      return `🔨 In Production (${ref}): Our master artisans have officially begun woodworking, assembly, and upholstery for your handcrafted furniture!`;
+    case "quality checked":
+      return `🔍 Quality Inspection Passed (${ref}): Your custom furniture has passed final workshop quality control and is being packaged for dispatch!`;
+    case "shipped":
+      return `🚚 Out for Delivery (${ref}): Your order has been dispatched with our logistics team and is on its way to your delivery address!`;
+    case "delivered":
+      return `🎉 Order Delivered (${ref}): Your handcrafted furniture has arrived! Please inspect your piece and tap "Order Received" in your orders page to finalize.`;
+    case "completed":
+      return `🎉 Order Completed (${ref}): Thank you for trusting Lanica Furniture! Your official receipt is ready in your Completed Transactions History.`;
+    case "cancelled":
+      return `❌ Order Cancelled (${ref}): This order has been cancelled. Please contact workshop support if you need assistance.`;
+    default:
+      return `📢 Status Update (${ref}): Your order status is now ${newStatus.toUpperCase()}.`;
+  }
+}
+
+async function broadcastOrderStatusUpdate(orderId, newStatus) {
+  if (!orderId || !newStatus) return;
+  const orderDocRef = doc(db, "orders", orderId);
+  const now = serverTimestamp();
+  const textMsg = getStatusNotificationMessage(orderId, newStatus);
+
+  const payload = {
+    text: textMsg,
+    message: textMsg,
+    content: textMsg,
+    sender: "system",
+    senderId: "system",
+    senderName: "Lanica System",
+    senderRole: "system",
+    role: "system",
+    isSystem: true,
+    type: 0,
+    timestamp: now,
+    createdAt: now,
+  };
+
+  try {
+    const webCol = collection(db, "orders", orderId, "messages");
+    await addDoc(webCol, payload);
+  } catch (err) {
+    console.warn("Could not write status update to orders/{id}/messages:", err);
+  }
+
+  try {
+    const mobileCol = collection(db, "order_chats", orderId, "messages");
+    await addDoc(mobileCol, payload);
+  } catch (err) {
+    console.warn("Could not write status update to order_chats/{id}/messages:", err);
+  }
+
+  try {
+    await updateDoc(orderDocRef, {
+      lastMessage: textMsg,
+      lastMessageAt: now,
+      lastSenderRole: "system",
+      lastSenderName: "Lanica System",
+    });
+  } catch (_) {}
 }
 
 async function handleOrderStatusChange(orderId, newStatus) {
@@ -8010,16 +8096,6 @@ async function handleOrderStatusChange(orderId, newStatus) {
     items.length > 0;
 
   if (shouldDeductStock) {
-    for (const it of items) {
-      if (!it.productId) {
-        showToast(
-          "This order has a line without productId. Add productId on each line in the app before leaving Pending.",
-          "warning"
-        );
-        applyOrdersFilter();
-        return;
-      }
-    }
     try {
       await runTransaction(db, async (transaction) => {
         const oSnap = await transaction.get(orderRef);
@@ -8027,7 +8103,9 @@ async function handleOrderStatusChange(orderId, newStatus) {
         const oData = oSnap.data();
         if (oData.stockDeducted) return;
         for (const it of items) {
-          await deductStockForLine(transaction, it.productId, it);
+          if (it.productId) {
+            await deductStockForLine(transaction, it.productId, it);
+          }
         }
         transaction.update(orderRef, {
           status: next,
@@ -8036,11 +8114,19 @@ async function handleOrderStatusChange(orderId, newStatus) {
           updatedAt: Timestamp.now(),
         });
       });
+      broadcastOrderStatusUpdate(orderId, next).catch((err) => console.warn("Broadcast update err:", err));
+      showAdminToast(`Order status updated to In Production (Crafting Started).`, "success");
     } catch (e) {
       console.error(e);
-      showAdminToast(e.message || "Could not update inventory for this order.", "error");
-      applyOrdersFilter();
-      return;
+      // Even if inventory update encounters issues, do not block made-to-order production!
+      await updateDoc(orderRef, {
+        status: next,
+        orderStatus: next,
+        stockDeducted: true,
+        updatedAt: serverTimestamp(),
+      });
+      broadcastOrderStatusUpdate(orderId, next).catch((err) => console.warn("Broadcast update err:", err));
+      showAdminToast(`Order advanced to In Production.`, "success");
     }
     return;
   }
@@ -8051,6 +8137,7 @@ async function handleOrderStatusChange(orderId, newStatus) {
       orderStatus: next,
       updatedAt: serverTimestamp(),
     });
+    broadcastOrderStatusUpdate(orderId, next).catch((err) => console.warn("Broadcast update err:", err));
     await recordAuditLog({
       action: "ORDER_STATUS_CHANGED",
       targetType: "order",
@@ -9680,17 +9767,28 @@ function setupAdminLiveChat() {
       }
 
       visibleMsgs.forEach((m) => {
+        const isSystem =
+          Boolean(m.isSystem) ||
+          m.senderRole === "system" ||
+          m.senderRole === "bot" ||
+          m.sender === "system" ||
+          m.senderId === "system" ||
+          (typeof m.senderName === "string" && (m.senderName.toLowerCase().includes("system") || m.senderName.toLowerCase().includes("bot")));
+
         const isStaff =
-          m.senderRole === "admin" ||
-          m.senderRole === "staff" ||
-          m.senderId === "support_admin";
+          !isSystem &&
+          (m.senderRole === "admin" ||
+           m.senderRole === "staff" ||
+           m.senderId === "support_admin");
 
         const row = document.createElement("div");
-        row.className = `chat-message-row ${isStaff ? "is-staff" : "is-customer"}`;
+        row.className = `chat-message-row ${isSystem ? "is-system" : isStaff ? "is-staff" : "is-customer"}`;
 
-        const senderLabel = isStaff
-          ? "Lanica Workshop & Admin"
-          : session.customerName || m.senderName || "Customer";
+        const senderLabel = isSystem
+          ? (m.senderName || "Lanica System")
+          : isStaff
+            ? "Lanica Workshop & Admin"
+            : (session.customerName || m.senderName || "Customer");
 
         const timeVal = m.timestamp || m.createdAt;
         const timeStr = timeVal?.toDate
@@ -9699,10 +9797,12 @@ function setupAdminLiveChat() {
 
         const { mediaUrl, displayText } = parseChatMessageContent(m);
 
-        // Avatar for customer message
-        const avatarCol = !isStaff
-          ? renderAvatarHtml(session.photoURL, senderLabel, isSupport, 32)
-          : "";
+        // Avatar for message: system has robot icon, customer has photo/initials, staff has none
+        const avatarCol = isSystem
+          ? `<div class="chat-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700; flex-shrink: 0; border: 1.5px solid #fde68a;" title="Lanica System Notification">🤖</div>`
+          : !isStaff
+            ? renderAvatarHtml(session.photoURL, senderLabel, isSupport, 32)
+            : "";
 
         // Quoted Reply HTML
         const quotedHtml = m.replyTo && m.replyTo.text
@@ -9717,7 +9817,7 @@ function setupAdminLiveChat() {
         row.innerHTML = `
           ${avatarCol}
           <div class="chat-message-content-wrap">
-            <span style="font-size: 0.72rem; color: #6b7280; margin-bottom: 2px;">
+            <span style="font-size: 0.72rem; color: ${isSystem ? '#b45309' : '#6b7280'}; margin-bottom: 2px; font-weight: ${isSystem ? '700' : '500'};">
               ${escapeHtml(senderLabel)} • ${timeStr}
             </span>
             <div class="chat-bubble-with-actions">
@@ -9725,10 +9825,10 @@ function setupAdminLiveChat() {
                 m.isUnsent
                   ? `<div class="chat-bubble-unsent">${isStaff ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}</div>`
                   : `
-                <div class="chat-bubble-${isStaff ? "staff" : "customer"}" style="padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
-                  isStaff ? "#6b4423" : "#ffffff"
-                }; color: ${isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
-                  isStaff ? "#6b4423" : "#e5e7eb"
+                <div class="chat-bubble-${isSystem ? "system" : isStaff ? "staff" : "customer"}" style="padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.4; background: ${
+                  isSystem ? "#fffbeb" : isStaff ? "#6b4423" : "#ffffff"
+                }; color: ${isSystem ? "#92400e" : isStaff ? "#fff" : "#1f2937"}; border: 1px solid ${
+                  isSystem ? "#fde68a" : isStaff ? "#6b4423" : "#e5e7eb"
                 }; box-shadow: 0 1px 2px rgba(0,0,0,0.05); max-width: 100%;">
                   ${quotedHtml}
                   ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}

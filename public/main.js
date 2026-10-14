@@ -228,6 +228,7 @@ function initCardSlideshows(root = document) {
     if (container.dataset.slideshowInitialized === "true") return;
     container.dataset.slideshowInitialized = "true";
 
+    const track = container.querySelector(".card-slideshow-track");
     const slides = container.querySelectorAll(".card-slideshow-slide");
     const dots = container.querySelectorAll(".card-slideshow-dot");
     const prevBtn = container.querySelector(".card-slideshow-btn.prev");
@@ -236,30 +237,14 @@ function initCardSlideshows(root = document) {
     if (slides.length <= 1) return;
 
     let currentIndex = 0;
-    let autoSlideInterval = null;
 
     function goToSlide(index) {
-      slides[currentIndex]?.classList.remove("active");
-      dots[currentIndex]?.classList.remove("active");
-
       currentIndex = (index + slides.length) % slides.length;
-
-      slides[currentIndex]?.classList.add("active");
-      dots[currentIndex]?.classList.add("active");
-    }
-
-    function startAutoSlide() {
-      stopAutoSlide();
-      autoSlideInterval = setInterval(() => {
-        goToSlide(currentIndex + 1);
-      }, 3500);
-    }
-
-    function stopAutoSlide() {
-      if (autoSlideInterval) {
-        clearInterval(autoSlideInterval);
-        autoSlideInterval = null;
+      if (track) {
+        track.style.transform = `translateX(-${currentIndex * 100}%)`;
       }
+      slides.forEach((s, i) => s.classList.toggle("active", i === currentIndex));
+      dots.forEach((d, i) => d.classList.toggle("active", i === currentIndex));
     }
 
     if (prevBtn) {
@@ -267,7 +252,6 @@ function initCardSlideshows(root = document) {
         e.preventDefault();
         e.stopPropagation();
         goToSlide(currentIndex - 1);
-        startAutoSlide();
       });
     }
 
@@ -276,7 +260,6 @@ function initCardSlideshows(root = document) {
         e.preventDefault();
         e.stopPropagation();
         goToSlide(currentIndex + 1);
-        startAutoSlide();
       });
     }
 
@@ -285,17 +268,23 @@ function initCardSlideshows(root = document) {
         e.preventDefault();
         e.stopPropagation();
         goToSlide(idx);
-        startAutoSlide();
       });
     });
 
-    // Touch swipe support
+    // Touch swipe support - Strictly horizontal swipe only
     let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isTouchActive = false;
+
     container.addEventListener(
       "touchstart",
       (e) => {
-        stopAutoSlide();
+        if (!e.touches || e.touches.length !== 1) return;
         touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        isTouchActive = true;
       },
       { passive: true }
     );
@@ -303,24 +292,36 @@ function initCardSlideshows(root = document) {
     container.addEventListener(
       "touchend",
       (e) => {
+        if (!isTouchActive) return;
+        isTouchActive = false;
+        if (!e.changedTouches || e.changedTouches.length === 0) return;
+
         const touchEndX = e.changedTouches[0].clientX;
-        const diff = touchEndX - touchStartX;
-        if (Math.abs(diff) > 30) {
-          if (diff < 0) {
+        const touchEndY = e.changedTouches[0].clientY;
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+        const elapsed = Date.now() - touchStartTime;
+
+        // ONLY trigger slide change when swipe is predominantly horizontal:
+        // diffX must be > 40px and at least 1.5x greater than vertical movement diffY,
+        // completed within 800ms
+        if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY) * 1.5 && elapsed < 800) {
+          const card = container.closest(".product-card");
+          if (card) {
+            card.dataset.wasSwiping = "true";
+            setTimeout(() => {
+              if (card) card.dataset.wasSwiping = "false";
+            }, 300);
+          }
+          if (diffX < 0) {
             goToSlide(currentIndex + 1);
           } else {
             goToSlide(currentIndex - 1);
           }
         }
-        startAutoSlide();
       },
       { passive: true }
     );
-
-    container.addEventListener("mouseenter", stopAutoSlide);
-    container.addEventListener("mouseleave", startAutoSlide);
-
-    startAutoSlide();
   });
 }
 
@@ -533,8 +534,10 @@ function bindProductCardButtons() {
   document.querySelectorAll(".product-card").forEach((card) => {
     card.addEventListener("click", (e) => {
       if (
+        card.dataset.wasSwiping === "true" ||
         e.target.closest(".btn-ar-view") ||
         e.target.closest(".card-slideshow-btn") ||
+        e.target.closest(".card-slideshow-dots") ||
         e.target.closest(".btn-wishlist-heart")
       ) {
         return;

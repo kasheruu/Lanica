@@ -430,16 +430,6 @@ ul {
   padding: 40px;
   border-radius: var(--border-radius);
   background-color: var(--clr-gray-light);
-  transition:
-    transform var(--transition-medium),
-    box-shadow var(--transition-medium),
-    background-color var(--transition-medium);
-}
-
-.feature-card:hover {
-  transform: translateY(-8px);
-  box-shadow: var(--shadow-md);
-  background-color: var(--clr-white);
 }
 
 .icon-box {
@@ -452,12 +442,6 @@ ul {
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  transition: background-color var(--transition-fast);
-}
-
-.feature-card:hover .icon-box {
-  background-color: var(--clr-yellow);
-  color: var(--clr-black);
 }
 
 .icon-box.highlight {
@@ -508,11 +492,15 @@ ul {
 .carousel-track-container {
   width: 100%;
   overflow-x: auto;
+  overflow-y: hidden !important;
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: contain;
   scroll-behavior: smooth;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   padding: 10px 0;
+  touch-action: pan-y pinch-zoom;
 }
 
 .carousel-track-container::-webkit-scrollbar {
@@ -625,34 +613,40 @@ ul {
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .card-slideshow-track {
   position: relative;
+  display: flex;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
+  transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
 }
 
 .card-slideshow-slide {
-  position: absolute;
-  top: 0;
-  left: 0;
+  flex: 0 0 100%;
   width: 100%;
   height: 100%;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-  transform: scale(0.98);
-  pointer-events: none;
-}
-
-.card-slideshow-slide.active {
+  position: relative;
+  overflow: hidden;
   opacity: 1;
   visibility: visible;
-  transform: scale(1);
-  z-index: 2;
   pointer-events: auto;
+}
+
+.card-slideshow-slide .product-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  pointer-events: none;
 }
 
 .card-slideshow-btn {
@@ -1449,14 +1443,6 @@ footer {
   border-radius: var(--border-radius);
   text-align: center;
   box-shadow: var(--shadow-sm);
-  transition:
-    transform var(--transition-medium),
-    box-shadow var(--transition-medium);
-}
-
-.value-card:hover {
-  transform: translateY(-8px);
-  box-shadow: var(--shadow-md);
 }
 
 .value-icon {
@@ -1548,14 +1534,6 @@ footer {
   padding: 30px;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-sm);
-  transition:
-    transform var(--transition-medium),
-    box-shadow var(--transition-medium);
-}
-
-.location-item:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-md);
 }
 
 .location-icon {
@@ -2453,6 +2431,8 @@ footer {
   border: 1px solid #cbd5e1;
   font-family: inherit;
   font-size: 0.95rem;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
 }
 
 .form-group input:focus {
@@ -3710,12 +3690,33 @@ textarea:focus-visible {
   align-items: center;
   gap: 8px;
   overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  max-width: 100%;
+  box-sizing: border-box;
+  cursor: grab;
+}
+
+.chat-channel-bar:active {
+  cursor: grabbing;
 }
 
 .chat-channel-bar::-webkit-scrollbar {
-  display: none;
+  height: 4px;
+}
+
+.chat-channel-bar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-channel-bar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .chat-channel-pill {
@@ -3732,6 +3733,10 @@ textarea:focus-visible {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  user-select: none;
+  -webkit-user-select: none;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
@@ -3747,6 +3752,42 @@ textarea:focus-visible {
   color: #ffffff;
   border-color: #111827;
   box-shadow: 0 2px 5px rgba(17, 24, 39, 0.25);
+}
+
+.chat-msg-row.system {
+  width: 100%;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.chat-system-card {
+  width: 95%;
+  max-width: 440px;
+  margin: 6px auto;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  font-size: 0.83rem;
+  color: #92400e;
+  line-height: 1.45;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-sizing: border-box;
+}
+
+.chat-system-card-header {
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #b45309;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Chat Messages Body */
@@ -4973,6 +5014,20 @@ body.modal-open {
   white-space: normal !important;
 }
 
+/* Dashboard Recent Orders Card Elements (Default: Desktop Hidden) */
+.dash-card-label {
+  display: none;
+}
+.dash-card-date-badge {
+  display: none;
+}
+.dash-card-actions-row {
+  display: none;
+}
+.dash-table-kebab-wrap {
+  display: inline-block;
+}
+
 /* ==========================================================================
    Admin Mobile Responsive Inventory Table (Clean Mobile Card Layout)
    ========================================================================== */
@@ -5224,11 +5279,12 @@ body.modal-open {
   .recent-orders-container table tbody tr {
     display: flex !important;
     flex-direction: column !important;
+    gap: 12px !important;
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 18px !important;
     padding: 16px !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
     box-sizing: border-box !important;
     width: 100% !important;
     overflow: hidden !important;
@@ -5236,88 +5292,291 @@ body.modal-open {
 
   .recent-orders-container table tbody td {
     display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    padding: 6px 0 !important;
-    border-bottom: none !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+    border: none !important;
     font-size: 0.88rem !important;
     width: 100% !important;
     box-sizing: border-box !important;
     min-width: 0 !important;
   }
 
-  /* Recent Orders Field Labels */
-  .recent-orders-container table tbody td:nth-child(2)::before { content: "Customer:"; font-weight: 600; color: #6b7280; font-size: 0.8rem; }
-  .recent-orders-container table tbody td:nth-child(3)::before { content: "Item(s):"; font-weight: 600; color: #6b7280; font-size: 0.8rem; }
-  .recent-orders-container table tbody td:nth-child(4)::before { content: "Financial:"; font-weight: 600; color: #6b7280; font-size: 0.8rem; }
-  .recent-orders-container table tbody td:nth-child(5)::before { content: "Status:"; font-weight: 600; color: #6b7280; font-size: 0.8rem; }
-  .recent-orders-container table tbody td:nth-child(6)::before { content: "Date:"; font-weight: 600; color: #6b7280; font-size: 0.8rem; }
+  /* Clear previous ::before pseudo elements */
+  .recent-orders-container table tbody td::before {
+    display: none !important;
+    content: none !important;
+  }
 
-  /* Recent Orders Values Right-Alignment & Wrapping */
   .recent-orders-container table tbody td > div,
   .recent-orders-container table tbody td > span,
   .recent-orders-container table tbody td > strong {
-    text-align: right !important;
-    max-width: 65% !important;
+    text-align: left !important;
+    max-width: 100% !important;
     min-width: 0 !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
   }
 
-  /* Recent Orders Header (Order ID) */
-  .recent-orders-container table tbody td:first-child {
-    border-bottom: 1px solid #f1f5f9 !important;
-    padding-bottom: 10px !important;
-    margin-bottom: 6px !important;
-    width: 100% !important;
-    display: flex !important;
+  /* Recent Orders Field Labels */
+  .recent-orders-container .dash-card-label {
+    display: block !important;
+    font-size: 0.82rem !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+    margin-bottom: 2px !important;
+    line-height: 1.2 !important;
+    text-align: left !important;
+  }
+
+  /* 1. Header Row (Order ID on Left, Date on Right) */
+  .recent-orders-container table tbody td.td-order-id {
+    flex-direction: row !important;
     justify-content: space-between !important;
     align-items: center !important;
-  }
-
-  .recent-orders-container table tbody td:first-child strong {
-    font-size: 0.95rem !important;
-    font-weight: 700 !important;
-    color: #0f172a !important;
-    text-align: left !important;
-    max-width: 100% !important;
-  }
-
-  /* Recent Orders Actions */
-  .recent-orders-container table tbody td:last-child {
-    border-top: 1px dashed #e2e8f0 !important;
-    margin-top: 8px !important;
-    padding-top: 10px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
+    padding-bottom: 2px !important;
+    border-bottom: none !important;
     width: 100% !important;
   }
 
-  .recent-orders-container table tbody td:last-child::before {
-    content: "ACTIONS:" !important;
-    font-weight: 700 !important;
-    color: #94a3b8 !important;
-    font-size: 0.72rem !important;
-    letter-spacing: 0.05em !important;
+  .recent-orders-container .dash-card-order-id {
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    letter-spacing: -0.01em !important;
   }
 
-  .recent-orders-container table tbody td:last-child > div {
+  .recent-orders-container .dash-card-date-badge {
+    display: inline-block !important;
+    font-size: 0.86rem !important;
+    color: #475569 !important;
+    font-weight: 500 !important;
+  }
+
+  /* 2. Customer Section (Prominent, Bold, Left-Aligned) */
+  .recent-orders-container table tbody td.td-customer {
+    align-items: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+  }
+
+  .recent-orders-container .dash-card-customer-name {
+    font-size: 1.18rem !important;
+    font-weight: 800 !important;
+    color: #0b1f44 !important;
+    line-height: 1.25 !important;
+    word-break: break-word !important;
+    letter-spacing: -0.01em !important;
+    text-align: left !important;
+  }
+
+  .recent-orders-container .dash-card-customer-email {
+    font-size: 0.76rem !important;
+    color: #64748b !important;
+    margin-top: 2px !important;
+    text-align: left !important;
+  }
+
+  /* 3. Items Section (Full width, Left-Aligned) */
+  .recent-orders-container table tbody td.td-items {
+    align-items: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+  }
+
+  .recent-orders-container table tbody td.td-items .order-items-summary {
+    font-size: 0.95rem !important;
+    color: #1e293b !important;
+    font-weight: 500 !important;
+    line-height: 1.35 !important;
+    max-width: 100% !important;
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  /* 4. Financial Section (Below Items, Above Status, Aligned to the LEFT side) */
+  .recent-orders-container table tbody td.td-financial {
     display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin-top: 2px !important;
+  }
+
+  .recent-orders-container table tbody td.td-financial .dash-card-label {
+    text-align: left !important;
+    width: 100% !important;
+    margin-bottom: 2px !important;
+  }
+
+  .recent-orders-container table tbody td.td-financial .dash-card-financial-val {
+    display: flex !important;
+    flex-direction: row !important;
     flex-wrap: wrap !important;
+    align-items: baseline !important;
+    text-align: left !important;
     gap: 6px !important;
     width: 100% !important;
   }
 
-  .recent-orders-container table tbody td:last-child .dash-action-btn-sm {
-    flex: 1 1 auto !important;
-    min-width: 80px !important;
+  .recent-orders-container .dash-card-amount {
+    font-size: 1.18rem !important;
+    font-weight: 800 !important;
+    color: #0b1f44 !important;
+    letter-spacing: -0.01em !important;
+    text-align: left !important;
+  }
+
+  .recent-orders-container .dash-card-partial {
+    font-size: 0.8rem !important;
+    color: #2563eb !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+  }
+
+  /* 5. Status Section (Below Financial, Left-Aligned with Badge) */
+  .recent-orders-container table tbody td.td-status {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin-top: 2px !important;
+  }
+
+  .recent-orders-container table tbody td.td-status .dash-card-label {
+    text-align: left !important;
+    margin-bottom: 5px !important;
+  }
+
+  .recent-orders-container table tbody td.td-status .order-status-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    padding: 5px 14px !important;
+    border-radius: 9999px !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+  }
+
+  .recent-orders-container .order-status-completed {
+    background: #e6f4ea !important;
+    color: #137333 !important;
+    border: 1px solid #bbf7d0 !important;
+  }
+
+  /* Hide raw date cell in card since it's already shown in header row */
+  .recent-orders-container table tbody td.td-date {
+    display: none !important;
+  }
+
+  /* 6. Actions Row (Full Width with Divider Line) */
+  .recent-orders-container table tbody td.td-actions {
+    border-top: 1px solid #f1f5f9 !important;
+    padding-top: 14px !important;
+    margin-top: 6px !important;
+    width: 100% !important;
+  }
+
+  .recent-orders-container .dash-table-kebab-wrap {
+    display: none !important;
+  }
+
+  .recent-orders-container .dash-card-actions-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .recent-orders-container .dash-card-action-btn {
+    display: inline-flex !important;
+    align-items: center !important;
     justify-content: center !important;
-    padding: 7px 8px !important;
-    font-size: 0.74rem !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
     box-sizing: border-box !important;
     white-space: nowrap !important;
+    min-height: 38px !important;
+    text-decoration: none !important;
+  }
+
+  .recent-orders-container .dash-card-btn-view {
+    flex: 1 1 auto !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+
+  .recent-orders-container .dash-card-btn-view:hover {
+    background: #f8fafc !important;
+    border-color: #94a3b8 !important;
+  }
+
+  .recent-orders-container .dash-card-btn-voucher {
+    flex: 1.5 1 auto !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  .recent-orders-container .dash-card-btn-voucher:hover {
+    background: #f8fafc !important;
+    border-color: #94a3b8 !important;
+  }
+
+  .recent-orders-container .dash-card-btn-quotation {
+    flex: 1.2 1 auto !important;
+    background: #2563eb !important;
+    border: 1px solid #2563eb !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+  }
+
+  .recent-orders-container .dash-card-btn-quotation:hover {
+    background: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
+  }
+
+  .recent-orders-container .dash-card-action-btn svg {
+    flex-shrink: 0 !important;
+  }
+
+  /* Compact handling for iPhone SE and small devices (<= 380px) */
+  @media (max-width: 380px) {
+    .recent-orders-container table tbody tr {
+      padding: 12px 10px !important;
+      column-gap: 8px !important;
+    }
+    .recent-orders-container .dash-card-customer-name {
+      font-size: 1.05rem !important;
+    }
+    .recent-orders-container .dash-card-amount {
+      font-size: 1.05rem !important;
+    }
+    .recent-orders-container .dash-card-actions-row {
+      gap: 5px !important;
+    }
+    .recent-orders-container .dash-card-action-btn {
+      padding: 7px 5px !important;
+      font-size: 0.74rem !important;
+      gap: 3px !important;
+      min-height: 34px !important;
+    }
+    .recent-orders-container .dash-card-action-btn svg {
+      width: 12px !important;
+      height: 12px !important;
+    }
   }
 
   /* Dashboard Side Widgets on Mobile */
@@ -5603,6 +5862,35 @@ body.modal-open {
   box-sizing: border-box;
   transition: all 0.2s ease;
   outline: none;
+  text-overflow: ellipsis;
+}
+
+textarea.auth-input-field {
+  padding: 12px 16px;
+  min-height: 90px;
+  max-height: 260px;
+  resize: vertical;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.char-counter-text {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  text-align: right;
+  margin-top: 4px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.char-counter-text.near-limit {
+  color: #d97706;
+}
+
+.char-counter-text.at-limit {
+  color: #ef4444;
+  font-weight: 700;
 }
 
 .auth-input-field:focus {
