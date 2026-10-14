@@ -108,7 +108,7 @@ export async function verifyPaymongoPayment({ paymentIntentId, orderId }) {
         paymentIntentId: paymentIntentId,
         downpaymentPaidAt: serverTimestamp(),
         orderStatus: "downpayment confirmed",
-        status: "Downpayment Confirmed",
+        status: "Deposit Verified",
       });
     } catch (fsErr) {
       console.warn("Client Firestore update notice:", fsErr);

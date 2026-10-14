@@ -66,6 +66,7 @@ let selectedPaymentTerm = "downpayment"; // "downpayment" (30%) or "full" (100%)
 let currentModalProduct = null;
 let currentSelectedMaterial = "Fabric";
 let currentSelectedQty = 1;
+let currentSelectedColor = "";
 let cartUnsubscribe = null;
 let liveChatController = null;
 
@@ -569,9 +570,9 @@ function renderFilteredProducts() {
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state-container" style="grid-column: 1 / -1; width: 100%; text-align: center; padding: 40px 20px;">
-        <svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <path d="m21 21-4.3-4.3"></path>
         </svg>
         <h3 class="empty-state-title" style="margin-top: 12px; font-size: 1.2rem;">No Products Found</h3>
         <p class="empty-state-subtitle" style="color: #6b7280; font-size: 0.9rem;">Try adjusting your search query or category filters.</p>
@@ -946,6 +947,115 @@ async function openProductQuickViewModal(productId) {
       }
     }
 
+    // Interactive Color Selection Picker
+    let availableColors = [];
+    if (Array.isArray(currentModalProduct.colors) && currentModalProduct.colors.length > 0) {
+      availableColors = currentModalProduct.colors
+        .map((c) => String(c).trim())
+        .filter(Boolean);
+    } else {
+      const rawColorStr = currentModalProduct.color || currentModalProduct.fabricColor || "";
+      if (rawColorStr) {
+        availableColors = String(rawColorStr)
+          .split(/[\n,]+/)
+          .map((c) => c.trim())
+          .filter(Boolean);
+      }
+    }
+
+    const colorSection = document.getElementById("pv-color-section");
+    const colorsList = document.getElementById("pv-colors-list");
+    const selectedColorBadge = document.getElementById("pv-selected-color-badge");
+
+    if (availableColors.length > 0) {
+      currentSelectedColor = availableColors[0];
+      if (selectedColorBadge) {
+        selectedColorBadge.textContent = `Selected: ${currentSelectedColor}`;
+      }
+      if (colorsList) {
+        colorsList.innerHTML = availableColors
+          .map(
+            (color, idx) => `
+          <button type="button" class="pdp-color-chip ${idx === 0 ? "selected" : ""}" data-color="${escapeHtml(color)}">
+            <span class="pdp-color-chip-check">✓</span>
+            <span class="pdp-color-chip-text">${escapeHtml(color)}</span>
+          </button>
+        `
+          )
+          .join("");
+
+        colorsList.querySelectorAll(".pdp-color-chip").forEach((chip) => {
+          chip.addEventListener("click", () => {
+            colorsList
+              .querySelectorAll(".pdp-color-chip")
+              .forEach((c) => c.classList.remove("selected"));
+            chip.classList.add("selected");
+            currentSelectedColor = chip.getAttribute("data-color");
+            if (selectedColorBadge) {
+              selectedColorBadge.textContent = `Selected: ${currentSelectedColor}`;
+            }
+          });
+        });
+      }
+      if (colorSection) colorSection.style.display = "block";
+    } else {
+      currentSelectedColor = "";
+      if (colorSection) colorSection.style.display = "none";
+      if (colorsList) colorsList.innerHTML = "";
+    }
+
+    // Render Freebies & Inclusions Card
+    const freebiesCard = document.getElementById("pv-freebies-card");
+    const freebiesList = document.getElementById("pv-freebies-list");
+    const rawFreebies = currentModalProduct.freebies;
+    if (freebiesList) {
+      const freebiesArr = (Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies || "").split(/[\n,]+/))
+        .map((f) => String(f).trim())
+        .filter(Boolean);
+      if (freebiesArr.length > 0) {
+        freebiesList.innerHTML = freebiesArr
+          .map(
+            (f) => `
+          <div class="pdp-check-item">
+            <span class="pdp-check-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            <span style="font-weight: 600;">${escapeHtml(f)}</span>
+          </div>
+        `
+          )
+          .join("");
+        if (freebiesCard) freebiesCard.style.display = "block";
+      } else {
+        if (freebiesCard) freebiesCard.style.display = "none";
+        freebiesList.innerHTML = "";
+      }
+    }
+
+    // Dynamic Materials Checklist
+    const materialsChecklist = document.getElementById("pv-materials-checklist");
+    const checkSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+    if (materialsChecklist && prodMaterials.length > 0 && prodMaterials[0] !== "Standard") {
+      materialsChecklist.innerHTML = [
+        ...prodMaterials.map((m) => `
+          <div class="pdp-check-item">
+            <span class="pdp-check-icon">${checkSvg}</span>
+            <span>${escapeHtml(m)}</span>
+          </div>
+        `),
+        `
+          <div class="pdp-check-item">
+            <span class="pdp-check-icon">${checkSvg}</span>
+            <span>Anti Anay at Bukbok Treated</span>
+          </div>
+          <div class="pdp-check-item">
+            <span class="pdp-check-icon">${checkSvg}</span>
+            <span>Plush Premium Upholstery Fabric</span>
+          </div>
+        `
+      ].join("");
+    }
+
     updateVariantStockUI();
     recalculatePdpTotals();
     modal.classList.add("active");
@@ -984,7 +1094,7 @@ function updateVariantStockUI() {
     if (addBtn) {
       addBtn.disabled = false;
       const ctaSpan = addBtn.querySelector("span:first-child");
-      if (ctaSpan) ctaSpan.textContent = "ADD READY STOCK TO BAG";
+      if (ctaSpan) ctaSpan.textContent = "PLACE ORDER";
     }
 
     if (currentSelectedQty < 1) currentSelectedQty = 1;
@@ -995,18 +1105,18 @@ function updateVariantStockUI() {
 
     if (allowsPreorder) {
       if (statusEl) {
-        statusEl.innerHTML = `Made to Order / Pre-order Available (Lead Time: ${lead})`;
+        statusEl.innerHTML = `Made to Order (Lead Time: ${escapeHtml(lead)})`;
         statusEl.className = "pdp-stock-chip mto";
       }
       if (leadBadge) {
-        leadBadge.textContent = `Pre-Order (${lead})`;
-        leadBadge.style.background = "#fef3c7";
-        leadBadge.style.color = "#92400e";
+        leadBadge.textContent = `MTO (~${escapeHtml(lead)})`;
+        leadBadge.style.background = "#e0f2fe";
+        leadBadge.style.color = "#0369a1";
       }
       if (addBtn) {
         addBtn.disabled = false;
         const ctaSpan = addBtn.querySelector("span:first-child");
-        if (ctaSpan) ctaSpan.textContent = "PRE-ORDER NOW";
+        if (ctaSpan) ctaSpan.textContent = "PLACE ORDER";
       }
       if (currentSelectedQty < 1) currentSelectedQty = 1;
     } else {
@@ -1302,6 +1412,7 @@ function setupStorefrontUI() {
 
       requireAuth(async () => {
         try {
+          currentModalProduct.selectedColor = currentSelectedColor || "";
           await addToCart(
             currentUser.uid,
             currentModalProduct,
@@ -1309,13 +1420,15 @@ function setupStorefrontUI() {
             currentSelectedQty,
             customNotes,
             selectedModalAddons,
-            unitPriceWithAddons
+            unitPriceWithAddons,
+            currentSelectedColor
           );
           const available = getAvailableStock(currentModalProduct, currentSelectedMaterial);
           const modeLabel = available > 0 ? "Ready Stock" : "Made-to-Order";
+          const colorText = currentSelectedColor ? ` [${currentSelectedColor}]` : "";
           const addonText = selectedModalAddons.length > 0 ? ` (+ ${selectedModalAddons.length} upgrades)` : "";
           showToast(
-            `Added ${currentSelectedQty} x ${currentModalProduct.name} (${currentSelectedMaterial}${addonText} - ${modeLabel}) to bag!`
+            `Added ${currentSelectedQty} x ${currentModalProduct.name}${colorText} (${currentSelectedMaterial}${addonText} - ${modeLabel}) to bag!`
           );
           const notesBox = document.getElementById("pv-custom-notes");
           if (notesBox) notesBox.value = "";
@@ -2081,7 +2194,7 @@ function setupLiveChatWidget() {
     channelBar.style.display = "flex";
     let barHtml = `
       <button type="button" class="chat-channel-pill ${currentChannel === "support" ? "active" : ""}" data-channel="support">
-        💬 Live Support
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Live Support
       </button>
     `;
 
@@ -2091,7 +2204,7 @@ function setupLiveChatWidget() {
       const isSel = currentChannel === "order" && activeChatOrderId === oId;
       barHtml += `
         <button type="button" class="chat-channel-pill ${isSel ? "active" : ""}" data-channel="order" data-order-id="${oId}">
-          🧵 #${orderNum}
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>#${orderNum}
         </button>
       `;
     });

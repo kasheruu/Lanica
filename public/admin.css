@@ -274,19 +274,23 @@
   border: 1px solid rgba(0, 0, 0, 0.02);
 }
 
-.inventory-table {
+.inventory-table,
+.orders-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 }
 
 .inventory-table th,
-.inventory-table td {
+.inventory-table td,
+.orders-table th,
+.orders-table td {
   padding: 12px 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.inventory-table th {
+.inventory-table th,
+.orders-table th {
   background-color: #fafbfc;
   font-weight: 600;
   color: var(--clr-text-muted);
@@ -295,8 +299,55 @@
   letter-spacing: 0.05em;
 }
 
-.inventory-table tbody tr:hover {
+.inventory-table tbody tr:hover,
+.orders-table tbody tr:hover {
   background-color: #fafbfc;
+}
+
+/* Materials List Wrapper & Responsive Chips in Inventory Table */
+.materials-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  max-width: 320px;
+  box-sizing: border-box;
+  padding: 2px 0;
+}
+
+.material-chip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 0.8rem;
+  color: #374151;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 5px 9px;
+  border-radius: 7px;
+  line-height: 1.35;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.material-chip-icon {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.material-chip-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 /* Shared Table Pagination Footer */
@@ -322,6 +373,14 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
+}
+
+.table-pagination-footer .pagination-extras {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .table-pagination-footer .pagination-per-page {
@@ -949,9 +1008,14 @@
   background: #fef7e0;
   color: #b06000;
 }
-.order-status-accepted {
-  background: #e8f0fe;
-  color: #1967d2;
+.order-status-accepted,
+.order-status-downpayment-confirmed,
+.order-status-downpayment\ confirmed,
+.order-status-deposit-verified,
+[class*="order-status-downpayment"] {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
 }
 .order-status-processing {
   background: #fff4e5;
@@ -1379,9 +1443,11 @@
 
   .admin-main {
     margin-left: 0 !important;
-    padding: 16px;
-    width: 100%;
-    overflow-x: hidden;
+    padding: 12px 10px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
 }
 
@@ -1396,7 +1462,7 @@
     grid-template-columns: 1fr !important;
   }
 
-  table {
+  table:not(.inventory-table):not(.orders-table) {
     display: block;
     width: 100%;
     overflow-x: auto;
@@ -1936,7 +2002,9 @@
   gap: 6px;
 }
 
-.material-tag-pill {
+.material-tag-pill,
+.color-tag-pill,
+.freebie-tag-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1950,12 +2018,26 @@
   animation: tagFadeIn 0.2s ease;
 }
 
+.color-tag-pill {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+.freebie-tag-pill {
+  background: #faf5ff;
+  border-color: #e9d5ff;
+  color: #7e22ce;
+}
+
 @keyframes tagFadeIn {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
 }
 
-.material-tag-remove {
+.material-tag-remove,
+.color-tag-remove,
+.freebie-tag-remove {
   background: none;
   border: none;
   color: #9ca3af;
@@ -1969,7 +2051,9 @@
   transition: color 0.15s ease;
 }
 
-.material-tag-remove:hover {
+.material-tag-remove:hover,
+.color-tag-remove:hover,
+.freebie-tag-remove:hover {
   color: #ef4444;
 }
 
@@ -3135,6 +3219,118 @@
   border-color: #2563eb;
 }
 
+/* Responsive Table Pagination for Tablets & Mobile Screens */
+@media (max-width: 768px) {
+  .table-pagination-footer {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px 12px !important;
+    gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    border-radius: 16px !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    margin-top: 14px !important;
+    margin-bottom: 24px !important;
+    text-align: center !important;
+    overflow: visible !important;
+  }
+
+  .table-pagination-footer .pagination-info {
+    width: 100% !important;
+    text-align: center !important;
+    font-size: 0.82rem !important;
+    color: #64748b !important;
+  }
+
+  .table-pagination-footer .pagination-controls {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .table-pagination-footer .pagination-buttons {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .table-pagination-footer .pagination-pages-list {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    flex-wrap: wrap !important;
+  }
+
+  /* Hide Per-Page selector and Jump input on mobile to eliminate overflowing dropdowns */
+  .table-pagination-footer .pagination-extras {
+    display: none !important;
+  }
+
+  .table-pagination-footer .pagination-jump {
+    margin-left: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-pagination-footer {
+    padding: 14px 10px !important;
+    gap: 10px !important;
+  }
+
+  .table-pagination-footer .pagination-info {
+    font-size: 0.78rem !important;
+  }
+
+  .table-pagination-footer .pagination-buttons {
+    gap: 4px !important;
+  }
+
+  .table-pagination-footer .first-btn,
+  .table-pagination-footer .last-btn {
+    display: none !important;
+  }
+
+  .table-pagination-footer .pagination-btn {
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+  }
+
+  .table-pagination-footer .pagination-btn svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .table-pagination-footer .pagination-num-btn {
+    min-width: 32px !important;
+    height: 32px !important;
+    padding: 0 6px !important;
+    font-size: 0.82rem !important;
+    border-radius: 8px !important;
+  }
+
+  .table-pagination-footer .pagination-extras {
+    display: none !important;
+  }
+}
+
 /* Skeleton Loading Shimmer */
 @keyframes skeletonShimmer {
   0% { background-position: -200px 0; }
@@ -3676,7 +3872,51 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+.receipt-branch-btn {
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+
+.receipt-branch-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.receipt-branch-btn.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.doc-editable-field {
+  border-radius: 4px;
+  transition: background-color 0.15s ease, outline 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media screen {
+  .doc-editable-field:hover {
+    background: rgba(37, 99, 235, 0.08) !important;
+    outline: 1.5px dashed #2563eb !important;
+  }
+
+  .doc-editable-field:focus {
+    background: #ffffff !important;
+    outline: 2px solid #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+  }
+
+  .doc-editable-field-active {
+    background: #eff6ff !important;
+  }
+}
+
 @media print {
+  @page {
+    /* Suppress browser default header (date/time, title) and footer (URL, page numbers) */
+    size: auto;
+    margin: 0 !important;
+  }
+
   /* Hide all dashboard chrome, navigation, headers, and backgrounds */
   body * {
     visibility: hidden !important;
@@ -3687,6 +3927,8 @@
     margin: 0 !important;
     padding: 0 !important;
     color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Expose only the receipt modal printable canvas */
@@ -3721,17 +3963,28 @@
     max-height: none !important;
   }
 
-  #lanica-receipt-modal .modal-no-print {
+  #lanica-receipt-modal .lanica-doc-toolbar,
+  #lanica-receipt-modal .modal-no-print,
+  .modal-no-print,
+  #lanica-esign-modal {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   #lanica-printable-area {
-    padding: 10mm 15mm !important;
+    /* Safe print margins on physical paper */
+    padding: 12mm 15mm !important;
+    margin: 0 auto !important;
+    max-width: 210mm !important;
+    box-sizing: border-box !important;
     overflow: visible !important;
     color: #000000 !important;
     background: #ffffff !important;
     box-shadow: none !important;
-    font-size: 11pt !important;
+    font-size: 10.5pt !important;
     line-height: 1.4 !important;
   }
 
@@ -3740,20 +3993,25 @@
   }
 
   .voucher-editable-signatory,
-  .voucher-editable-date {
+  .voucher-editable-date,
+  .doc-editable-field {
     outline: none !important;
     background: transparent !important;
     box-shadow: none !important;
+    border-color: #000000 !important;
   }
 
   .voucher-edit-hint,
-  #btn-reset-voucher-sig {
+  .btn-attach-esign,
+  .btn-remove-esign,
+  #btn-reset-voucher-sig,
+  #btn-reset-branch-btn {
     display: none !important;
   }
 }
 
 /* ==========================================================================
-   Voucher Signatory In-Place Editing UI/UX
+   Voucher Signatory & Branch In-Place Editing UI/UX
    ========================================================================== */
 .voucher-editable-signatory,
 .voucher-editable-date {
@@ -3779,10 +4037,43 @@
     background: #ffffff !important;
     outline: 1.5px solid #2563eb !important;
   }
-  #btn-reset-voucher-sig:hover {
+  #btn-reset-voucher-sig:hover,
+  #btn-reset-branch-btn:hover {
     background: #e2e8f0 !important;
     color: #0f172a !important;
     border-color: #94a3b8 !important;
+  }
+}
+
+/* Mobile Responsive Optimization for Lanica Financial Modal */
+@media screen and (max-width: 768px) {
+  #lanica-receipt-modal {
+    padding: 8px !important;
+    align-items: flex-start !important;
+  }
+
+  #lanica-receipt-modal .lanica-doc-modal-card {
+    max-height: 96vh !important;
+    border-radius: 12px !important;
+    margin: 4px auto !important;
+  }
+
+  #lanica-receipt-modal .lanica-doc-toolbar {
+    padding: 10px 12px !important;
+  }
+
+  #btn-close-lanica-modal {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  #lanica-printable-area {
+    padding: 18px 14px !important;
+    font-size: 0.85rem !important;
+  }
+
+  #lanica-printable-area table {
+    font-size: 0.8rem !important;
   }
 }
 
@@ -3923,6 +4214,20 @@
   }
   .dashboard-pipeline-steps {
     grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .dashboard-operational-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 20px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .dashboard-operational-layout > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
   }
 }
 

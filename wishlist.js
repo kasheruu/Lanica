@@ -60,6 +60,7 @@ let currentCartItems = [];
 let allProductsList = [];
 let currentModalProduct = null;
 let pdpQuantity = 1;
+let currentSelectedColor = "";
 
 let savedAddresses = [];
 let selectedAddressId = null;
@@ -616,17 +617,20 @@ function openProductModal(product) {
   const addCartLabel = document.getElementById("pdp-add-cart-label");
 
   if (isMTO || stockQty <= 0) {
-    stockStatusEl.textContent = "Pre-Order / Made to Order";
+    const lead = (product.leadTime || product.estimated_lead_time || "14-21 Days").trim();
+    stockStatusEl.textContent = `Made to Order (Lead Time: ${lead})`;
     stockStatusEl.style.background = "#fff7ed";
     stockStatusEl.style.color = "#c2410c";
-    leadtimeEl.textContent = "MTO (~21-28 days)";
-    addCartLabel.textContent = "Pre-Order Now";
+    leadtimeEl.textContent = `MTO (~${lead})`;
+    leadtimeEl.style.background = "#e0f2fe";
+    leadtimeEl.style.color = "#0369a1";
+    addCartLabel.textContent = "PLACE ORDER";
   } else {
     stockStatusEl.textContent = `In Stock (${stockQty} left)`;
     stockStatusEl.style.background = "#f0fdf4";
     stockStatusEl.style.color = "#15803d";
     leadtimeEl.textContent = "In Stock (Fast Shipping)";
-    addCartLabel.textContent = "Add to Cart";
+    addCartLabel.textContent = "PLACE ORDER";
   }
 
   const dimInfo = document.getElementById("pv-dimensions-info");
@@ -657,6 +661,153 @@ function openProductModal(product) {
   const mainImg = document.getElementById("pv-image");
   const thumbnails = getProductThumbnails(product);
   mainImg.src = thumbnails[0];
+  const paginationEl = document.getElementById("pv-pagination-indicator");
+  if (paginationEl) paginationEl.textContent = `1/${thumbnails.length}`;
+
+  const thumbStrip = document.getElementById("pv-thumbnails");
+  if (thumbStrip) {
+    if (thumbnails.length >= 2) {
+      thumbStrip.innerHTML = thumbnails
+        .map(
+          (url, i) => `
+        <button type="button" class="modal-thumb-btn ${i === 0 ? "active" : ""}" data-index="${i}" title="View image ${i + 1}">
+          <img src="${url}" alt="Thumbnail ${i + 1}" onerror="this.src='assets/product_sofa.png'" />
+        </button>
+      `
+        )
+        .join("");
+      thumbStrip.style.display = "flex";
+      thumbStrip.querySelectorAll(".modal-thumb-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          thumbStrip
+            .querySelectorAll(".modal-thumb-btn")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const idx = parseInt(btn.dataset.index, 10);
+          mainImg.src = thumbnails[idx];
+          if (paginationEl) paginationEl.textContent = `${idx + 1}/${thumbnails.length}`;
+        });
+      });
+    } else {
+      thumbStrip.style.display = "none";
+      thumbStrip.innerHTML = "";
+    }
+  }
+
+  // Interactive Color Selection Picker
+  let availableColors = [];
+  if (Array.isArray(product.colors) && product.colors.length > 0) {
+    availableColors = product.colors
+      .map((c) => String(c).trim())
+      .filter(Boolean);
+  } else {
+    const rawColorStr = product.color || product.fabricColor || "";
+    if (rawColorStr) {
+      availableColors = String(rawColorStr)
+        .split(/[\n,]+/)
+        .map((c) => c.trim())
+        .filter(Boolean);
+    }
+  }
+
+  const colorSection = document.getElementById("pv-color-section");
+  const colorsList = document.getElementById("pv-colors-list");
+  const selectedColorBadge = document.getElementById("pv-selected-color-badge");
+
+  if (availableColors.length > 0) {
+    currentSelectedColor = availableColors[0];
+    if (selectedColorBadge) {
+      selectedColorBadge.textContent = `Selected: ${currentSelectedColor}`;
+    }
+    if (colorsList) {
+      colorsList.innerHTML = availableColors
+        .map(
+          (color, idx) => `
+        <button type="button" class="pdp-color-chip ${idx === 0 ? "selected" : ""}" data-color="${escapeHtml(color)}">
+          <span class="pdp-color-chip-check">✓</span>
+          <span class="pdp-color-chip-text">${escapeHtml(color)}</span>
+        </button>
+      `
+        )
+        .join("");
+
+      colorsList.querySelectorAll(".pdp-color-chip").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          colorsList
+            .querySelectorAll(".pdp-color-chip")
+            .forEach((c) => c.classList.remove("selected"));
+          chip.classList.add("selected");
+          currentSelectedColor = chip.getAttribute("data-color");
+          if (selectedColorBadge) {
+            selectedColorBadge.textContent = `Selected: ${currentSelectedColor}`;
+          }
+        });
+      });
+    }
+    if (colorSection) colorSection.style.display = "block";
+  } else {
+    currentSelectedColor = "";
+    if (colorSection) colorSection.style.display = "none";
+    if (colorsList) colorsList.innerHTML = "";
+  }
+
+  // Render Freebies & Inclusions Card
+  const freebiesCard = document.getElementById("pv-freebies-card");
+  const freebiesList = document.getElementById("pv-freebies-list");
+  const rawFreebies = product.freebies;
+  if (freebiesList) {
+    const freebiesArr = (Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies || "").split(/[\n,]+/))
+      .map((f) => String(f).trim())
+      .filter(Boolean);
+    if (freebiesArr.length > 0) {
+      freebiesList.innerHTML = freebiesArr
+        .map(
+          (f) => `
+        <div class="pdp-check-item">
+          <span class="pdp-check-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span style="font-weight: 600;">${escapeHtml(f)}</span>
+        </div>
+      `
+        )
+        .join("");
+      if (freebiesCard) freebiesCard.style.display = "block";
+    } else {
+      if (freebiesCard) freebiesCard.style.display = "none";
+      freebiesList.innerHTML = "";
+    }
+  }
+
+  // Dynamic Materials Checklist
+  const prodMaterials =
+    Array.isArray(product.materials) && product.materials.length > 0
+      ? product.materials
+      : product.material
+        ? product.material.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+  const materialsChecklist = document.getElementById("pv-materials-checklist");
+  const checkSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+  if (materialsChecklist && prodMaterials.length > 0 && prodMaterials[0] !== "Standard") {
+    materialsChecklist.innerHTML = [
+      ...prodMaterials.map((m) => `
+        <div class="pdp-check-item">
+          <span class="pdp-check-icon">${checkSvg}</span>
+          <span>${escapeHtml(m)}</span>
+        </div>
+      `),
+      `
+        <div class="pdp-check-item">
+          <span class="pdp-check-icon">${checkSvg}</span>
+          <span>Anti Anay at Bukbok Treated</span>
+        </div>
+        <div class="pdp-check-item">
+          <span class="pdp-check-icon">${checkSvg}</span>
+          <span>Plush Premium Upholstery Fabric</span>
+        </div>
+      `
+    ].join("");
+  }
 
   recalculatePdpTotals();
   modal.classList.add("active");
@@ -1250,10 +1401,20 @@ document.addEventListener("DOMContentLoaded", () => {
   if (pdpAddCartBtn) {
     pdpAddCartBtn.addEventListener("click", async () => {
       if (!currentModalProduct) return;
-      const customNotesVal = document.getElementById("pv-custom-notes")?.value || "";
-      const res = await addToCart(currentUser?.uid, currentModalProduct, "Fabric", pdpQuantity, customNotesVal);
+      currentModalProduct.selectedColor = currentSelectedColor || "";
+      const res = await addToCart(
+        currentUser?.uid,
+        currentModalProduct,
+        "Fabric",
+        pdpQuantity,
+        customNotesVal,
+        [],
+        null,
+        currentSelectedColor
+      );
       if (res && res.success) {
-        showToast("Added to shopping bag!", "success");
+        const colorText = currentSelectedColor ? ` [${currentSelectedColor}]` : "";
+        showToast(`Added ${currentModalProduct.name || "item"}${colorText} to shopping bag!`, "success");
         if (pdpModal) pdpModal.classList.remove("active");
         document.body.style.overflow = "";
         const cartDrawerOverlay = document.getElementById("cart-drawer-overlay");

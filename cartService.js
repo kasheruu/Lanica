@@ -138,7 +138,8 @@ export async function addToCart(
   quantity = 1,
   customNotes = "",
   selectedAddons = [],
-  customUnitPrice = null
+  customUnitPrice = null,
+  selectedColor = null
 ) {
   if (!userId || !product || !product.id) {
     throw new Error("Invalid parameters for addToCart");
@@ -171,16 +172,18 @@ export async function addToCart(
     qty = typeof quantity === "number" ? quantity : 1;
   }
 
+  // Fetch current fresh stock from Firestore to validate
+  const freshProduct = await fetchProductById(product.id);
+  const prodToUse = freshProduct || product;
+
+  const colorChosen = selectedColor || product.selectedColor || prodToUse.selectedColor || prodToUse.color || prodToUse.fabricColor || "";
+  const colorKey = colorChosen ? `_${colorChosen.replace(/[^a-zA-Z0-9]/g, "")}` : "";
   const addonsKey =
     addons.length > 0
       ? `_${addons.map((a) => a.name).sort().join("_")}`
       : "";
-  const itemId = `${product.id}_${mat}${addonsKey}`; // Unique per product variant and selected upgrades
+  const itemId = `${product.id}_${mat}${colorKey}${addonsKey}`; // Unique per product variant, color, and selected upgrades
   const itemRef = doc(db, "users", userId, "cart", itemId);
-
-  // Fetch current fresh stock from Firestore to validate
-  const freshProduct = await fetchProductById(product.id);
-  const prodToUse = freshProduct || product;
 
   const availableStock = getAvailableStock(prodToUse, mat);
 
@@ -220,6 +223,9 @@ export async function addToCart(
     url: displayImage,
     quantity: targetQty,
     material: mat,
+    color: colorChosen,
+    freebies: prodToUse.freebies || "",
+    materials: Array.isArray(prodToUse.materials) ? prodToUse.materials : (prodToUse.material ? [prodToUse.material] : []),
     customNotes: String(notes || "").trim(),
     orderType: isMadeToOrder ? "Made-to-Order" : "Ready-to-Ship",
     leadTime: leadTime,
@@ -334,6 +340,7 @@ export async function placeOrderAtomic({
 
   await runTransaction(db, async (transaction) => {
     const productUpdates = [];
+    const productDataMap = {};
     let hasMadeToOrderItems = false;
 
     for (const item of cartItems) {
@@ -345,6 +352,7 @@ export async function placeOrderAtomic({
       }
 
       const pData = productSnap.data();
+      productDataMap[item.productId] = pData;
       const mat = (item.material || "Fabric").toLowerCase();
       const reqQty = Number(item.quantity || 1);
 
@@ -394,19 +402,25 @@ export async function placeOrderAtomic({
     }
 
     // Build Item Breakdown
-    const orderItemsBreakdown = cartItems.map((item) => ({
-      productId: item.productId,
-      name: item.name,
-      price: Number(item.price),
-      quantity: Number(item.quantity),
-      material: item.material || "Fabric",
-      customNotes: item.customNotes || customNotes || "",
-      orderType: item.orderType || (hasMadeToOrderItems ? "Made-to-Order" : "Ready-to-Ship"),
-      leadTime:
-        item.leadTime || (hasMadeToOrderItems ? "14-21 Business Days" : "3-5 Business Days"),
-      url: item.url || "",
-      subtotal: Number(item.price) * Number(item.quantity),
-    }));
+    const orderItemsBreakdown = cartItems.map((item) => {
+      const pData = productDataMap[item.productId] || {};
+      return {
+        productId: item.productId,
+        name: item.name,
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+        material: item.material || "Fabric",
+        color: item.color || item.fabricColor || pData.color || pData.fabricColor || (Array.isArray(pData.colors) && pData.colors[0]) || "",
+        freebies: item.freebies || pData.freebies || "",
+        materials: item.materials || pData.materials || (pData.material ? [pData.material] : []),
+        customNotes: item.customNotes || customNotes || "",
+        orderType: item.orderType || (hasMadeToOrderItems ? "Made-to-Order" : "Ready-to-Ship"),
+        leadTime:
+          item.leadTime || (hasMadeToOrderItems ? "14-21 Business Days" : "3-5 Business Days"),
+        url: item.url || "",
+        subtotal: Number(item.price) * Number(item.quantity),
+      };
+    });
 
     const pMethodLower = String(paymentMethod || "").toLowerCase();
     let paymentType = "qr_code";
@@ -496,7 +510,7 @@ export async function placeOrderAtomic({
         : (isDownpaymentPaid ? "downpayment confirmed" : "placed"),
       status: isWalkInCash
         ? "Slot Reserved"
-        : (isDownpaymentPaid ? "Downpayment Confirmed" : "placed"),
+        : (isDownpaymentPaid ? "Deposit Verified" : "placed"),
       reservationExpiresAt: reservationExpiresAt,
       paymentIntentId: paymentDetails?.paymentIntentId || null,
       downpaymentPaidAt: isDownpaymentPaid ? serverTimestamp() : null,
@@ -683,6 +697,7 @@ export function renderCartDrawerComponent({
         <div class="cart-item-title">${escapeHtml(item.name || "")}</div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
           <span class="cart-item-material">${escapeHtml(item.material || "Fabric")}</span>
+          ${item.color ? `<span style="font-size: 0.72rem; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Color: ${escapeHtml(item.color)}</span>` : ""}
           ${
             isMTO
               ? '<span style="font-size: 0.72rem; color: #2563eb; background: #eff6ff; padding: 1px 6px; border-radius: 4px; font-weight: 500;">Made-to-Order (14-21d)</span>'
@@ -702,9 +717,12 @@ export function renderCartDrawerComponent({
         </div>
       </div>
       <button class="cart-item-remove" data-id="${item.id}" aria-label="Remove item">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"></path>
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
         </svg>
       </button>
     `;

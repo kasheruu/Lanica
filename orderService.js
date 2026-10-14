@@ -10,6 +10,8 @@ import {
   onSnapshot,
   runTransaction,
   serverTimestamp,
+  updateDoc,
+  addDoc,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -52,11 +54,13 @@ export function normalizeOrderStatus(rawStatus) {
   if (
     s === "downpayment confirmed" ||
     s === "deposit confirmed" ||
+    s === "deposit verified" ||
     s === "payment verified" ||
     s === "confirmed" ||
-    s === "downpayment_paid"
+    s === "downpayment_paid" ||
+    s === "accepted"
   ) {
-    return "Downpayment Confirmed";
+    return "Deposit Verified";
   }
   if (
     s === "in production" ||
@@ -64,7 +68,6 @@ export function normalizeOrderStatus(rawStatus) {
     s === "fabrication" ||
     s === "upholstery" ||
     s === "processing" ||
-    s === "accepted" ||
     s === "packed"
   ) {
     return "In Production";
@@ -88,7 +91,10 @@ export function normalizeOrderStatus(rawStatus) {
   ) {
     return "Shipped";
   }
-  if (s === "delivered" || s === "completed" || s === "arrived" || s === "received") {
+  if (s === "completed" || s === "order completed") {
+    return "Completed";
+  }
+  if (s === "delivered" || s === "arrived" || s === "received") {
     return "Delivered";
   }
   if (s === "cancelled" || s === "canceled" || s === "declined") {
@@ -137,39 +143,53 @@ export function getRiderName(order) {
  */
 export function isOrderCancellable(status) {
   const norm = normalizeOrderStatus(status);
-  return norm === "Placed" || norm === "Slot Reserved" || norm === "Downpayment Confirmed";
+  return (
+    norm === "Placed" ||
+    norm === "Slot Reserved" ||
+    norm === "Deposit Verified" ||
+    norm === "Downpayment Confirmed"
+  );
 }
 
 /**
  * Categorizes an order record into active "Order Page" scope vs terminal "Transaction History" scope.
- * 
+ *
  * Rules:
  * 1. "Order Page" Scope (Active / On-Process):
  *    - Orders currently in progress: "Placed", "Downpayment Confirmed", "In Production", "Quality Checked", "Shipped".
  *    - Orders marked "Delivered" where remaining balance is STILL PENDING (> 0).
  *    - Orders with active "Request Refund" pending admin review.
- * 
+ *
  * 2. "Transaction History" Scope (Terminal / Resolved):
  *    - Orders marked "Delivered" AND remaining balance is completely SETTLED (<= 0).
  *    - "Refund Complete" / "refunded" orders.
  *    - "Cancelled" orders.
  *    - "Declined" orders.
- * 
- * @param {Object} order 
+ *
+ * @param {Object} order
  * @returns {"active" | "history"}
  */
 export function classifyOrderScope(order) {
   if (!order) return "history";
 
   const status = getOrderCanonicalStatus(order);
-  const rawStatus = String(order.status || "").trim().toLowerCase();
-  const rawOrderStatus = String(order.orderStatus || "").trim().toLowerCase();
+  const rawStatus = String(order.status || "")
+    .trim()
+    .toLowerCase();
+  const rawOrderStatus = String(order.orderStatus || "")
+    .trim()
+    .toLowerCase();
 
   const remainingBalance = Number(order.remainingBalance ?? order.balanceDue ?? 0);
-  const balanceStatus = String(order.balanceStatus || "").trim().toLowerCase();
-  const isBalanceSettled = balanceStatus === "settled" || order.isBalanceSettled === true || remainingBalance <= 0;
+  const balanceStatus = String(order.balanceStatus || "")
+    .trim()
+    .toLowerCase();
+  const isBalanceSettled =
+    balanceStatus === "settled" || order.isBalanceSettled === true || remainingBalance <= 0;
 
-  const refundStatus = String(order.refundStatus || "").trim().toLowerCase();
+  const refundStatus = String(order.refundStatus || "")
+    .trim()
+    .toLowerCase();
   const isRefundCompleted =
     refundStatus === "completed" ||
     refundStatus === "approved" ||
@@ -196,16 +216,22 @@ export function classifyOrderScope(order) {
     return "history";
   }
 
-  // 2. Delivered or Completed Orders:
+  // 2. Completed Orders:
+  // - Orders marked "completed", "order completed", or orderReceived === true belong directly to History.
+  if (
+    status === "Completed" ||
+    rawStatus === "completed" ||
+    rawOrderStatus === "completed" ||
+    order.orderReceived === true ||
+    Boolean(order.completedAt)
+  ) {
+    return "history";
+  }
+
+  // 3. Delivered Orders:
   // - If remaining balance is settled (<= 0 or balanceStatus === "settled"), move to History.
   // - If remaining balance is STILL PENDING (> 0), keep on Active Order Page.
-  if (
-    status === "Delivered" ||
-    rawStatus === "completed" ||
-    rawStatus === "delivered" ||
-    rawOrderStatus === "delivered" ||
-    rawOrderStatus === "completed"
-  ) {
+  if (status === "Delivered" || rawStatus === "delivered" || rawOrderStatus === "delivered") {
     if (isBalanceSettled || remainingBalance <= 0) {
       return "history";
     }
@@ -238,6 +264,7 @@ export function getTrackingStepIndex(status) {
     case "Placed":
     case "Slot Reserved":
       return 0;
+    case "Deposit Verified":
     case "Downpayment Confirmed":
       return 1;
     case "In Production":
@@ -247,6 +274,7 @@ export function getTrackingStepIndex(status) {
     case "Shipped":
       return 4;
     case "Delivered":
+    case "Completed":
       return 5;
     case "Cancelled":
     default:
@@ -304,10 +332,7 @@ export function calculateEstimatedDelivery(orderOrCreatedAt) {
 
   const isMTO =
     order.isMadeToOrder ||
-    Boolean(
-      Array.isArray(order.items) &&
-        order.items.some((i) => i.orderType === "Made-to-Order")
-    );
+    Boolean(Array.isArray(order.items) && order.items.some((i) => i.orderType === "Made-to-Order"));
 
   // Add business days helper
   const addBusinessDays = (date, days) => {
@@ -329,8 +354,7 @@ export function calculateEstimatedDelivery(orderOrCreatedAt) {
   const minDate = addBusinessDays(baseDate, minDays);
   const maxDate = addBusinessDays(baseDate, maxDays);
 
-  const formatShort = (d) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const formatShort = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const formatFull = (d) =>
     d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -377,10 +401,7 @@ export function subscribeToUserOrders(userId, callback, errorCallback) {
 
   const ordersRef = collection(db, "orders");
   // Query by userId without composite index requirements
-  const q = query(
-    ordersRef,
-    where("userId", "==", userId)
-  );
+  const q = query(ordersRef, where("userId", "==", userId));
 
   return onSnapshot(
     q,
@@ -546,6 +567,81 @@ export async function requestRefundAtomic({ orderId, userId, reason = "", detail
       updatedAt: serverTimestamp(),
     });
   });
+
+  return { success: true, orderId };
+}
+
+/**
+ * Executes the Enterprise Order Completion Process (Customer "ORDER RECEIVED" action).
+ *
+ * Spec Alignment:
+ * 1. Prerequisite: role "customer", status "delivered", taps "ORDER RECEIVED".
+ * 2. Firestore payload: { "status": "completed", "updatedAt": serverTimestamp() } (+ canonical fields).
+ * 3. Side-effects:
+ *    - Order Chat Bot (order_chats/{orderId}/messages & orders/{orderId}/messages):
+ *      "Order status updated to COMPLETED."
+ *
+ * @param {string} orderId
+ * @param {Object} [userInfo]
+ * @returns {Promise<{success: boolean, orderId: string}>}
+ */
+export async function completeCustomerOrder(orderId, userInfo = null) {
+  if (!orderId) throw new Error("Order ID is required to complete order.");
+
+  const orderDocRef = doc(db, "orders", orderId);
+  const now = serverTimestamp();
+
+  // 1. Update Firestore Database Payload (Section 2 of Spec)
+  await updateDoc(orderDocRef, {
+    status: "completed",
+    orderStatus: "completed",
+    orderReceived: true,
+    completedAt: now,
+    updatedAt: now,
+  });
+
+  // 2. Automated Chat Bot Broadcast (Section 3 of Spec)
+  // Sends message: "Order status updated to COMPLETED."
+  // Broadcasts to both mobile Flutter collection 'order_chats/{orderId}/messages'
+  // and web collection 'orders/{orderId}/messages' for 100% cross-platform parity.
+  const botMessagePayload = {
+    text: "Order status updated to COMPLETED.",
+    message: "Order status updated to COMPLETED.",
+    content: "Order status updated to COMPLETED.",
+    sender: "system",
+    senderId: "system",
+    senderName: "Lanica System Bot",
+    senderRole: "system",
+    role: "system",
+    isSystem: true,
+    type: 0,
+    timestamp: now,
+    createdAt: now,
+  };
+
+  try {
+    const mobileChatCol = collection(db, "order_chats", orderId, "messages");
+    await addDoc(mobileChatCol, botMessagePayload);
+  } catch (err) {
+    console.warn("Could not write to order_chats messages collection:", err);
+  }
+
+  try {
+    const webChatCol = collection(db, "orders", orderId, "messages");
+    await addDoc(webChatCol, botMessagePayload);
+  } catch (err) {
+    console.warn("Could not write to orders messages collection:", err);
+  }
+
+  // Update order document chat summary so admin/staff queues reflect the bot message
+  try {
+    await updateDoc(orderDocRef, {
+      lastMessage: "Order status updated to COMPLETED.",
+      lastMessageAt: now,
+      lastSenderRole: "system",
+      lastSenderName: "Lanica System Bot",
+    });
+  } catch (_) {}
 
   return { success: true, orderId };
 }

@@ -102,9 +102,9 @@
           <!-- Catalog Toolbar: Search, Filters & Sorting -->
           <div class="catalog-toolbar reveal">
             <div class="catalog-search-box">
-              <svg class="catalog-search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <svg class="catalog-search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <path d="m21 21-4.3-4.3"></path>
               </svg>
               <input type="text" id="catalog-search-input" class="catalog-search-input" placeholder="Search furniture by name..." />
             </div>
@@ -204,7 +204,7 @@
         <div class="modal-header">
           <div class="pdp-header-left">
             <span id="pv-category-badge" class="pdp-badge-category">SOFA</span>
-            <span id="pv-leadtime-badge" class="pdp-badge-leadtime">MTO (~21-28 days)</span>
+            <span id="pv-leadtime-badge" class="pdp-badge-leadtime">MTO (~14-21 Days)</span>
           </div>
           <button id="close-product-modal-btn" class="modal-close-btn" aria-label="Close Modal">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -220,8 +220,9 @@
               <div class="pdp-hero-image-wrapper">
                 <img id="pv-image" src="assets/product_sofa.png" alt="Product Image" class="pdp-main-image" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png';" />
                 <div id="pv-pagination-indicator" class="pdp-pagination-indicator">1/1</div>
+                <!-- Thumbnail Strip Floating ON TOP of Hero Image -->
+                <div id="pv-thumbnails" class="modal-thumbnail-strip" style="display: none;"></div>
               </div>
-              <div id="pv-thumbnails" class="modal-thumbnail-strip" style="display: none;"></div>
             </div>
 
             <div class="product-detail-info">
@@ -229,6 +230,17 @@
               <div class="pdp-price-row">
                 <span id="pv-price" class="product-detail-price">₱21,500</span>
                 <span id="pv-stock-status" class="pdp-stock-chip">Made to Order</span>
+              </div>
+
+              <!-- Interactive Color Selection Section -->
+              <div id="pv-color-section" class="variant-section pdp-color-section" style="margin-top: 10px; margin-bottom: 12px; display: none;">
+                <div class="variant-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-weight: 700; color: #111827; font-size: 0.82rem; letter-spacing: 0.04em;">CHOOSE AVAILABLE COLOR</span>
+                  <span id="pv-selected-color-badge" style="font-size: 0.78rem; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 12px;">Selected: —</span>
+                </div>
+                <div id="pv-colors-list" class="pdp-colors-chips" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <!-- Dynamically populated with selectable color buttons -->
+                </div>
               </div>
 
               <!-- Dedicated SIZE Card -->
@@ -250,23 +262,40 @@
                   </svg>
                   <span>MATERIALS FOR THAT PRODUCT</span>
                 </div>
-                <div class="pdp-materials-checklist">
+                <div id="pv-materials-checklist" class="pdp-materials-checklist">
                   <div class="pdp-check-item">
-                    <span class="pdp-check-icon">✓</span>
+                    <span class="pdp-check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
                     <span>4 inches Pure Original Uratex Foam</span>
                   </div>
                   <div class="pdp-check-item">
-                    <span class="pdp-check-icon">✓</span>
+                    <span class="pdp-check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
                     <span>Good lumber wood frame (Kiln dried)</span>
                   </div>
                   <div class="pdp-check-item">
-                    <span class="pdp-check-icon">✓</span>
+                    <span class="pdp-check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
                     <span>Anti Anay at Bukbok Treated</span>
                   </div>
                   <div class="pdp-check-item">
-                    <span class="pdp-check-icon">✓</span>
+                    <span class="pdp-check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
                     <span>Plush Premium Upholstery Fabric</span>
                   </div>
+                </div>
+              </div>
+
+              <!-- DEDICATED INCLUDED FREEBIES Card -->
+              <div id="pv-freebies-card" class="pdp-spec-card pdp-freebies-card" style="margin-top: 14px; background: #faf5ff; border: 1.5px solid #e9d5ff; border-radius: 12px; padding: 12px 14px; display: none;">
+                <div class="pdp-spec-title" style="display: flex; align-items: center; gap: 8px; color: #7e22ce; font-weight: 700; font-size: 0.82rem; margin-bottom: 6px; letter-spacing: 0.03em;">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                    <rect x="2" y="7" width="20" height="5"></rect>
+                    <line x1="12" y1="22" x2="12" y2="7"></line>
+                    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                  </svg>
+                  <span>INCLUDED FREEBIES</span>
+                </div>
+                <div id="pv-freebies-list" class="pdp-materials-checklist" style="display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; color: #581c87;">
+                  <!-- Dynamically populated with freebies items -->
                 </div>
               </div>
 
@@ -285,7 +314,7 @@
                 <div class="variant-label">
                   <span>Customization / Special Instructions (Optional)</span>
                 </div>
-                <textarea id="pv-custom-notes" placeholder="e.g. Preferred wood stain, exact room measurements, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: none; box-sizing: border-box; background: #FAFAFA;"></textarea>
+                <textarea id="pv-custom-notes" placeholder="e.g. Preferred color (e.g. Gamusa Bailey Mustang, Emerald Green), wood stain, special fabric requests..." rows="2" style="width: 100%; border: 1.5px solid #E5E7EB; border-radius: 12px; padding: 10px 14px; font-family: inherit; font-size: 0.85rem; resize: none; box-sizing: border-box; background: #FAFAFA;"></textarea>
               </div>
 
             </div>
@@ -295,7 +324,6 @@
         <!-- Sticky Action Footer -->
         <div class="pdp-sticky-footer">
           <div class="pdp-footer-qty-wrap">
-            <span style="font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase;">Qty</span>
             <div class="quantity-control">
               <button type="button" id="pv-qty-minus" class="qty-btn">-</button>
               <span id="pv-qty-val" class="qty-value">1</span>
@@ -303,7 +331,7 @@
             </div>
           </div>
           <button type="button" id="pv-add-to-cart-btn" class="btn-primary pdp-cta-btn">
-            <span>PLACE MADE-TO-ORDER</span>
+            <span>PLACE ORDER</span>
             <span id="pv-total-price-display" class="pdp-cta-price">₱21,500</span>
           </button>
         </div>
@@ -397,7 +425,9 @@
               <!-- Option 1: PayMongo QR Ph -->
               <div class="payment-card selected" data-method="qr_code" style="cursor: pointer; background: #fffdf0; border: 2px solid var(--clr-yellow, #fcd535); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; transition: all 0.2s;">
                 <div class="payment-card-left">
-                  <div class="payment-card-icon" style="font-size: 1.5rem;">📱</div>
+                  <div class="payment-card-icon" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #0f172a;"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                  </div>
                   <div class="payment-card-text">
                     <h5 style="display: flex; align-items: center; gap: 8px; margin: 0 0 4px 0; font-size: 0.95rem;">
                       PayMongo QR Ph
@@ -417,7 +447,9 @@
               <!-- Option 2: Walk-in Workshop Cash -->
               <div class="payment-card" data-method="walk_in_cash" style="cursor: pointer; background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; transition: all 0.2s;">
                 <div class="payment-card-left">
-                  <div class="payment-card-icon" style="font-size: 1.5rem;">🏢</div>
+                  <div class="payment-card-icon" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #475569;"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>
+                  </div>
                   <div class="payment-card-text">
                     <h5 style="display: flex; align-items: center; gap: 8px; margin: 0 0 4px 0; font-size: 0.95rem;">
                       Walk-in (Pay 30% Downpayment at Counter)
@@ -723,7 +755,7 @@
                   </svg>
                   <input type="password" id="login-password" class="auth-input-field" required placeholder="••••••••" autocomplete="current-password" />
                   <button type="button" class="eye-toggle-btn" data-target="login-password" aria-label="Toggle Password Visibility">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                   </button>
                 </div>
               </div>
@@ -797,7 +829,7 @@
                   </svg>
                   <input type="password" id="reg-password" class="auth-input-field" required placeholder="••••••••" autocomplete="new-password" />
                   <button type="button" class="eye-toggle-btn" data-target="reg-password" aria-label="Toggle Password Visibility">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                   </button>
                 </div>
               </div>
@@ -847,7 +879,7 @@
                   </svg>
                   <input type="password" id="reg-confirm-password" class="auth-input-field" required placeholder="••••••••" autocomplete="new-password" />
                   <button type="button" class="eye-toggle-btn" data-target="reg-confirm-password" aria-label="Toggle Password Visibility">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                   </button>
                 </div>
               </div>

@@ -530,7 +530,7 @@ app.post("/api/paymongo/verify-payment", checkoutLimiter, async (req, res) => {
               paymentIntentId: { stringValue: cleanIntentId },
               downpaymentPaidAt: { timestampValue: new Date().toISOString() },
               orderStatus: { stringValue: "downpayment confirmed" },
-              status: { stringValue: "Downpayment Confirmed" },
+              status: { stringValue: "Deposit Verified" },
             },
           }),
         });

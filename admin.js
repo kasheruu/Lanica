@@ -81,6 +81,7 @@ let currentUser = null;
 // Protect Admin Route (admin role only)
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
+    sessionStorage.removeItem("lanica_admin_role");
     window.location.replace("/login.html");
     return;
   }
@@ -88,9 +89,12 @@ onAuthStateChanged(auth, async (user) => {
   currentUser = user;
 
   try {
-    await reload(user);
+    await Promise.race([
+      reload(user),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Auth reload timeout")), 2500)),
+    ]);
   } catch (e) {
-    console.warn("Could not reload auth user:", e);
+    console.warn("Could not reload auth user (proceeding without block):", e);
   }
   if (!user.emailVerified) {
     window.location.replace("/login.html");
@@ -128,6 +132,8 @@ onAuthStateChanged(auth, async (user) => {
     return;
   } else {
     console.log(" ADMIN PAGE - Admin user confirmed, staying on admin page");
+    sessionStorage.setItem("lanica_admin_role", "admin");
+    startAdminRealtimeListeners(user);
     loadStaffMembers();
   }
 
@@ -379,6 +385,384 @@ if (btnResetQuickAdd) {
 renderQuickAddMaterials();
 
 // ==========================================================================
+// Custom Colors / Fabric Shades Tags Field & Dynamic Quick Add
+// ==========================================================================
+const DEFAULT_QUICK_ADD_COLORS = [
+  "Gamusa Bailey Mustang",
+  "Emerald Green",
+  "Charcoal Grey",
+  "Cream Beige",
+  "Navy Blue",
+  "Warm Cognac",
+  "Dusty Rose",
+  "Olive Green"
+];
+
+function loadQuickAddColors() {
+  try {
+    const raw = localStorage.getItem("lanica_quick_add_colors");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, QUICK_ADD_LIMIT);
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load quick add colors from localStorage:", err);
+  }
+  return [...DEFAULT_QUICK_ADD_COLORS];
+}
+
+function saveQuickAddColors(list) {
+  try {
+    const capped = list.slice(0, QUICK_ADD_LIMIT);
+    localStorage.setItem("lanica_quick_add_colors", JSON.stringify(capped));
+  } catch (err) {
+    console.warn("Could not save quick add colors to localStorage:", err);
+  }
+}
+
+let quickAddColors = loadQuickAddColors();
+let currentColorsList = [];
+const colorTagsList = document.getElementById("color-tags-list");
+const colorInput = document.getElementById("product-color-input");
+const colorHiddenInput = document.getElementById("product-color");
+const addColorTagBtn = document.getElementById("btn-add-color-tag");
+const quickAddColorsListEl = document.getElementById("quick-add-colors-list");
+const btnResetQuickAddColors = document.getElementById("btn-reset-quick-add-colors");
+
+function renderColorTags() {
+  if (!colorTagsList) return;
+  colorTagsList.innerHTML = currentColorsList
+    .map(
+      (tag, idx) => `
+      <span class="color-tag-pill">
+        ${escapeHtml(tag)}
+        <button type="button" class="color-tag-remove" data-index="${idx}" title="Remove color">&times;</button>
+      </span>
+    `
+    )
+    .join("");
+  if (colorHiddenInput) {
+    colorHiddenInput.value = currentColorsList.join(", ");
+  }
+}
+
+function renderQuickAddColors() {
+  if (!quickAddColorsListEl) return;
+  if (!quickAddColors || quickAddColors.length === 0) {
+    quickAddColorsListEl.innerHTML = `<span style="font-size: 0.75rem; color: #9ca3af; font-style: italic;">No suggestions. Click "Reset defaults" to restore.</span>`;
+    return;
+  }
+  quickAddColorsListEl.innerHTML = quickAddColors
+    .map(
+      (col) => `
+      <div class="quick-add-chip" data-val="${escapeHtml(col)}">
+        <button type="button" class="quick-add-chip-btn" data-val="${escapeHtml(col)}" title="Add ${escapeHtml(col)}">${escapeHtml(col)}</button>
+        <button type="button" class="quick-add-chip-remove" data-val="${escapeHtml(col)}" title="Remove ${escapeHtml(col)} from quick add">&times;</button>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function addRecentQuickAddColor(val) {
+  if (!val) return;
+  const clean = val.trim();
+  if (!clean) return;
+  const existingIdx = quickAddColors.findIndex((c) => c.toLowerCase() === clean.toLowerCase());
+  if (existingIdx !== -1) {
+    quickAddColors.splice(existingIdx, 1);
+  }
+  quickAddColors.unshift(clean);
+  if (quickAddColors.length > QUICK_ADD_LIMIT) {
+    quickAddColors = quickAddColors.slice(0, QUICK_ADD_LIMIT);
+  }
+  saveQuickAddColors(quickAddColors);
+  renderQuickAddColors();
+}
+
+function removeQuickAddColor(val) {
+  if (!val) return;
+  quickAddColors = quickAddColors.filter((c) => c.toLowerCase() !== val.toLowerCase());
+  saveQuickAddColors(quickAddColors);
+  renderQuickAddColors();
+}
+
+function addColorTag(val) {
+  if (!val) return;
+  const clean = val.trim();
+  if (!clean) return;
+  const parts = clean
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  parts.forEach((p) => {
+    if (!currentColorsList.some((t) => t.toLowerCase() === p.toLowerCase())) {
+      currentColorsList.push(p);
+      addRecentQuickAddColor(p);
+    }
+  });
+  renderColorTags();
+  if (colorInput) colorInput.value = "";
+}
+
+function removeColorTag(idx) {
+  currentColorsList.splice(idx, 1);
+  renderColorTags();
+}
+
+function clearColorTags() {
+  currentColorsList = [];
+  renderColorTags();
+  if (colorInput) colorInput.value = "";
+}
+
+if (addColorTagBtn) {
+  addColorTagBtn.addEventListener("click", () => {
+    if (colorInput) addColorTag(colorInput.value);
+  });
+}
+
+if (colorInput) {
+  colorInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addColorTag(colorInput.value);
+    }
+  });
+}
+
+if (colorTagsList) {
+  colorTagsList.addEventListener("click", (e) => {
+    const btn = e.target.closest(".color-tag-remove");
+    if (btn) {
+      e.preventDefault();
+      const idx = parseInt(btn.dataset.index, 10);
+      if (!isNaN(idx)) removeColorTag(idx);
+    }
+  });
+}
+
+if (quickAddColorsListEl) {
+  quickAddColorsListEl.addEventListener("click", (e) => {
+    const removeBtn = e.target.closest(".quick-add-chip-remove");
+    if (removeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const val = removeBtn.dataset.val;
+      removeQuickAddColor(val);
+      return;
+    }
+    const addBtn = e.target.closest(".quick-add-chip-btn");
+    if (addBtn) {
+      e.preventDefault();
+      const val = addBtn.dataset.val;
+      addColorTag(val);
+    }
+  });
+}
+
+if (btnResetQuickAddColors) {
+  btnResetQuickAddColors.addEventListener("click", (e) => {
+    e.preventDefault();
+    quickAddColors = [...DEFAULT_QUICK_ADD_COLORS];
+    saveQuickAddColors(quickAddColors);
+    renderQuickAddColors();
+  });
+}
+renderQuickAddColors();
+
+// ==========================================================================
+// Custom Freebies Tags Field & Dynamic Quick Add
+// ==========================================================================
+const DEFAULT_QUICK_ADD_FREEBIES = [
+  "5 Pillows",
+  "Footstool (Class A Foam)",
+  "Wood Footings",
+  "Extra Throw Pillow",
+  "Fabric Cleaner Spray",
+  "Matching Ottoman",
+  "Headrest Cushion",
+  "Wood Care Polish"
+];
+
+function loadQuickAddFreebies() {
+  try {
+    const raw = localStorage.getItem("lanica_quick_add_freebies");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, QUICK_ADD_LIMIT);
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load quick add freebies from localStorage:", err);
+  }
+  return [...DEFAULT_QUICK_ADD_FREEBIES];
+}
+
+function saveQuickAddFreebies(list) {
+  try {
+    const capped = list.slice(0, QUICK_ADD_LIMIT);
+    localStorage.setItem("lanica_quick_add_freebies", JSON.stringify(capped));
+  } catch (err) {
+    console.warn("Could not save quick add freebies to localStorage:", err);
+  }
+}
+
+let quickAddFreebies = loadQuickAddFreebies();
+let currentFreebiesList = [];
+const freebieTagsList = document.getElementById("freebie-tags-list");
+const freebieInput = document.getElementById("product-freebie-input");
+const freebieHiddenInput = document.getElementById("product-freebies");
+const addFreebieTagBtn = document.getElementById("btn-add-freebie-tag");
+const quickAddFreebiesListEl = document.getElementById("quick-add-freebies-list");
+const btnResetQuickAddFreebies = document.getElementById("btn-reset-quick-add-freebies");
+
+function renderFreebieTags() {
+  if (!freebieTagsList) return;
+  freebieTagsList.innerHTML = currentFreebiesList
+    .map(
+      (tag, idx) => `
+      <span class="freebie-tag-pill">
+        ${escapeHtml(tag)}
+        <button type="button" class="freebie-tag-remove" data-index="${idx}" title="Remove freebie">&times;</button>
+      </span>
+    `
+    )
+    .join("");
+  if (freebieHiddenInput) {
+    freebieHiddenInput.value = currentFreebiesList.join(", ");
+  }
+}
+
+function renderQuickAddFreebies() {
+  if (!quickAddFreebiesListEl) return;
+  if (!quickAddFreebies || quickAddFreebies.length === 0) {
+    quickAddFreebiesListEl.innerHTML = `<span style="font-size: 0.75rem; color: #9ca3af; font-style: italic;">No suggestions. Click "Reset defaults" to restore.</span>`;
+    return;
+  }
+  quickAddFreebiesListEl.innerHTML = quickAddFreebies
+    .map(
+      (f) => `
+      <div class="quick-add-chip" data-val="${escapeHtml(f)}">
+        <button type="button" class="quick-add-chip-btn" data-val="${escapeHtml(f)}" title="Add ${escapeHtml(f)}">${escapeHtml(f)}</button>
+        <button type="button" class="quick-add-chip-remove" data-val="${escapeHtml(f)}" title="Remove ${escapeHtml(f)} from quick add">&times;</button>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function addRecentQuickAddFreebie(val) {
+  if (!val) return;
+  const clean = val.trim();
+  if (!clean) return;
+  const existingIdx = quickAddFreebies.findIndex((f) => f.toLowerCase() === clean.toLowerCase());
+  if (existingIdx !== -1) {
+    quickAddFreebies.splice(existingIdx, 1);
+  }
+  quickAddFreebies.unshift(clean);
+  if (quickAddFreebies.length > QUICK_ADD_LIMIT) {
+    quickAddFreebies = quickAddFreebies.slice(0, QUICK_ADD_LIMIT);
+  }
+  saveQuickAddFreebies(quickAddFreebies);
+  renderQuickAddFreebies();
+}
+
+function removeQuickAddFreebie(val) {
+  if (!val) return;
+  quickAddFreebies = quickAddFreebies.filter((f) => f.toLowerCase() !== val.toLowerCase());
+  saveQuickAddFreebies(quickAddFreebies);
+  renderQuickAddFreebies();
+}
+
+function addFreebieTag(val) {
+  if (!val) return;
+  const clean = val.trim();
+  if (!clean) return;
+  const parts = clean
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  parts.forEach((p) => {
+    if (!currentFreebiesList.some((t) => t.toLowerCase() === p.toLowerCase())) {
+      currentFreebiesList.push(p);
+      addRecentQuickAddFreebie(p);
+    }
+  });
+  renderFreebieTags();
+  if (freebieInput) freebieInput.value = "";
+}
+
+function removeFreebieTag(idx) {
+  currentFreebiesList.splice(idx, 1);
+  renderFreebieTags();
+}
+
+function clearFreebieTags() {
+  currentFreebiesList = [];
+  renderFreebieTags();
+  if (freebieInput) freebieInput.value = "";
+}
+
+if (addFreebieTagBtn) {
+  addFreebieTagBtn.addEventListener("click", () => {
+    if (freebieInput) addFreebieTag(freebieInput.value);
+  });
+}
+
+if (freebieInput) {
+  freebieInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addFreebieTag(freebieInput.value);
+    }
+  });
+}
+
+if (freebieTagsList) {
+  freebieTagsList.addEventListener("click", (e) => {
+    const btn = e.target.closest(".freebie-tag-remove");
+    if (btn) {
+      e.preventDefault();
+      const idx = parseInt(btn.dataset.index, 10);
+      if (!isNaN(idx)) removeFreebieTag(idx);
+    }
+  });
+}
+
+if (quickAddFreebiesListEl) {
+  quickAddFreebiesListEl.addEventListener("click", (e) => {
+    const removeBtn = e.target.closest(".quick-add-chip-remove");
+    if (removeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const val = removeBtn.dataset.val;
+      removeQuickAddFreebie(val);
+      return;
+    }
+    const addBtn = e.target.closest(".quick-add-chip-btn");
+    if (addBtn) {
+      e.preventDefault();
+      const val = addBtn.dataset.val;
+      addFreebieTag(val);
+    }
+  });
+}
+
+if (btnResetQuickAddFreebies) {
+  btnResetQuickAddFreebies.addEventListener("click", (e) => {
+    e.preventDefault();
+    quickAddFreebies = [...DEFAULT_QUICK_ADD_FREEBIES];
+    saveQuickAddFreebies(quickAddFreebies);
+    renderQuickAddFreebies();
+  });
+}
+renderQuickAddFreebies();
+
+// ==========================================================================
 // Dimensions & Size: Real-Time Unit Conversion Logic
 // ==========================================================================
 const UNIT_TO_CM = {
@@ -487,7 +871,7 @@ function renderThumbnailPreviews() {
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
           <button type="button" class="btn-thumb-action delete-thumb" data-index="${idx}" title="Remove thumbnail">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
           </button>
         </div>
       </div>
@@ -1151,10 +1535,14 @@ function saveFormDraft() {
   const length2 = document.getElementById("product-length2")?.value || "72";
   const isLType = document.getElementById("product-is-ltype")?.value === "true";
   const unit = document.getElementById("product-unit")?.value || "in";
+  const color = document.getElementById("product-color")?.value || "";
+  const freebies = document.getElementById("product-freebies")?.value || "";
 
   const hasContent =
     name.trim() ||
     description.trim() ||
+    currentColorsList.length > 0 ||
+    currentFreebiesList.length > 0 ||
     (price && price !== "0") ||
     currentMaterialTags.length > 0 ||
     thumbnailItems.length > 0;
@@ -1176,6 +1564,8 @@ function saveFormDraft() {
     length,
     length2,
     unit,
+    colors: [...currentColorsList],
+    freebies: [...currentFreebiesList],
     materials: currentMaterialTags,
     thumbnailData,
     savedAt: Date.now(),
@@ -1244,10 +1634,23 @@ function restoreFormDraft() {
       unitSelect.value = draft.unit;
       currentDimensionUnit = draft.unit;
     }
-
     clearMaterialTags();
     if (Array.isArray(draft.materials) && draft.materials.length > 0) {
       draft.materials.forEach((m) => addMaterialTag(m));
+    }
+
+    clearColorTags();
+    if (Array.isArray(draft.colors) && draft.colors.length > 0) {
+      draft.colors.forEach((c) => addColorTag(c));
+    } else if (draft.color) {
+      draft.color.split(",").forEach((c) => addColorTag(c));
+    }
+
+    clearFreebieTags();
+    if (Array.isArray(draft.freebies) && draft.freebies.length > 0) {
+      draft.freebies.forEach((f) => addFreebieTag(f));
+    } else if (typeof draft.freebies === "string" && draft.freebies.trim()) {
+      draft.freebies.split(/[\n,]+/).forEach((f) => addFreebieTag(f));
     }
 
     clearThumbnailItems();
@@ -1389,9 +1792,10 @@ function hasUnsavedFormChanges() {
       String(currentStock) !== String(orig.stock) ||
       String(currentH) !== String(orig.height) ||
       String(currentW) !== String(orig.width) ||
-      String(currentL) !== String(orig.length) ||
       currentU !== orig.unit ||
-      JSON.stringify(currentMaterialTags) !== JSON.stringify(orig.materials || [])
+      JSON.stringify(currentMaterialTags) !== JSON.stringify(orig.materials || []) ||
+      JSON.stringify(currentColorsList) !== JSON.stringify(orig.colors || []) ||
+      JSON.stringify(currentFreebiesList) !== JSON.stringify(orig.freebies || [])
     );
   } else {
     const name = document.getElementById("product-name")?.value.trim() || "";
@@ -1406,6 +1810,8 @@ function hasUnsavedFormChanges() {
     );
     const hasThumbnails = thumbnailItems.length > 0;
     const hasMaterials = currentMaterialTags.length > 0;
+    const hasColors = currentColorsList.length > 0;
+    const hasFreebies = currentFreebiesList.length > 0;
     return (
       name !== "" ||
       desc !== "" ||
@@ -1413,7 +1819,9 @@ function hasUnsavedFormChanges() {
       stock !== "0" ||
       hasFiles ||
       hasThumbnails ||
-      hasMaterials
+      hasMaterials ||
+      hasColors ||
+      hasFreebies
     );
   }
 }
@@ -1458,6 +1866,8 @@ window.closeModal = () => {
 
   // Reset custom components
   clearMaterialTags();
+  clearColorTags();
+  clearFreebieTags();
   closeCustomCategoryDropdown();
   closeInlineCategoryManager();
   renderCategoryDropdowns();
@@ -1471,6 +1881,8 @@ window.closeModal = () => {
   toggleLTypeFields(false);
   if (unitSelect) unitSelect.value = "in";
   currentDimensionUnit = "in";
+  if (document.getElementById("product-color")) document.getElementById("product-color").value = "";
+  if (document.getElementById("product-freebies")) document.getElementById("product-freebies").value = "";
 
   // Reset required states
   document.getElementById("img-bg").required = true;
@@ -1750,6 +2162,20 @@ productForm.addEventListener("submit", async (e) => {
     const materials = currentMaterialTags.length > 0 ? [...currentMaterialTags] : ["Standard"];
     const material = materials.join(", ");
 
+    // Auto-commit any color typed in the input
+    if (colorInput && colorInput.value.trim()) {
+      addColorTag(colorInput.value);
+    }
+    const colors = currentColorsList.length > 0 ? [...currentColorsList] : ["Gamusa Bailey Mustang"];
+    const color = colors[0] || "Gamusa Bailey Mustang";
+
+    // Auto-commit any freebie typed in the input
+    if (freebieInput && freebieInput.value.trim()) {
+      addFreebieTag(freebieInput.value);
+    }
+    const freebies = currentFreebiesList.length > 0 ? [...currentFreebiesList] : ["5 Pillows", "Footstool (Class A Foam)", "Footings"];
+    const freebiesText = freebies.join(", ");
+
     const transparentFrontFile = document.getElementById("img-bg").files[0];
     const leftBgFile = document.getElementById("img-bg-left")?.files[0] || null;
     const rightBgFile = document.getElementById("img-bg-right")?.files[0] || null;
@@ -1925,6 +2351,10 @@ productForm.addEventListener("submit", async (e) => {
       category: document.getElementById("product-category").value,
       price: parseFloat(String(document.getElementById("product-price").value).replace(/,/g, "").trim()) || 0,
       stock,
+      color,
+      colors,
+      freebies,
+      freebiesText,
       allowPreorder,
       isMadeToOrder: allowPreorder,
       leadTime,
@@ -2056,7 +2486,7 @@ window.deleteProduct = async (id) => {
     confirmText: "Yes, Delete Product",
     cancelText: "Cancel",
     confirmType: "danger",
-    icon: "🗑️",
+    icon: "delete",
   });
   if (!confirmed) return;
 
@@ -2337,9 +2767,12 @@ function renderAddonsRepeater() {
       </button>
 
       <button type="button" class="btn-remove-addon-row" data-index="${index}" title="Remove Upgrade" style="background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; border-radius: 8px; width: 38px; height: 38px; min-width: 38px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-sizing: border-box; padding: 0; transition: all 0.2s;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"></path>
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
         </svg>
       </button>
     </div>
@@ -2406,11 +2839,26 @@ function setupAddonsRepeaterUI() {
 // Edit Product (Load data into form)
 window.editProduct = (id, productJsonBase64) => {
   try {
-    const product = JSON.parse(decodeURIComponent(atob(productJsonBase64)));
-    document.getElementById("product-name").value = product.name;
+    let product = null;
+    if (productJsonBase64) {
+      try {
+        product = JSON.parse(decodeURIComponent(atob(productJsonBase64)));
+      } catch (err) {
+        console.warn("Could not decode base64 product, searching in memory:", err);
+      }
+    }
+    if (!product && Array.isArray(allProducts)) {
+      product = allProducts.find((p) => String(p.id) === String(id));
+    }
+    if (!product) {
+      console.error("Product not found for editing id:", id);
+      if (typeof showToast === "function") showToast("Unable to find product details to edit.", "error");
+      return;
+    }
+    document.getElementById("product-name").value = product.name || "";
     document.getElementById("product-description").value = product.description || "";
     ensureCategoryOption(product.category);
-    document.getElementById("product-category").value = product.category;
+    document.getElementById("product-category").value = product.category || "";
     renderCategoryDropdowns(product.category);
     document.getElementById("product-price").value = formatPriceWithCommas(product.price);
     document.getElementById("product-stock").value = product.stock || 0;
@@ -2420,6 +2868,26 @@ window.editProduct = (id, productJsonBase64) => {
     }
     if (document.getElementById("product-lead-time")) {
       document.getElementById("product-lead-time").value = product.leadTime || product.estimated_lead_time || "14-21 Business Days";
+    }
+
+    // Colors tags
+    clearColorTags();
+    if (Array.isArray(product.colors) && product.colors.length > 0) {
+      product.colors.forEach((c) => addColorTag(c));
+    } else if (product.color) {
+      product.color.split(",").forEach((c) => addColorTag(c));
+    } else if (product.fabricColor) {
+      product.fabricColor.split(",").forEach((c) => addColorTag(c));
+    }
+
+    // Freebies tags
+    clearFreebieTags();
+    if (Array.isArray(product.freebies) && product.freebies.length > 0) {
+      product.freebies.forEach((f) => addFreebieTag(f));
+    } else if (product.freebiesList && Array.isArray(product.freebiesList)) {
+      product.freebiesList.forEach((f) => addFreebieTag(f));
+    } else if (typeof product.freebies === "string" && product.freebies.trim()) {
+      product.freebies.split(/[\n,]+/).forEach((f) => addFreebieTag(f));
     }
 
     // Materials tags
@@ -2525,6 +2993,9 @@ window.editProduct = (id, productJsonBase64) => {
       category: product.category || "",
       price: product.price || "",
       stock: product.stock || 0,
+      color: product.color || "",
+      colors: [...currentColorsList],
+      freebies: [...currentFreebiesList],
       height,
       width,
       length,
@@ -2579,15 +3050,15 @@ function formatMaterialsListHtml(materialRaw) {
   if (items.length === 0) return '<span style="color:#9ca3af;">—</span>';
 
   return `
-    <div class="materials-list-wrapper" style="display: flex; flex-direction: column; gap: 4px; max-width: 260px; padding: 2px 0;">
+    <div class="materials-list-wrapper">
       ${items
         .map(
           (item) => `
-        <div class="material-chip-item" style="display: inline-flex; align-items: flex-start; gap: 6px; font-size: 0.8rem; color: #374151; background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 6px; line-height: 1.3;">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;">
+        <div class="material-chip-item">
+          <svg viewBox="0 0 24 24" class="material-chip-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          <span>${escapeHtml(item)}</span>
+          <span class="material-chip-text">${escapeHtml(item)}</span>
         </div>
       `
         )
@@ -2597,7 +3068,7 @@ function formatMaterialsListHtml(materialRaw) {
 }
 
   if (pagedProducts.length === 0) {
-    inventoryList.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 20px;">No products found. Add some!</td></tr>`;
+    inventoryList.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px;">No products found. Add some!</td></tr>`;
   } else {
     pagedProducts.forEach((product) => {
       let statusClass = "status-in-stock";
@@ -2620,7 +3091,6 @@ function formatMaterialsListHtml(materialRaw) {
         product.thumbnail ||
         "https://via.placeholder.com/48";
       const productPayload = btoa(encodeURIComponent(JSON.stringify(product)));
-      const dateAddedStr = formatProductDate(product.createdAt || product.dateAdded || product.timestamp);
 
       const tr = document.createElement("tr");
       const priceFormatted = Number(product.price || 0).toLocaleString();
@@ -2638,7 +3108,6 @@ function formatMaterialsListHtml(materialRaw) {
                   ${product.stock !== undefined ? product.stock : 0}
               </td>
               <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-              <td><span style="font-size:0.82rem; color:#64748b; font-weight:500;">${dateAddedStr}</span></td>
               <td>
                   <div class="action-btns">
                       ${
@@ -2652,7 +3121,7 @@ function formatMaterialsListHtml(materialRaw) {
                           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                       </button>
                       <button class="btn-icon delete" onclick="deleteProduct('${product.id}')">
-                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                       </button>
                   </div>
               </td>
@@ -2819,7 +3288,7 @@ function renderMtoProductionWatchlist(orders) {
       let statusLabel = "In Production";
       if (st === "downpayment confirmed") {
         pillClass = "downpayment";
-        statusLabel = "Downpayment Confirmed";
+        statusLabel = "Deposit Verified";
       } else if (st === "quality checked") {
         pillClass = "quality";
         statusLabel = "Quality Check Passed";
@@ -3044,19 +3513,60 @@ let adminTransTypeFilter = "all";
 let adminTransMethodFilter = "all";
 let activeReceiptOrder = null;
 let activeReceiptTab = "voucher";
+let activeReceiptBranch = "calamba";
 
-
+const LANICA_BRANCHES = {
+  calamba: {
+    key: "calamba",
+    name: "Calamba Branch",
+    title: "LANICA'S SOFA SALA SET CALAMBA BRANCH",
+    address: "MILAN PRESTIGE BLDG. BRGY. HALANG NATIONAL HIGHWAY CALAMBA CITY LAGUNA",
+    contact: "0993-287-4937",
+    voucherLocation: "MILAN PRESTIGE BUILDING, BRGY. HALANG CALAMBA LAGUNA",
+  },
+  pila: {
+    key: "pila",
+    name: "Pila Branch",
+    title: "LANICA'S SOFA SALA SET PILA BRANCH",
+    address: "VILLASOL 1, BRGY. LABUIN NATIONAL HIGHWAY, PILA, LAGUNA",
+    contact: "0993-287-4937",
+    voucherLocation: "VILLASOL 1, BRGY. LABUIN NATIONAL HIGHWAY, PILA, LAGUNA",
+  },
+};
 
 const ORDERS_COLLECTION = collection(db, "orders");
 
 async function getUserRole(user) {
   if (!user) return null;
 
+  // 1. Instant check from session storage to avoid desktop-mode reload stalling
+  const cachedRole = sessionStorage.getItem("lanica_admin_role");
+  if (cachedRole === "admin") {
+    // Validate in background without stalling render
+    setTimeout(async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const freshRole = (snap.data().role || "").toLowerCase();
+          if (freshRole !== "admin") {
+            sessionStorage.removeItem("lanica_admin_role");
+            window.location.replace("/login.html");
+          }
+        }
+      } catch (_) {}
+    }, 200);
+    return "admin";
+  }
+
   try {
-    const roleByUid = await getDoc(doc(db, "users", user.uid));
+    const roleByUid = await Promise.race([
+      getDoc(doc(db, "users", user.uid)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Role fetch timeout")), 3500)),
+    ]);
     if (roleByUid.exists()) {
       const role = (roleByUid.data().role || "").toLowerCase();
       console.log("Admin page - Role found by UID:", role);
+      if (role === "admin") sessionStorage.setItem("lanica_admin_role", "admin");
       return role;
     }
   } catch (e) {
@@ -3065,10 +3575,14 @@ async function getUserRole(user) {
 
   try {
     const q = query(collection(db, "users"), where("email", "==", user.email || ""));
-    const snap = await getDocs(q);
+    const snap = await Promise.race([
+      getDocs(q),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Email role fetch timeout")), 3500)),
+    ]);
     if (!snap.empty) {
       const role = ((snap.docs[0].data() || {}).role || "").toLowerCase();
       console.log("Admin page - Role found by email:", role);
+      if (role === "admin") sessionStorage.setItem("lanica_admin_role", "admin");
       return role;
     }
   } catch (e) {
@@ -3397,7 +3911,7 @@ function normalizeOrderStatus(raw) {
   const s = String(raw).toLowerCase().trim();
   if (s === "slot reserved" || s === "slot_reserved") return "slot reserved";
   if (s === "pending" || s === "order placed" || s === "placed") return "placed";
-  if (s === "accepted" || s === "confirmed" || s === "deposit confirmed" || s === "downpayment confirmed") return "downpayment confirmed";
+  if (s === "accepted" || s === "confirmed" || s === "deposit confirmed" || s === "deposit verified" || s === "downpayment confirmed") return "downpayment confirmed";
   if (s === "processing" || s === "packed" || s === "crafting" || s === "fabrication" || s === "in production") return "in production";
   if (s === "inspected" || s === "qc passed" || s === "quality check" || s === "quality checked") return "quality checked";
   if (s === "dispatched" || s === "out for delivery" || s === "shipped" || s === "shipping" || s === "in transit") return "shipped";
@@ -3419,6 +3933,10 @@ function getOrderCanonicalStatus(order) {
   if (normStatus && normStatus !== "placed") chosen = normStatus;
   else if (normOrderStatus && normOrderStatus !== "placed") chosen = normOrderStatus;
   else chosen = normStatus || normOrderStatus || "placed";
+
+  if (chosen === "downpayment confirmed" || chosen === "accepted") {
+    return "Deposit Verified";
+  }
 
   return chosen
     .split(" ")
@@ -3462,16 +3980,16 @@ function showAdminToast(message, type = "info", duration = 3500) {
   toast.className = `admin-toast-card ${type}`;
 
   const iconMap = {
-    success: "✓",
-    error: "✕",
-    danger: "✕",
-    warning: "⚠️",
-    info: "ℹ️",
+    success: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+    error: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+    danger: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+    warning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+    info: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`,
   };
-  const icon = iconMap[type] || "ℹ️";
+  const icon = iconMap[type] || iconMap.info;
 
   toast.innerHTML = `
-    <span style="font-size: 1.15rem; flex-shrink: 0;">${icon}</span>
+    <span style="display: flex; align-items: center; justify-content: center; flex-shrink: 0;">${icon}</span>
     <div class="admin-toast-content">${escapeHtml(message)}</div>
     <button type="button" class="admin-toast-close" aria-label="Close">&times;</button>
   `;
@@ -3493,14 +4011,38 @@ function showAdminToast(message, type = "info", duration = 3500) {
   }
 }
 
+function getAdminConfirmIconSvg(icon, confirmType) {
+  if (typeof icon === "string" && icon.trim().startsWith("<svg")) {
+    return icon;
+  }
+  const cleanKey = typeof icon === "string" ? icon.trim().toLowerCase() : "";
+  if (cleanKey === "delete" || cleanKey === "trash" || cleanKey === "trash-2" || cleanKey === "🗑️") {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+  }
+  if (cleanKey === "✓" || cleanKey === "check" || cleanKey === "success") {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+  }
+  if (cleanKey === "✕" || cleanKey === "x" || cleanKey === "cancel" || cleanKey === "close") {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+  }
+  if (cleanKey === "💰" || cleanKey === "💵" || cleanKey === "cash" || cleanKey === "payment") {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>`;
+  }
+  if (cleanKey === "warning" || cleanKey === "⚠️") {
+    return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+  }
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+}
+
 function showAdminConfirmModal({
   title = "Confirmation",
   message = "Are you sure you want to proceed?",
   confirmText = "Confirm",
   cancelText = "Cancel",
   confirmType = "primary",
-  icon = "ℹ️",
+  icon = "info",
 }) {
+  const renderedIcon = getAdminConfirmIconSvg(icon, confirmType);
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "admin-modal-overlay";
@@ -3509,7 +4051,7 @@ function showAdminConfirmModal({
       <div class="admin-confirm-card" role="dialog" aria-modal="true">
         <div class="admin-confirm-header">
           <div class="admin-confirm-icon-box ${confirmType}">
-            ${icon}
+            ${renderedIcon}
           </div>
           <div style="flex: 1;">
             <h3 class="admin-confirm-title">${escapeHtml(title)}</h3>
@@ -3900,7 +4442,11 @@ function updateDashboardKpis(products, orders) {
 
   activeOrders.forEach((o) => {
     const st = normalizeOrderStatus(o.status);
-    if (st === "placed" || st === "pending") placedCount++;
+    const isCompleted = isOrderCompleted(o) || st === "completed";
+
+    if (isCompleted) {
+      deliveredCount++;
+    } else if (st === "placed" || st === "pending") placedCount++;
     else if (st === "downpayment confirmed" || st === "slot reserved") downpaymentCount++;
     else if (st === "in production" || st === "crafting") productionCount++;
     else if (st === "quality checked") qcCount++;
@@ -3917,7 +4463,7 @@ function updateDashboardKpis(products, orders) {
         ? Number(o.downpaymentPaid || 0)
         : Number(o.downpaymentAmount ?? (isDown ? Math.round(totalVal * 0.3) : totalVal));
       const balanceDue = Number(o.remainingBalance ?? o.balanceDue ?? (isDown ? Math.max(0, totalVal - paidVal) : 0));
-      const isSettled = o.balanceStatus === "settled" || balanceDue <= 0;
+      const isSettled = isCompleted || o.balanceStatus === "settled" || balanceDue <= 0;
       totalCollected += isSettled ? totalVal : paidVal;
     }
   });
@@ -3948,7 +4494,7 @@ function updateDashboardKpis(products, orders) {
   const lowStockSubEl = document.getElementById("dash-low-stock-sub");
   if (lowStockSubEl) {
     if (lowStockProducts.length > 0) {
-      lowStockSubEl.textContent = `⚠️ ${lowStockProducts.length} low stock items`;
+      lowStockSubEl.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>${lowStockProducts.length} low stock items`;
       lowStockSubEl.style.color = "#dc2626";
       lowStockSubEl.style.fontWeight = "700";
     } else {
@@ -3990,7 +4536,7 @@ function updateDashboardKpis(products, orders) {
             <div style="font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name || "Product")}</div>
             <span style="font-size: 0.72rem; color: #dc2626; font-weight: 700;">Stock: ${p.stock ?? 0} remaining</span>
           </div>
-          <button type="button" class="dash-action-btn-sm btn-edit-watchlist" data-product-id="${escapeHtml(p.id)}" style="flex-shrink: 0;">
+          <button type="button" class="dash-action-btn-sm btn-edit-watchlist" data-product-id="${escapeHtml(p.id)}" style="flex-shrink: 0; cursor: pointer; touch-action: manipulation;">
             Edit
           </button>
         </div>
@@ -4068,15 +4614,18 @@ function renderDashboardRecentOrders(orders) {
         <strong style="color:#0f172a; font-size:0.88rem;">${totalStr}</strong>
         ${isDown ? `<div style="font-size:0.71rem; color:#2563eb; font-weight:600; margin-top:2px;">Partial (₱${paidVal.toLocaleString()})</div>` : ''}
       </td>
-      <td><span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(st.charAt(0).toUpperCase() + st.slice(1))}</span></td>
+      <td><span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml((st === "downpayment confirmed" || st === "accepted") ? "Deposit Verified" : (st === "slot reserved" ? "Slot Reserved" : (st.charAt(0).toUpperCase() + st.slice(1))))}</span></td>
       <td style="font-size:0.82rem; color:#64748b;">${escapeHtml(dateStr)}</td>
       <td style="text-align: center; white-space: nowrap;">
         <div style="display: inline-flex; gap: 6px;">
           <button type="button" class="dash-action-btn-sm btn-dash-view-order" data-order-id="${escapeHtml(order.id)}" title="View Order Summary & Details">
-            👁️ View
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>View
           </button>
           <button type="button" class="dash-action-btn-sm dash-action-btn-voucher btn-dash-voucher" data-order-id="${escapeHtml(order.id)}" title="Generate / Print Official Voucher">
-            📑 Voucher
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Voucher
+          </button>
+          <button type="button" class="dash-action-btn-sm dash-action-btn-voucher btn-dash-quotation" data-order-id="${escapeHtml(order.id)}" title="Generate / Print Official Quotation" style="border-color: #bae6fd; color: #0284c7; background: #f0f9ff;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M8 2v4"/><path d="M12 2v4"/><path d="M16 2v4"/><rect width="16" height="18" x="4" y="4" rx="2"/><path d="M8 10h6"/><path d="M8 14h8"/><path d="M8 18h5"/></svg>Quotation
           </button>
         </div>
       </td>
@@ -4132,6 +4681,14 @@ function initDashboardInteractiveListeners() {
         }
         return;
       }
+      const quotationBtn = e.target.closest(".btn-dash-quotation");
+      if (quotationBtn) {
+        const orderId = quotationBtn.getAttribute("data-order-id");
+        if (orderId && typeof openLanicaReceiptModal === "function") {
+          openLanicaReceiptModal(orderId, "quotation");
+        }
+        return;
+      }
     });
   }
 
@@ -4174,15 +4731,18 @@ function initDashboardInteractiveListeners() {
   const watchlistItemsEl = document.getElementById("dash-watchlist-items");
   if (watchlistItemsEl && !watchlistItemsEl.dataset.bound) {
     watchlistItemsEl.dataset.bound = "true";
-    watchlistItemsEl.addEventListener("click", (e) => {
+    const onWatchlistClick = (e) => {
       const editBtn = e.target.closest(".btn-edit-watchlist");
       if (editBtn) {
+        e.preventDefault();
         const pId = editBtn.getAttribute("data-product-id");
         if (pId && typeof window.editProduct === "function") {
           window.editProduct(pId);
         }
       }
-    });
+    };
+    watchlistItemsEl.addEventListener("click", onWatchlistClick);
+    watchlistItemsEl.addEventListener("touchend", onWatchlistClick);
   }
 
   const btnOpenChat = document.getElementById("dash-btn-open-chat");
@@ -4260,15 +4820,9 @@ function showAdminSection(name) {
 function formatTransactionMethod(method) {
   const m = String(method || "").toLowerCase();
   if (m.includes("walk_in") || m.includes("cash") || m.includes("counter")) {
-    return "🏢 Cash (Counter)";
+    return "Cash (Counter)";
   }
-  if (m.includes("qr") || m.includes("paymongo")) {
-    return "📱 QR Ph (PayMongo)";
-  }
-  if (m.includes("bpi") || m.includes("bank")) {
-    return "🏦 BPI / Bank Transfer";
-  }
-  return "💳 " + (method ? String(method).toUpperCase() : "Online / Counter");
+  return "QR Ph (PayMongo)";
 }
 
 function formatFormalDate(val, uppercase = false) {
@@ -4301,7 +4855,7 @@ function buildTransactionsLedger(orders) {
     let initialStatus = order.paymentStatus;
     if (!initialStatus || initialStatus === "pending") {
       initialStatus = isDownpayment
-        ? (Number(order.downpaymentPaid) > 0 || order.paymentStatus === "Downpayment Confirmed" ? "Downpayment Verified" : "Awaiting Verification")
+        ? (Number(order.downpaymentPaid) > 0 || order.paymentStatus === "Downpayment Confirmed" || order.paymentStatus === "downpayment_paid" ? "Deposit Verified" : "Awaiting Verification")
         : "Paid Verified";
     }
 
@@ -4493,7 +5047,6 @@ function renderAdminTransactionsList(orders) {
       const m = String(tx.method || "").toLowerCase();
       if (adminTransMethodFilter === "qr" && !m.includes("qr") && !m.includes("paymongo")) return false;
       if (adminTransMethodFilter === "cash" && !m.includes("cash") && !m.includes("walk_in") && !m.includes("counter")) return false;
-      if (adminTransMethodFilter === "bpi" && !m.includes("bpi") && !m.includes("bank")) return false;
     }
 
     return true;
@@ -4531,8 +5084,9 @@ function renderAdminTransactionsList(orders) {
       <td style="padding: 14px 18px; font-weight: 500; color: #334155;">${escapeHtml(formatTransactionMethod(tx.method))}</td>
       <td style="padding: 14px 18px;"><span class="status-badge" style="background: ${tx.badgeColor}; color: ${tx.badgeTextColor}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;">${escapeHtml(tx.status)}</span></td>
       <td style="padding: 14px 18px; text-align: center;">
-        <button type="button" class="btn-view-lanica-receipt" data-order-id="${escapeHtml(tx.orderId)}" data-tx-type="${escapeHtml(tx.typeKey)}" style="display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font-size: 0.78rem; font-weight: 600; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer;">
-          🧾 View Receipt
+        <button type="button" class="btn-view-lanica-receipt" data-order-id="${escapeHtml(tx.orderId)}" data-tx-type="${escapeHtml(tx.typeKey)}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78rem; font-weight: 600; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h6"/></svg>
+          <span>View Receipt</span>
         </button>
       </td>
     `;
@@ -4569,6 +5123,254 @@ function renderAdminTransactionsList(orders) {
   }
 }
 
+// ==========================================================================
+// Official Lanica Document E-Signature & Drawing System
+// ==========================================================================
+let currentEsignRole = null;
+let esignDrawing = false;
+let esignHasDrawn = false;
+let esignUploadedData = null;
+let esignActiveMode = "draw";
+
+function initLanicaEsignModalListeners() {
+  const modal = document.getElementById("lanica-esign-modal");
+  if (!modal || modal.dataset.bound) return;
+  modal.dataset.bound = "true";
+
+  const closeBtn = document.getElementById("btn-close-esign-modal");
+  const cancelBtn = document.getElementById("btn-cancel-esign");
+  const applyBtn = document.getElementById("btn-apply-esign");
+  const clearBtn = document.getElementById("btn-clear-esign-canvas");
+  const tabDraw = document.getElementById("tab-esign-draw");
+  const tabUpload = document.getElementById("tab-esign-upload");
+  const panelDraw = document.getElementById("panel-esign-draw");
+  const panelUpload = document.getElementById("panel-esign-upload");
+  const fileInput = document.getElementById("input-esign-file");
+  const canvas = document.getElementById("lanica-esign-canvas");
+  const placeholder = document.getElementById("esign-placeholder-text");
+  const previewContainer = document.getElementById("esign-upload-preview-container");
+  const previewImg = document.getElementById("esign-upload-preview");
+
+  const closeEsignModal = () => {
+    modal.style.display = "none";
+    modal.classList.remove("active");
+  };
+
+  [closeBtn, cancelBtn].forEach((btn) => {
+    if (btn) {
+      btn.addEventListener("click", closeEsignModal);
+      btn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        closeEsignModal();
+      });
+    }
+  });
+
+  const setEsignMode = (mode) => {
+    esignActiveMode = mode;
+    if (mode === "draw") {
+      tabDraw.style.background = "#2563eb";
+      tabDraw.style.color = "#ffffff";
+      tabUpload.style.background = "transparent";
+      tabUpload.style.color = "#64748b";
+      panelDraw.style.display = "block";
+      panelUpload.style.display = "none";
+    } else {
+      tabUpload.style.background = "#2563eb";
+      tabUpload.style.color = "#ffffff";
+      tabDraw.style.background = "transparent";
+      tabDraw.style.color = "#64748b";
+      panelUpload.style.display = "block";
+      panelDraw.style.display = "none";
+    }
+  };
+
+  if (tabDraw) {
+    tabDraw.addEventListener("click", () => setEsignMode("draw"));
+    tabDraw.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      setEsignMode("draw");
+    });
+  }
+  if (tabUpload) {
+    tabUpload.addEventListener("click", () => setEsignMode("upload"));
+    tabUpload.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      setEsignMode("upload");
+    });
+  }
+
+  // Canvas drawing setup
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+
+    const getCoords = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      let clientX = e.clientX;
+      let clientY = e.clientY;
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else if (e.changedTouches && e.changedTouches.length > 0) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+      }
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
+      };
+    };
+
+    const startDraw = (e) => {
+      if (e.cancelable) e.preventDefault();
+      esignDrawing = true;
+      const pos = getCoords(e);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      ctx.lineWidth = 2.8;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#000000";
+      if (placeholder) placeholder.style.display = "none";
+    };
+
+    const moveDraw = (e) => {
+      if (!esignDrawing) return;
+      if (e.cancelable) e.preventDefault();
+      const pos = getCoords(e);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      esignHasDrawn = true;
+    };
+
+    const stopDraw = (e) => {
+      if (!esignDrawing) return;
+      if (e.cancelable) e.preventDefault();
+      esignDrawing = false;
+    };
+
+    canvas.addEventListener("mousedown", startDraw);
+    canvas.addEventListener("mousemove", moveDraw);
+    canvas.addEventListener("mouseup", stopDraw);
+    canvas.addEventListener("mouseleave", stopDraw);
+
+    canvas.addEventListener("touchstart", startDraw, { passive: false });
+    canvas.addEventListener("touchmove", moveDraw, { passive: false });
+    canvas.addEventListener("touchend", stopDraw, { passive: false });
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        esignHasDrawn = false;
+        if (placeholder) placeholder.style.display = "flex";
+      });
+    }
+  }
+
+  // File Upload Handling
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (loadEvt) => {
+        esignUploadedData = loadEvt.target.result;
+        if (previewImg) previewImg.src = esignUploadedData;
+        if (previewContainer) previewContainer.style.display = "block";
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Apply Signature Handler
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      if (!activeReceiptOrder || !currentEsignRole) {
+        closeEsignModal();
+        return;
+      }
+
+      let signatureDataUrl = null;
+      if (esignActiveMode === "draw") {
+        if (!esignHasDrawn) {
+          showToast("Please sign on the canvas before applying.", "warning");
+          return;
+        }
+        signatureDataUrl = canvas.toDataURL("image/png");
+      } else {
+        if (!esignUploadedData) {
+          showToast("Please select a signature image file.", "warning");
+          return;
+        }
+        signatureDataUrl = esignUploadedData;
+      }
+
+      if (!activeReceiptOrder._voucherSignatories) {
+        activeReceiptOrder._voucherSignatories = {};
+      }
+      if (!activeReceiptOrder._voucherSignatories.signatures) {
+        activeReceiptOrder._voucherSignatories.signatures = {};
+      }
+
+      activeReceiptOrder._voucherSignatories.signatures[currentEsignRole] = signatureDataUrl;
+      closeEsignModal();
+      renderLanicaDocumentContent();
+      showToast("E-Signature attached successfully!", "success");
+    });
+  }
+}
+
+function openLanicaEsignModal(role, roleTitle) {
+  initLanicaEsignModalListeners();
+  currentEsignRole = role;
+  esignUploadedData = null;
+  esignHasDrawn = false;
+
+  const titleEl = document.getElementById("esign-modal-title");
+  if (titleEl) {
+    titleEl.textContent = `Attach Signature for ${roleTitle || "Signatory"}`;
+  }
+
+  const canvas = document.getElementById("lanica-esign-canvas");
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  const placeholder = document.getElementById("esign-placeholder-text");
+  if (placeholder) placeholder.style.display = "flex";
+
+  const fileInput = document.getElementById("input-esign-file");
+  if (fileInput) fileInput.value = "";
+
+  const previewContainer = document.getElementById("esign-upload-preview-container");
+  if (previewContainer) previewContainer.style.display = "none";
+
+  const modal = document.getElementById("lanica-esign-modal");
+  if (modal) {
+    modal.style.display = "flex";
+    modal.classList.add("active");
+  }
+}
+
+// Blank document title during window print so browsers don't print "Lanica | Admin Dashboard"
+let savedAdminDocTitle = "";
+window.addEventListener("beforeprint", () => {
+  const modal = document.getElementById("lanica-receipt-modal");
+  if (modal && modal.classList.contains("active")) {
+    savedAdminDocTitle = document.title;
+    document.title = "";
+  }
+});
+window.addEventListener("afterprint", () => {
+  if (savedAdminDocTitle) {
+    document.title = savedAdminDocTitle;
+    savedAdminDocTitle = "";
+  }
+});
+
 /**
  * Initializes and wires up the official Lanica receipt/voucher modal events.
  */
@@ -4578,83 +5380,200 @@ function initLanicaReceiptModalListeners() {
   const printBtn = document.getElementById("btn-print-lanica-doc");
   const tabVoucher = document.getElementById("tab-btn-voucher");
   const tabQuotation = document.getElementById("tab-btn-quotation");
+  const branchCalamba = document.getElementById("btn-branch-calamba");
+  const branchPila = document.getElementById("btn-branch-pila");
+
+  const closeModal = () => {
+    if (modal) {
+      modal.classList.remove("active");
+      modal.style.display = "none";
+    }
+  };
 
   if (closeBtn && !closeBtn.dataset.bound) {
     closeBtn.dataset.bound = "true";
-    closeBtn.addEventListener("click", () => {
-      if (modal) {
-        modal.classList.remove("active");
-        modal.style.display = "none";
-      }
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      closeModal();
+    });
+    closeBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      closeModal();
     });
   }
 
   if (modal && !modal.dataset.bound) {
     modal.dataset.bound = "true";
-    modal.addEventListener("click", (e) => {
-      if (e.target === modal) {
-        modal.classList.remove("active");
-        modal.style.display = "none";
-      }
-    });
+    // Deliberately do not close on backdrop click or ESC key to prevent accidental dismissal on mobile
   }
 
   if (printBtn && !printBtn.dataset.bound) {
     printBtn.dataset.bound = "true";
-    printBtn.addEventListener("click", () => {
+    printBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.print();
+    });
+    printBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
       window.print();
     });
   }
 
   if (tabVoucher && !tabVoucher.dataset.bound) {
     tabVoucher.dataset.bound = "true";
-    tabVoucher.addEventListener("click", () => {
+    const onVoucher = (e) => {
+      if (e) e.preventDefault();
       activeReceiptTab = "voucher";
       renderLanicaDocumentContent();
-    });
+    };
+    tabVoucher.addEventListener("click", onVoucher);
+    tabVoucher.addEventListener("touchend", onVoucher);
   }
 
   if (tabQuotation && !tabQuotation.dataset.bound) {
     tabQuotation.dataset.bound = "true";
-    tabQuotation.addEventListener("click", () => {
+    const onQuotation = (e) => {
+      if (e) e.preventDefault();
       activeReceiptTab = "quotation";
       renderLanicaDocumentContent();
-    });
+    };
+    tabQuotation.addEventListener("click", onQuotation);
+    tabQuotation.addEventListener("touchend", onQuotation);
+  }
+
+  const setBranch = (branchKey) => {
+    if (!activeReceiptOrder) return;
+    activeReceiptOrder._selectedBranch = branchKey;
+    const cfg = LANICA_BRANCHES[branchKey] || LANICA_BRANCHES.calamba;
+    activeReceiptOrder._docBranch = {
+      title: cfg.title,
+      address: cfg.address,
+      contact: cfg.contact,
+      voucherLocation: cfg.voucherLocation,
+    };
+    renderLanicaDocumentContent();
+    showToast(`Switched document to ${cfg.name}.`, "info");
+  };
+
+  if (branchCalamba && !branchCalamba.dataset.bound) {
+    branchCalamba.dataset.bound = "true";
+    const onCalamba = (e) => {
+      if (e) e.preventDefault();
+      setBranch("calamba");
+    };
+    branchCalamba.addEventListener("click", onCalamba);
+    branchCalamba.addEventListener("touchend", onCalamba);
+  }
+
+  if (branchPila && !branchPila.dataset.bound) {
+    branchPila.dataset.bound = "true";
+    const onPila = (e) => {
+      if (e) e.preventDefault();
+      setBranch("pila");
+    };
+    branchPila.addEventListener("click", onPila);
+    branchPila.addEventListener("touchend", onPila);
   }
 
   const area = document.getElementById("lanica-printable-area");
   if (area && !area.dataset.bound) {
     area.dataset.bound = "true";
 
-    // Track real-time edits to signatories or dates
+    // Track real-time edits to signatories, branch details, and quotation fields
     area.addEventListener("input", (e) => {
-      const fieldEl = e.target.closest("[data-sig-field]");
-      if (!fieldEl || !activeReceiptOrder) return;
-      const field = fieldEl.getAttribute("data-sig-field");
-      if (field) {
-        if (!activeReceiptOrder._voucherSignatories) {
-          activeReceiptOrder._voucherSignatories = {};
+      if (!activeReceiptOrder) return;
+
+      // 1. Signatory edits
+      const sigEl = e.target.closest("[data-sig-field]");
+      if (sigEl) {
+        const field = sigEl.getAttribute("data-sig-field");
+        if (field) {
+          if (!activeReceiptOrder._voucherSignatories) {
+            activeReceiptOrder._voucherSignatories = {};
+          }
+          activeReceiptOrder._voucherSignatories[field] = sigEl.innerText.trim();
         }
-        activeReceiptOrder._voucherSignatories[field] = fieldEl.innerText.trim();
+        return;
+      }
+
+      // 2. Branch header & location edits
+      const branchEl = e.target.closest("[data-branch-field]");
+      if (branchEl) {
+        const field = branchEl.getAttribute("data-branch-field");
+        if (field) {
+          if (!activeReceiptOrder._docBranch) {
+            activeReceiptOrder._docBranch = {};
+          }
+          activeReceiptOrder._docBranch[field] = branchEl.innerText.trim();
+        }
+        return;
+      }
+
+      // 3. Customer & Quotation detail edits
+      const docEl = e.target.closest("[data-quotation-field]");
+      if (docEl) {
+        const field = docEl.getAttribute("data-quotation-field");
+        if (field) {
+          if (!activeReceiptOrder._docQuotation) {
+            activeReceiptOrder._docQuotation = {};
+          }
+          activeReceiptOrder._docQuotation[field] = docEl.innerText.trim();
+        }
+        return;
       }
     });
 
-    // Prevent multiline breaks on Enter in editable signature/date spans
+    // Prevent multiline breaks on Enter in single-line editable spans
     area.addEventListener("keydown", (e) => {
-      const fieldEl = e.target.closest("[data-sig-field]");
+      const fieldEl = e.target.closest("[contenteditable='true']");
       if (fieldEl && e.key === "Enter") {
         e.preventDefault();
         fieldEl.blur();
       }
     });
 
-    // Reset signatories button handler
+    // Reset and E-Sign button handlers
     area.addEventListener("click", (e) => {
-      const resetBtn = e.target.closest("#btn-reset-voucher-sig");
-      if (resetBtn && activeReceiptOrder) {
+      const attachBtn = e.target.closest(".btn-attach-esign");
+      if (attachBtn) {
+        const role = attachBtn.getAttribute("data-sig-role");
+        const title = attachBtn.getAttribute("data-sig-title");
+        if (role) openLanicaEsignModal(role, title);
+        return;
+      }
+
+      const removeSigBtn = e.target.closest(".btn-remove-esign");
+      if (removeSigBtn && activeReceiptOrder) {
+        const role = removeSigBtn.getAttribute("data-sig-role");
+        if (role && activeReceiptOrder._voucherSignatories && activeReceiptOrder._voucherSignatories.signatures) {
+          delete activeReceiptOrder._voucherSignatories.signatures[role];
+          renderLanicaDocumentContent();
+          showToast("Signature removed.", "info");
+        }
+        return;
+      }
+
+      const resetSigBtn = e.target.closest("#btn-reset-voucher-sig");
+      if (resetSigBtn && activeReceiptOrder) {
         delete activeReceiptOrder._voucherSignatories;
         renderLanicaDocumentContent();
         showToast("Signatories reset to default.", "info");
+        return;
+      }
+
+      const resetBranchBtn = e.target.closest("#btn-reset-branch-btn");
+      if (resetBranchBtn && activeReceiptOrder) {
+        const branchKey = activeReceiptOrder._selectedBranch || "calamba";
+        const cfg = LANICA_BRANCHES[branchKey] || LANICA_BRANCHES.calamba;
+        activeReceiptOrder._docBranch = {
+          title: cfg.title,
+          address: cfg.address,
+          contact: cfg.contact,
+          voucherLocation: cfg.voucherLocation,
+        };
+        renderLanicaDocumentContent();
+        showToast(`Branch header reset to ${cfg.name} defaults.`, "info");
+        return;
       }
     });
   }
@@ -4664,7 +5583,11 @@ function initLanicaReceiptModalListeners() {
  * Opens the high-fidelity Lanica document modal for a specific order.
  */
 function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
-  const order = (allOrders || []).find((o) => o.id === orderId) || (currentSelectedOrder && currentSelectedOrder.id === orderId ? currentSelectedOrder : null);
+  initLanicaReceiptModalListeners();
+
+  const order =
+    (allOrders || []).find((o) => o.id === orderId) ||
+    (currentSelectedOrder && currentSelectedOrder.id === orderId ? currentSelectedOrder : null);
   if (!order) {
     showToast("Unable to load order details for receipt generation.", "error");
     return;
@@ -4672,6 +5595,24 @@ function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
 
   activeReceiptOrder = order;
   activeReceiptTab = defaultTab || "voucher";
+
+  // Auto-detect branch based on order address/notes if not already explicitly selected
+  if (!activeReceiptOrder._selectedBranch) {
+    const rawAddr = (formatOrderDeliveryAddress(order) || "").toLowerCase();
+    const rawLandmark = (formatOrderLandmark(order) || "").toLowerCase();
+    const branchHint = String(order.branch || order.branchName || "").toLowerCase();
+
+    if (
+      rawAddr.includes("pila") ||
+      rawAddr.includes("labuin") ||
+      rawLandmark.includes("pila") ||
+      branchHint.includes("pila")
+    ) {
+      activeReceiptOrder._selectedBranch = "pila";
+    } else {
+      activeReceiptOrder._selectedBranch = "calamba";
+    }
+  }
 
   renderLanicaDocumentContent();
 
@@ -4689,6 +5630,9 @@ function renderLanicaDocumentContent() {
   const area = document.getElementById("lanica-printable-area");
   const tabVoucher = document.getElementById("tab-btn-voucher");
   const tabQuotation = document.getElementById("tab-btn-quotation");
+  const branchCalamba = document.getElementById("btn-branch-calamba");
+  const branchPila = document.getElementById("btn-branch-pila");
+
   if (!area || !activeReceiptOrder) return;
 
   const order = activeReceiptOrder;
@@ -4712,6 +5656,39 @@ function renderLanicaDocumentContent() {
     }
   }
 
+  // Toggle Branch Button Active Visuals
+  const currentBranchKey = order._selectedBranch || "calamba";
+  const branchConfig = LANICA_BRANCHES[currentBranchKey] || LANICA_BRANCHES.calamba;
+
+  if (branchCalamba && branchPila) {
+    if (currentBranchKey === "pila") {
+      branchPila.classList.add("active");
+      branchCalamba.classList.remove("active");
+      branchPila.style.background = "#2563eb";
+      branchPila.style.color = "#ffffff";
+      branchCalamba.style.background = "transparent";
+      branchCalamba.style.color = "#94a3b8";
+    } else {
+      branchCalamba.classList.add("active");
+      branchPila.classList.remove("active");
+      branchCalamba.style.background = "#2563eb";
+      branchCalamba.style.color = "#ffffff";
+      branchPila.style.background = "transparent";
+      branchPila.style.color = "#94a3b8";
+    }
+  }
+
+  // Preserve custom branch header edits or initialize from branch config
+  if (!order._docBranch) {
+    order._docBranch = {
+      title: branchConfig.title,
+      address: branchConfig.address,
+      contact: branchConfig.contact,
+      voucherLocation: branchConfig.voucherLocation,
+    };
+  }
+  const branch = order._docBranch;
+
   // Financial calculations
   const totalVal = Number(order.totalAmount || order.total || 0);
   const isAwaitingCounter = order.paymentStatus === "awaiting_counter_downpayment";
@@ -4728,26 +5705,63 @@ function renderLanicaDocumentContent() {
   const totalPlusDf = itemsSubtotal + deliveryCharge;
   const grandTotal = totalVal;
 
-  const customerName = resolveCustomerDisplay(order);
-  const customerAddress = formatOrderDeliveryAddress(order);
-  const customerPhone = formatOrderRecipientPhone(order);
-  const quotationNumber = String(order.orderId || order.id || "0122").slice(0, 10).toUpperCase();
+  // Preserve quotation customer field edits
+  const customQuotation = order._docQuotation || {};
+  const customerName = customQuotation.customerName || resolveCustomerDisplay(order);
+  const customerAddress = customQuotation.customerAddress || formatOrderDeliveryAddress(order);
+  const customerPhone = customQuotation.customerPhone || formatOrderRecipientPhone(order);
+  const quotationNumber = customQuotation.quotationNumber || String(order.orderId || order.id || "0122").slice(0, 10).toUpperCase();
 
-  const purchaseDate = formatFormalDate(order.createdAt, false);
+  const purchaseDate = customQuotation.purchaseDate || formatFormalDate(order.createdAt, false);
   const purchaseDateUpper = formatFormalDate(order.createdAt, true);
-  const deliveryDate = formatFormalDate(order.targetDeliveryDate || order.estimatedDeliveryDate || order.deliveredAt, true);
+  const deliveryDate = customQuotation.deliveryDate || formatFormalDate(order.targetDeliveryDate || order.estimatedDeliveryDate || order.deliveredAt, true);
 
   const proofUrl = pickFirstNonEmpty(order.proofUrl, order.paymentProof, order.paymentProofUrl, "");
   const methodDisplay = formatTransactionMethod(order.paymentMethod || order.paymentType);
 
-  // Common Header Template matching uploaded documents
+  // Common Header Template matching authentic Lanica format with editable branch details
   const headerHtml = `
-    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; margin-bottom: 8px;">
+    <!-- Subtle Inline Editing Notification (Hidden on print) -->
+    <div class="modal-no-print voucher-edit-hint" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding: 6px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 0.76rem; color: #1d4ed8;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 0.9rem;">✎</span>
+        <span>Branch header, address, customer details &amp; signatories are fully editable inline.</span>
+      </div>
+      <button type="button" id="btn-reset-branch-btn" title="Reset branch details to defaults" style="background: #ffffff; border: 1px solid #bfdbfe; border-radius: 5px; font-size: 0.72rem; font-weight: 600; color: #1e40af; padding: 3px 8px; cursor: pointer; transition: all 0.15s ease;">
+        ↺ Reset to ${escapeHtml(branchConfig.name)}
+      </button>
+    </div>
+
+    <!-- Authentic Document Header -->
+    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 18px; margin-bottom: 8px;">
       <img src="assets/lanicalogo.jpg" alt="Lanica Logo" style="width: 76px; height: 76px; object-fit: contain; border: 1.5px solid #000; padding: 2px;" onerror="this.onerror=null;this.src='assets/product_sofa.png';" />
       <div style="text-align: center; flex: 1;">
-        <div style="font-size: 0.95rem; font-weight: 800; letter-spacing: 0.05em; color: #000; text-transform: uppercase;">LANICA'S SOFA SALA SET CALAMBA BRANCH</div>
-        <div style="font-size: 0.8rem; font-weight: 600; color: #1f2937; margin-top: 3px; text-transform: uppercase;">MILAN PRESTIGE BLDG. BRGY. HALANG NATIONAL HIGHWAY CALAMBA CITY LAGUNA</div>
-        <div style="font-size: 0.8rem; font-weight: 700; color: #000; margin-top: 2px;">CONTACT NO#: 0993-287-4937</div>
+        <div
+          contenteditable="true"
+          spellcheck="false"
+          class="doc-editable-field"
+          data-branch-field="title"
+          title="Click to edit branch name"
+          style="font-size: 0.95rem; font-weight: 800; letter-spacing: 0.05em; color: #000; text-transform: uppercase; cursor: text; padding: 1px 4px;"
+        >${escapeHtml(branch.title)}</div>
+        <div
+          contenteditable="true"
+          spellcheck="false"
+          class="doc-editable-field"
+          data-branch-field="address"
+          title="Click to edit branch address"
+          style="font-size: 0.8rem; font-weight: 600; color: #1f2937; margin-top: 3px; text-transform: uppercase; cursor: text; padding: 1px 4px;"
+        >${escapeHtml(branch.address)}</div>
+        <div style="font-size: 0.8rem; font-weight: 700; color: #000; margin-top: 2px;">
+          CONTACT NO#: <span
+            contenteditable="true"
+            spellcheck="false"
+            class="doc-editable-field"
+            data-branch-field="contact"
+            title="Click to edit contact number"
+            style="cursor: text; padding: 1px 4px;"
+          >${escapeHtml(branch.contact)}</span>
+        </div>
       </div>
     </div>
     <div style="height: 4px; background: #000; width: 100%; margin-bottom: 22px;"></div>
@@ -4774,9 +5788,60 @@ function renderLanicaDocumentContent() {
         approvedDate: signDate,
         receivedBy: "OWNER/REPRESENTATIVE",
         receivedDate: signDate,
+        signatures: {},
       };
     }
+    if (!order._voucherSignatories.signatures) {
+      order._voucherSignatories.signatures = {};
+    }
     const sigs = order._voucherSignatories;
+
+    const renderSignatoryCol = (roleKey, roleLabel, defaultName, isCursive = false) => {
+      const nameVal = sigs[roleKey] || defaultName;
+      const dateVal = sigs[roleKey + "Date"] || purchaseDate;
+      const signatureImg = (sigs.signatures && sigs.signatures[roleKey]) || null;
+
+      return `
+        <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+          <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px; display: flex; align-items: center; justify-content: center; line-height: 1.2;">${roleLabel}</div>
+          
+          <!-- E-Signature Slot Above Name -->
+          <div class="voucher-signature-slot" style="min-height: 52px; display: flex; align-items: flex-end; justify-content: center; position: relative; margin: 6px auto 2px; width: 90%;">
+            ${
+              signatureImg
+                ? `
+                  <div style="position: relative; display: inline-block;">
+                    <img src="${signatureImg}" alt="Signature" style="max-height: 48px; max-width: 130px; object-fit: contain; display: block;" />
+                    <div class="modal-no-print" style="position: absolute; top: -6px; right: -8px;">
+                      <button type="button" class="btn-remove-esign" data-sig-role="${roleKey}" title="Remove signature" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.25); touch-action: manipulation;">&times;</button>
+                    </div>
+                  </div>
+                `
+                : `
+                  <div class="modal-no-print" style="width: 100%;">
+                    <button type="button" class="btn-attach-esign" data-sig-role="${roleKey}" data-sig-title="${escapeHtml(roleLabel.replace(/<br\s*\/?>/gi, ' '))}" title="Attach or draw electronic signature" style="width: 100%; border: 1.5px dashed #93c5fd; background: #eff6ff; color: #1d4ed8; border-radius: 6px; padding: 4px 2px; font-size: 0.68rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.15s ease; touch-action: manipulation;">
+                      ✍️ + Attach / Draw
+                    </button>
+                  </div>
+                `
+            }
+          </div>
+
+          <div
+            contenteditable="true"
+            spellcheck="false"
+            class="voucher-editable-signatory"
+            data-sig-field="${roleKey}"
+            title="Click to edit name"
+            style="margin: 2px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 22px; font-weight: ${isCursive ? '600' : '800'}; ${isCursive ? "font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b;" : "font-size: 0.78rem; color: #000;"} padding: 1px 4px; text-align: center; cursor: text;"
+          >${escapeHtml(nameVal)}</div>
+
+          <div style="font-size: 0.72rem; color: #475569;">
+            DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="${roleKey}Date" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(dateVal)}</span>
+          </div>
+        </div>
+      `;
+    };
 
     area.innerHTML = `
       <div style="max-width: 760px; margin: 0 auto; color: #000;">
@@ -4800,11 +5865,18 @@ function renderLanicaDocumentContent() {
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PAYMENT METHOD:</td>
-              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${escapeHtml(order.paymentMethod === "walk_in_cash" ? "CASH (COUNTER)" : (order.paymentMethod === "bpi" ? "BPI" : "QR PH / PAYMONGO"))}</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${escapeHtml(order.paymentMethod === "walk_in_cash" || order.paymentMethod === "cash" || String(order.paymentMethod || "").toLowerCase().includes("counter") ? "CASH (COUNTER)" : "QR PH / PAYMONGO")}</td>
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">LOCATION:</td>
-              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 600; text-transform: uppercase;">MILAN PRESTIGE BUILDING, BRGY. HALANG CALAMBA LAGUNA</td>
+              <td
+                contenteditable="true"
+                spellcheck="false"
+                class="doc-editable-field"
+                data-branch-field="voucherLocation"
+                title="Click to edit voucher location"
+                style="border: 1px solid #000; padding: 7px 12px; font-weight: 600; text-transform: uppercase; cursor: text;"
+              >${escapeHtml(branch.voucherLocation || branch.address)}</td>
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PARTICULARS/DESCRIPTION:</td>
@@ -4831,71 +5903,19 @@ function renderLanicaDocumentContent() {
           <div style="font-size: 0.9rem; font-weight: 700; color: #000;">2. APPROVAL &amp; CHECK/PAYMENT RELEASE SIGNATORIES</div>
           <div class="modal-no-print" style="display: flex; align-items: center; gap: 8px;">
             <span class="voucher-edit-hint" style="font-size: 0.74rem; font-weight: 600; color: #1d4ed8; background: #eff6ff; padding: 3px 10px; border-radius: 6px; border: 1px solid #bfdbfe;">
-              ✎ Click any name/signature or date to edit
+              ✎ Click any name or attach signature above
             </span>
-            <button type="button" id="btn-reset-voucher-sig" title="Reset signatories to default" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.72rem; font-weight: 600; color: #475569; padding: 3px 8px; cursor: pointer; transition: all 0.15s ease;">
+            <button type="button" id="btn-reset-voucher-sig" title="Reset signatories and signatures to default" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.72rem; font-weight: 600; color: #475569; padding: 3px 8px; cursor: pointer; transition: all 0.15s ease;">
               ↺ Reset
             </button>
           </div>
         </div>
         <div style="border-top: 2px solid #000; padding-top: 14px; margin-bottom: 24px;">
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; font-size: 0.78rem;">
-            <div>
-              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">PREPARED BY</div>
-              <div
-                contenteditable="true"
-                spellcheck="false"
-                class="voucher-editable-signatory"
-                data-sig-field="preparedBy"
-                title="Click to edit name / signature"
-                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 600; font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b; padding: 2px 4px; text-align: center; cursor: text;"
-              >${escapeHtml(sigs.preparedBy)}</div>
-              <div style="font-size: 0.72rem; color: #475569;">
-                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="preparedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.preparedDate)}</span>
-              </div>
-            </div>
-            <div>
-              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECKED BY</div>
-              <div
-                contenteditable="true"
-                spellcheck="false"
-                class="voucher-editable-signatory"
-                data-sig-field="checkedBy"
-                title="Click to edit name / signature"
-                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 600; font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b; padding: 2px 4px; text-align: center; cursor: text;"
-              >${escapeHtml(sigs.checkedBy)}</div>
-              <div style="font-size: 0.72rem; color: #475569;">
-                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="checkedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.checkedDate)}</span>
-              </div>
-            </div>
-            <div>
-              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">APPROVED AND CHECK<br/>SIGNATORY</div>
-              <div
-                contenteditable="true"
-                spellcheck="false"
-                class="voucher-editable-signatory"
-                data-sig-field="approvedBy"
-                title="Click to edit name / signature"
-                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 800; font-size: 0.78rem; color: #000; padding: 2px 4px; text-align: center; cursor: text;"
-              >${escapeHtml(sigs.approvedBy)}</div>
-              <div style="font-size: 0.72rem; color: #475569;">
-                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="approvedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.approvedDate)}</span>
-              </div>
-            </div>
-            <div>
-              <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px;">CHECK PAYMENT<br/>RECEIVE</div>
-              <div
-                contenteditable="true"
-                spellcheck="false"
-                class="voucher-editable-signatory"
-                data-sig-field="receivedBy"
-                title="Click to edit name / signature"
-                style="margin: 16px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 24px; font-weight: 800; font-size: 0.78rem; color: #000; padding: 2px 4px; text-align: center; cursor: text;"
-              >${escapeHtml(sigs.receivedBy)}</div>
-              <div style="font-size: 0.72rem; color: #475569;">
-                DATE: <span contenteditable="true" spellcheck="false" class="voucher-editable-date" data-sig-field="receivedDate" title="Click to edit date" style="padding: 1px 4px; cursor: text;">${escapeHtml(sigs.receivedDate)}</span>
-              </div>
-            </div>
+            ${renderSignatoryCol("preparedBy", "PREPARED BY", staffSignatory, true)}
+            ${renderSignatoryCol("checkedBy", "CHECKED BY", "Artisan Lead", true)}
+            ${renderSignatoryCol("approvedBy", "APPROVED AND CHECK<br/>SIGNATORY", "SUPERVISOR", false)}
+            ${renderSignatoryCol("receivedBy", "CHECK PAYMENT<br/>RECEIVE", "OWNER/REPRESENTATIVE", false)}
           </div>
         </div>
 
@@ -4930,8 +5950,62 @@ function renderLanicaDocumentContent() {
       const itemPrice = parseItemPrice(item.price);
       const itemTotal = itemPrice * itemQty;
       const itemName = String(item.name || item.title || "SEMI ELEGANT LTYPE FULLBACKREST").toUpperCase();
-      const itemColor = String(item.color || item.fabricColor || "GAMUSA BAILEY MUSTANG").toUpperCase();
+
+      // Match catalog product for fallback/lookup
+      const matchedProduct = Array.isArray(allProducts)
+        ? allProducts.find((p) => p.id === item.productId || (p.name && item.name && p.name.toLowerCase() === item.name.toLowerCase()))
+        : null;
+
+      // Dynamic Color
+      const rawColor = item.color || item.fabricColor || (matchedProduct && (matchedProduct.color || matchedProduct.fabricColor || (Array.isArray(matchedProduct.colors) && matchedProduct.colors[0]))) || "GAMUSA BAILEY MUSTANG";
+      const itemColor = String(rawColor).toUpperCase();
+
       const itemSpecs = item.customNotes || item.specs || "With 1 arm sa kanan, with flesh lining";
+
+      // Dynamic Freebies
+      const rawFreebies = item.freebies || (matchedProduct && matchedProduct.freebies) || "5 PILLOWS, FOOTSTOOL (CLASS A FOAM), FOOTINGS";
+      const freebiesList = (Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies).split(/[\n,]+/))
+        .map((f) => String(f).trim())
+        .filter(Boolean);
+
+      // Resolve Product Materials from Admin Configured Product Data
+      const isUpholsteryOnly = (val) => {
+        if (!val) return true;
+        const s = String(val).trim().toLowerCase();
+        return s === "fabric" || s === "leather" || s === "standard" || s === "custom";
+      };
+
+      let materialsList = [];
+      if (matchedProduct && Array.isArray(matchedProduct.materials) && matchedProduct.materials.length > 0) {
+        materialsList = matchedProduct.materials
+          .map((m) => String(m).trim())
+          .filter((m) => m && !isUpholsteryOnly(m));
+      }
+      if (materialsList.length === 0 && Array.isArray(item.materials) && item.materials.length > 0) {
+        materialsList = item.materials
+          .map((m) => String(m).trim())
+          .filter((m) => m && !isUpholsteryOnly(m));
+      }
+      if (materialsList.length === 0 && matchedProduct && matchedProduct.material && !isUpholsteryOnly(matchedProduct.material)) {
+        materialsList = String(matchedProduct.material)
+          .split(/[\n,]+/)
+          .map((m) => m.trim())
+          .filter((m) => m && !isUpholsteryOnly(m));
+      }
+      if (materialsList.length === 0 && item.materials && typeof item.materials === "string" && !isUpholsteryOnly(item.materials)) {
+        materialsList = String(item.materials)
+          .split(/[\n,]+/)
+          .map((m) => m.trim())
+          .filter((m) => m && !isUpholsteryOnly(m));
+      }
+      if (materialsList.length === 0) {
+        materialsList = [
+          "PURE GOODLUMBER WOOD FRAME (KILN DRIED)",
+          "PURE 4 INCHES URATEX FOAM",
+          "ANTI ANAY AT BUKBOK TREATED",
+          "PLUSH PREMIUM UPHOLSTERY FABRIC"
+        ];
+      }
 
       return `
         <tr style="vertical-align: top; border-bottom: 1px solid #e5e7eb;">
@@ -4941,21 +6015,21 @@ function renderLanicaDocumentContent() {
             <div style="font-weight: 700; font-size: 0.82rem; margin-top: 3px;">STANDARD SIZE</div>
             <div style="font-size: 0.82rem; margin-top: 2px;">${escapeHtml(itemSpecs)}</div>
             <div style="font-weight: 700; font-size: 0.82rem; margin-top: 6px;">COLOR: ${escapeHtml(itemColor)}</div>
+            ${item.material ? `<div style="font-weight: 700; font-size: 0.8rem; margin-top: 2px; color: #4b5563;">FINISH / UPHOLSTERY: ${escapeHtml(String(item.material).toUpperCase())}</div>` : ""}
             
             <div style="margin-top: 8px; font-size: 0.8rem;">
               <div style="font-weight: 700; text-transform: uppercase;">FREEBIES:</div>
               <div style="padding-left: 4px; line-height: 1.4;">
-                ✓ 5 PILLOWS<br/>
-                ✓ FOOTSTOOL (CLASS A FOAM)<br/>
-                ✓ FOOTINGS
+                ${freebiesList.length > 0 
+                  ? freebiesList.map(f => `✓ ${escapeHtml(f.toUpperCase())}`).join("<br/>") 
+                  : "✓ STANDARD INCLUSIONS"}
               </div>
             </div>
 
             <div style="margin-top: 8px; font-size: 0.8rem;">
               <div style="font-weight: 700; text-transform: uppercase;">MATERIALS:</div>
               <div style="padding-left: 4px; line-height: 1.4;">
-                ✓ PURE GOODLUMBER WOOD FRAME<br/>
-                ✓ PURE 4 INCHES URATEX FOAM
+                ${materialsList.map(m => `✓ ${escapeHtml(m.toUpperCase())}`).join("<br/>")}
               </div>
             </div>
 
@@ -4974,17 +6048,17 @@ function renderLanicaDocumentContent() {
       <div style="max-width: 760px; margin: 0 auto; color: #000;">
         ${headerHtml}
 
-        <!-- Customer & Quotation Meta Grid -->
-        <div style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 22px; font-size: 0.86rem; line-height: 1.5;">
-          <div style="flex: 1;">
-            <div><strong>NAME:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerName)}</span></div>
-            <div><strong>ADDRESS:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerAddress)}</span></div>
-            <div><strong>CONTACT#:</strong> <span>${escapeHtml(customerPhone)}</span></div>
+        <!-- Customer & Quotation Meta Grid (Directly Inline Editable) -->
+        <div style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 22px; font-size: 0.86rem; line-height: 1.5; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 260px;">
+            <div><strong>NAME:</strong> <span contenteditable="true" spellcheck="false" class="doc-editable-field" data-quotation-field="customerName" title="Click to edit customer name" style="text-transform: uppercase; cursor: text; padding: 1px 4px;">${escapeHtml(customerName)}</span></div>
+            <div><strong>ADDRESS:</strong> <span contenteditable="true" spellcheck="false" class="doc-editable-field" data-quotation-field="customerAddress" title="Click to edit customer address" style="text-transform: uppercase; cursor: text; padding: 1px 4px;">${escapeHtml(customerAddress)}</span></div>
+            <div><strong>CONTACT#:</strong> <span contenteditable="true" spellcheck="false" class="doc-editable-field" data-quotation-field="customerPhone" title="Click to edit contact number" style="cursor: text; padding: 1px 4px;">${escapeHtml(customerPhone)}</span></div>
           </div>
-          <div style="min-width: 280px; text-align: right;">
-            <div><strong>QUOTATION#</strong> <span>${escapeHtml(quotationNumber)}</span></div>
-            <div><strong>DATE OF PURCHASE:</strong> <span>${escapeHtml(purchaseDate)}</span></div>
-            <div><strong>DATE OF DELIVERY:</strong> <span style="text-transform: uppercase;">${escapeHtml(deliveryDate)}</span></div>
+          <div style="min-width: 260px; text-align: right;">
+            <div><strong>QUOTATION#</strong> <span contenteditable="true" spellcheck="false" class="doc-editable-field" data-quotation-field="quotationNumber" title="Click to edit quotation#" style="cursor: text; padding: 1px 4px;">${escapeHtml(quotationNumber)}</span></div>
+            <div><strong>DATE OF PURCHASE:</strong> <span contenteditable="true" spellcheck="false" class="doc-editable-field" data-quotation-field="purchaseDate" title="Click to edit purchase date" style="cursor: text; padding: 1px 4px;">${escapeHtml(purchaseDate)}</span></div>
+            <div><strong>DATE OF DELIVERY:</strong> <span contenteditable="true" spellcheck="false" class="doc-editable-field" data-quotation-field="deliveryDate" title="Click to edit delivery date" style="text-transform: uppercase; cursor: text; padding: 1px 4px;">${escapeHtml(deliveryDate)}</span></div>
           </div>
         </div>
 
@@ -5412,7 +6486,7 @@ function applyAuditLogsFilters() {
           hasDiff
             ? `
           <button type="button" class="btn-toggle-diff" data-target="diff-panel-${safeLogId}" style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 3px 8px; font-size: 0.72rem; font-weight: 600; color: #2563eb; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
-            🔍 <span>Inspect State Diff</span>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><span>Inspect State Diff</span>
           </button>
           <div id="diff-panel-${safeLogId}" class="diff-container" style="display: none; margin-top: 8px; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 0.74rem; overflow-x: auto;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
@@ -5887,9 +6961,13 @@ function setupUserManagementControls() {
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", setupUserManagementControls);
+  document.addEventListener("DOMContentLoaded", () => {
+    setupUserManagementControls();
+    initLanicaReceiptModalListeners();
+  });
 } else {
   setupUserManagementControls();
+  initLanicaReceiptModalListeners();
 }
 
 function applyUsersFilter() {
@@ -5936,38 +7014,7 @@ if (usersRoleFilter) {
   });
 }
 
-onSnapshot(
-  collection(db, "users"),
-  (snapshot) => {
-    allUsers = snapshot.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => {
-        const aName = pickFirstNonEmpty(a.displayName, a.name, a.email, a.id).toLowerCase();
-        const bName = pickFirstNonEmpty(b.displayName, b.name, b.email, b.id).toLowerCase();
-        return aName.localeCompare(bName);
-      });
-    staffMembers = allUsers
-      .filter((u) => {
-        const r = String(u.role || "").toLowerCase().trim();
-        return r === "staff" || r === "artisan" || r === "admin";
-      })
-      .map((u) => ({
-        uid: u.uid || u.id,
-        email: u.email || "",
-        displayName: pickFirstNonEmpty(u.displayName, u.name, u.fullName, u.email, u.id),
-        role: u.role || "staff",
-      }))
-      .filter((u) => !!u.uid);
-    applyUsersFilter();
-    applyOrdersFilter();
-  },
-  (err) => {
-    console.warn("Could not load users for admin management:", err);
-    if (usersListEl) {
-      usersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#b91c1c;">Failed to load users.</td></tr>`;
-    }
-  }
-);
+// User realtime subscriptions are initialized in startAdminRealtimeListeners upon authentication
 
 if (usersListEl) {
   usersListEl.addEventListener("click", async (e) => {
@@ -6061,6 +7108,12 @@ function applyOrdersFilter() {
         const st = normalizeOrderStatus(o.status);
         return st === "placed" || st === "slot reserved";
       });
+    } else if (ordersFilterValue === "completed") {
+      rows = allOrders.filter(
+        (o) =>
+          (isOrderCompleted(o) || normalizeOrderStatus(o.status) === "completed") &&
+          normalizeOrderAction(o.action) !== "delete"
+      );
     } else {
       rows = activeOrders.filter((o) => normalizeOrderStatus(o.status) === ordersFilterValue);
     }
@@ -6283,7 +7336,7 @@ async function handleBatchDeleteDeclined() {
     confirmText: `Delete ${validTargets.length} Orders`,
     cancelText: "Cancel",
     confirmType: "danger",
-    icon: "🗑️",
+    icon: "delete",
   });
   if (!confirmed) return;
 
@@ -6417,36 +7470,142 @@ if (batchDeleteDeclinedBtn) {
   });
 }
 
-const ordersQuerySorted = query(ORDERS_COLLECTION, orderBy("createdAt", "desc"));
+let unsubOrders = null;
+let unsubUsers = null;
+let ordersRetryTimeout = null;
+let usersRetryTimeout = null;
 
-onSnapshot(
-  ordersQuerySorted,
-  (snapshot) => {
-    allOrders = [];
-    snapshot.forEach((d) => {
-      const data = d.data();
-      if (data.action === "delete" || data.isDeleted === true) return;
-      allOrders.push({ id: d.id, ...data });
-    });
-    allOrders.sort((a, b) => orderTimestampMs(b) - orderTimestampMs(a));
-    applyOrdersFilter();
-    hydrateCustomerNamesForOrders(allOrders);
-  },
-  (err) => {
-    console.warn("orders orderBy(createdAt) failed; falling back to unsorted listener:", err);
-    onSnapshot(ORDERS_COLLECTION, (snapshot) => {
-      allOrders = [];
-      snapshot.forEach((d) => {
-        const data = d.data();
-        if (data.action === "delete" || data.isDeleted === true) return;
-        allOrders.push({ id: d.id, ...data });
-      });
-      allOrders.sort((a, b) => orderTimestampMs(b) - orderTimestampMs(a));
-      applyOrdersFilter();
-      hydrateCustomerNamesForOrders(allOrders);
-    });
+/**
+ * Initializes authenticated realtime subscriptions for orders and users.
+ * Automatically retries with backoff if initial connection occurs while token is refreshing.
+ */
+function startAdminRealtimeListeners(user) {
+  if (!user) return;
+
+  // 1. ORDERS SUBSCRIPTION
+  if (unsubOrders) {
+    try {
+      unsubOrders();
+    } catch (_) {}
+    unsubOrders = null;
   }
-);
+  if (ordersRetryTimeout) {
+    clearTimeout(ordersRetryTimeout);
+    ordersRetryTimeout = null;
+  }
+
+  function setupOrdersListener() {
+    try {
+      const ordersQuerySorted = query(ORDERS_COLLECTION, orderBy("createdAt", "desc"));
+      unsubOrders = onSnapshot(
+        ordersQuerySorted,
+        (snapshot) => {
+          allOrders = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            if (data.action === "delete" || data.isDeleted === true) return;
+            allOrders.push({ id: d.id, ...data });
+          });
+          allOrders.sort((a, b) => orderTimestampMs(b) - orderTimestampMs(a));
+          applyOrdersFilter();
+          hydrateCustomerNamesForOrders(allOrders);
+        },
+        (err) => {
+          console.warn(
+            "orders orderBy(createdAt) failed or initial auth pending, falling back to unsorted:",
+            err
+          );
+          try {
+            unsubOrders = onSnapshot(
+              ORDERS_COLLECTION,
+              (snapshot) => {
+                allOrders = [];
+                snapshot.forEach((d) => {
+                  const data = d.data();
+                  if (data.action === "delete" || data.isDeleted === true) return;
+                  allOrders.push({ id: d.id, ...data });
+                });
+                allOrders.sort((a, b) => orderTimestampMs(b) - orderTimestampMs(a));
+                applyOrdersFilter();
+                hydrateCustomerNamesForOrders(allOrders);
+              },
+              (fallbackErr) => {
+                console.warn("Orders listener fallback encountered error (will retry):", fallbackErr);
+                ordersRetryTimeout = setTimeout(() => {
+                  if (currentUser) setupOrdersListener();
+                }, 2500);
+              }
+            );
+          } catch (e2) {
+            console.error("Could not set up fallback orders listener:", e2);
+          }
+        }
+      );
+    } catch (e) {
+      console.error("Failed to initiate orders listener:", e);
+    }
+  }
+
+  setupOrdersListener();
+
+  // 2. USERS & STAFF DIRECTORY SUBSCRIPTION
+  if (unsubUsers) {
+    try {
+      unsubUsers();
+    } catch (_) {}
+    unsubUsers = null;
+  }
+  if (usersRetryTimeout) {
+    clearTimeout(usersRetryTimeout);
+    usersRetryTimeout = null;
+  }
+
+  function setupUsersListener() {
+    try {
+      unsubUsers = onSnapshot(
+        collection(db, "users"),
+        (snapshot) => {
+          allUsers = snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => {
+              const aName = pickFirstNonEmpty(a.displayName, a.name, a.email, a.id).toLowerCase();
+              const bName = pickFirstNonEmpty(b.displayName, b.name, b.email, b.id).toLowerCase();
+              return aName.localeCompare(bName);
+            });
+          staffMembers = allUsers
+            .filter((u) => {
+              const r = String(u.role || "").toLowerCase().trim();
+              return r === "staff" || r === "artisan" || r === "admin";
+            })
+            .map((u) => ({
+              uid: u.uid || u.id,
+              email: u.email || "",
+              displayName: pickFirstNonEmpty(u.displayName, u.name, u.fullName, u.email, u.id),
+              role: u.role || "staff",
+            }))
+            .filter((u) => !!u.uid);
+          applyUsersFilter();
+          applyOrdersFilter();
+        },
+        (err) => {
+          console.warn("Could not load users directory (will retry):", err);
+          usersRetryTimeout = setTimeout(() => {
+            if (currentUser) setupUsersListener();
+          }, 2500);
+        }
+      );
+    } catch (e) {
+      console.error("Failed to initiate users listener:", e);
+    }
+  }
+
+  setupUsersListener();
+}
+
+// Start listeners immediately if currentUser is already confirmed
+if (currentUser && currentUser.role === "admin") {
+  startAdminRealtimeListeners(currentUser);
+}
 
 function formatOrderItemsSummary(items) {
   if (!Array.isArray(items) || items.length === 0) return "—";
@@ -6515,12 +7674,12 @@ function renderOrdersList(orders) {
       order.shippingAddress?.pickupAtWorkshop;
     const fullAddr = formatOrderDeliveryAddress(order);
     const fulfillmentBadgeHtml = isPickup
-      ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop">🏪 Store Pickup</span>`
-      : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}">🚚 Delivery</span>`;
+      ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path><path d="M2 7h20"></path></svg>Store Pickup</span>`
+      : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Delivery</span>`;
 
     const nearestLandmark = isPickup ? "" : formatOrderLandmark(order);
     const landmarkBadgeHtml = nearestLandmark
-      ? `<div style="font-size:0.73rem; color:#d97706; font-weight:500; margin-top:2px; max-width:170px; line-height:1.2; white-space:normal;" title="Landmark / Instructions: ${escapeHtml(nearestLandmark)}">📌 ${escapeHtml(nearestLandmark)}</div>`
+      ? `<div style="font-size:0.73rem; color:#d97706; font-weight:500; margin-top:2px; max-width:170px; line-height:1.2; white-space:normal; display:flex; align-items:flex-start; gap:3px;" title="Landmark / Instructions: ${escapeHtml(nearestLandmark)}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><span>${escapeHtml(nearestLandmark)}</span></div>`
       : "";
 
     const addressDisplayHtml = !isPickup && fullAddr && fullAddr !== "No delivery address recorded"
@@ -6541,8 +7700,8 @@ function renderOrdersList(orders) {
     const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? (isAwaitingCounterDownpayment ? 0 : 30) : 100);
 
     const balanceBadgeHtml = isAwaitingCounterDownpayment
-      ? `<span class="balance-badge pending" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">⏳ Counter DP Pending</span>`
-      : `<span class="balance-badge ${isBalanceSettled ? "settled" : "pending"}">${isBalanceSettled ? "✓ Settled" : "⏳ Pending"}</span>`;
+      ? `<span class="balance-badge pending" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; display:inline-flex; align-items:center; gap:3px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Counter DP Pending</span>`
+      : `<span class="balance-badge ${isBalanceSettled ? "settled" : "pending"}" style="display:inline-flex; align-items:center; gap:3px;">${isBalanceSettled ? '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Settled' : '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pending'}</span>`;
 
     const financialBreakdownHtml = `
       <div class="financial-breakdown-card">
@@ -6560,17 +7719,21 @@ function renderOrdersList(orders) {
 
     let refundBadgeHtml = "";
     if (isRefundRequested) {
-      refundBadgeHtml = `<div><span class="refund-status-badge requested">💸 Refund Requested</span></div>`;
+      refundBadgeHtml = `<div><span class="refund-status-badge requested" style="display:inline-flex; align-items:center; gap:3px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>Refund Requested</span></div>`;
     } else if (isRefundCompleted) {
-      refundBadgeHtml = `<div><span class="refund-status-badge completed">✅ Refunded (₱${Number(order.refundedAmount || paidVal).toLocaleString()})</span></div>`;
+      refundBadgeHtml = `<div><span class="refund-status-badge completed" style="display:inline-flex; align-items:center; gap:3px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Refunded (₱${Number(order.refundedAmount || paidVal).toLocaleString()})</span></div>`;
     } else if (isRefundRejected) {
-      refundBadgeHtml = `<div><span class="refund-status-badge rejected">❌ Refund Rejected</span></div>`;
+      refundBadgeHtml = `<div><span class="refund-status-badge rejected" style="display:inline-flex; align-items:center; gap:3px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Refund Rejected</span></div>`;
     }
+
+    const displayStatusText = (st === "downpayment confirmed" || st === "accepted")
+      ? "Deposit Verified"
+      : (st === "slot reserved" ? "Slot Reserved" : (st.charAt(0).toUpperCase() + st.slice(1)));
 
     const statusColumnHtml = `
       <div>
-        <span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(
-          st.charAt(0).toUpperCase() + st.slice(1)
+        <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml(
+          displayStatusText
         )}</span>
         ${refundBadgeHtml}
       </div>
@@ -6607,7 +7770,7 @@ function renderOrdersList(orders) {
       <td>${statusColumnHtml}</td>
       <td>
         <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; border: 1.5px solid ${!order.assignedToUid ? '#f59e0b' : '#cbd5e1'}; background: ${!order.assignedToUid ? '#fffbeb' : '#ffffff'}; color: ${!order.assignedToUid ? '#b45309' : '#1e293b'}; font-weight: ${!order.assignedToUid ? '600' : '400'}; cursor: pointer;">
-          <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>⚠️ Unassigned (Assign Staff)</option>
+          <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>Unassigned (Assign Staff)</option>
           ${staffMembers
             .map((s) => {
               const sel = order.assignedToUid === s.uid ? "selected" : "";
@@ -6622,16 +7785,26 @@ function renderOrdersList(orders) {
           <button type="button" class="kebab-trigger-btn" aria-label="Row Actions" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; color: #334155; font-weight: bold; transition: all 0.2s;">
             ⋮
           </button>
-          <div class="kebab-dropdown-menu" style="display: none; position: absolute; right: 0; top: 36px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1000; min-width: 190px; padding: 6px; text-align: left;">
+          <div class="kebab-dropdown-menu" style="display: none; position: absolute; right: 0; top: 36px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); z-index: 1000; min-width: 195px; padding: 6px; text-align: left;">
             <button type="button" class="kebab-menu-item btn-view-order-details" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #334155; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-              📄 View Order Summary
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+              View Order Summary
+            </button>
+            <button type="button" class="kebab-menu-item btn-open-lanica-receipt" data-order-id="${escapeHtml(order.id)}" data-default-tab="voucher" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #2563eb; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+              Payment Voucher
+            </button>
+            <button type="button" class="kebab-menu-item btn-open-lanica-receipt" data-order-id="${escapeHtml(order.id)}" data-default-tab="quotation" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #0284c7; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg>
+              Official Quotation
             </button>
             ${
               isRefundRequested
                 ? `<button type="button" class="kebab-menu-item btn-review-refund" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: #fef2f2; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    💸 Review Refund
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                    Review Refund
                   </button>`
                 : ""
             }
@@ -6640,7 +7813,8 @@ function renderOrdersList(orders) {
                 ? `<button type="button" class="kebab-menu-item btn-receive-counter-downpayment" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: #ecfdf5; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    💰 Receive Counter Downpayment
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                    Receive Counter Downpayment
                   </button>`
                 : ""
             }
@@ -6649,7 +7823,8 @@ function renderOrdersList(orders) {
                 ? `<button type="button" class="kebab-menu-item btn-settle-balance" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    💵 Mark Balance Settled
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                    Mark Balance Settled
                   </button>`
                 : ""
             }
@@ -6658,40 +7833,46 @@ function renderOrdersList(orders) {
                 ? `<button type="button" class="kebab-menu-item btn-accept-order" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #16a34a; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    ✓ Confirm Downpayment
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Confirm Downpayment
                   </button>
                   <button type="button" class="kebab-menu-item btn-decline-order" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    ✕ Decline Order
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                    Decline Order
                   </button>`
                 : ""
             }
             ${
               st === "downpayment confirmed"
                 ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="In Production" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #2563eb; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    🔨 Start Production
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    Start Production
                   </button>`
                 : ""
             }
             ${
               st === "in production"
                 ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="Quality Checked" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #7c3aed; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    ✨ Pass Quality Check
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Pass Quality Check
                   </button>`
                 : ""
             }
             ${
               st === "quality checked"
                 ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="Shipped" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #d97706; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    🚚 Dispatch / Ship Order
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                    Dispatch / Ship Order
                   </button>`
                 : ""
             }
             ${
               st === "shipped"
                 ? `<button type="button" class="kebab-menu-item btn-advance-status" data-order-id="${escapeHtml(order.id)}" data-next-status="Delivered" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    📦 Mark as Delivered
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    Mark as Delivered
                   </button>`
                 : ""
             }
@@ -6700,7 +7881,8 @@ function renderOrdersList(orders) {
                 ? `<button type="button" class="kebab-menu-item btn-delete-order" data-order-id="${escapeHtml(
                     order.id
                   )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #dc2626; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
-                    🗑 Delete Order
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    Delete Order
                   </button>`
                 : ""
             }
@@ -6802,7 +7984,7 @@ async function handleOrderStatusChange(orderId, newStatus) {
   const requiresStaffAssignment = ["in production", "quality checked", "shipped", "delivered"].includes(next);
   if (requiresStaffAssignment && !current.assignedToUid) {
     showAdminToast(
-      `⚠️ Assignment Required: Please assign a staff artisan or team member to Order #${orderId.slice(0, 8)} before advancing to "${next.charAt(0).toUpperCase() + next.slice(1)}".`,
+      `Assignment Required: Please assign a staff artisan or team member to Order #${orderId.slice(0, 8)} before advancing to "${next.charAt(0).toUpperCase() + next.slice(1)}".`,
       "warning"
     );
     const assignSelect = ordersListEl?.querySelector(`.order-assign-select[data-order-id="${orderId}"]`);
@@ -7009,7 +8191,7 @@ async function handleDeleteOrder(orderId) {
     confirmText: "Yes, Delete Order",
     cancelText: "Cancel",
     confirmType: "danger",
-    icon: "🗑️",
+    icon: "delete",
   });
   if (!confirmed) return;
 
@@ -7136,6 +8318,13 @@ if (ordersListEl) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) showOrderSummaryModal(id);
     }
+    if (actionBtn.classList.contains("btn-open-lanica-receipt")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      const defaultTab = actionBtn.getAttribute("data-default-tab") || "voucher";
+      if (id && typeof openLanicaReceiptModal === "function") {
+        openLanicaReceiptModal(id, defaultTab);
+      }
+    }
     if (actionBtn.classList.contains("btn-receive-counter-downpayment")) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) handleReceiveCounterDownpayment(id);
@@ -7255,9 +8444,9 @@ async function showOrderSummaryModal(orderId) {
       <div style="background: #f8fafc; padding: 14px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 0.85rem; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 6px;">
         <div><strong>Customer Name:</strong> ${escapeHtml(resolveCustomerDisplay(order))} ${phone !== "—" ? `(${escapeHtml(phone)})` : ""}</div>
         <div><strong>Delivery Address:</strong> ${escapeHtml(fullAddress)}</div>
-        ${landmark ? `<div style="color: #b45309; background: #fffbeb; padding: 4px 8px; border-radius: 4px; display: inline-block;">📌 <strong>Landmark:</strong> ${escapeHtml(landmark)}</div>` : ""}
+        ${landmark ? `<div style="color: #b45309; background: #fffbeb; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><strong>Landmark:</strong> ${escapeHtml(landmark)}</div>` : ""}
         <div><strong>Current Status:</strong> <span style="font-weight: 600; color: #1e293b; background: #e2e8f0; padding: 2px 8px; border-radius: 4px;">${escapeHtml(canonicalStatus)}</span></div>
-        <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod || "QR / Walk-in")}</div>
+        <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod === "walk_in_cash" || order.paymentMethod === "cash" || String(order.paymentMethod || "").toLowerCase().includes("counter") ? "Cash (Counter)" : "QR Ph (PayMongo)")}</div>
       </div>
 
       ${proofUrl ? `
@@ -7278,22 +8467,55 @@ async function showOrderSummaryModal(orderId) {
         <div style="display: flex; justify-content: space-between; color: ${remainingVal > 0 ? "#dc2626" : "#64748b"};"><span>Balance Remaining:</span><strong>₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
       </div>
 
-      <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+      <div style="margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-summary-open-voucher" data-order-id="${escapeHtml(
+          order.id
+        )}" style="padding: 10px 16px; cursor: pointer; border-radius: 8px; background: #2563eb; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; touch-action: manipulation;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+          Payment Voucher
+        </button>
+        <button type="button" class="btn-summary-open-quotation" data-order-id="${escapeHtml(
+          order.id
+        )}" style="padding: 10px 16px; cursor: pointer; border-radius: 8px; background: #0284c7; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; touch-action: manipulation;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg>
+          Official Quotation
+        </button>
         ${
           order.paymentStatus === "awaiting_counter_downpayment"
             ? `<button type="button" class="btn-summary-receive-counter-downpayment" data-order-id="${escapeHtml(
                 order.id
-              )}" style="padding: 10px 18px; cursor: pointer; border-radius: 8px; background: #059669; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-                💰 Receive Counter Downpayment
+              )}" style="padding: 10px 18px; cursor: pointer; border-radius: 8px; background: #059669; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; touch-action: manipulation;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                Receive Counter Downpayment
               </button>`
             : ""
         }
-        <button type="button" class="btn-close-modal btn-primary" style="padding: 10px 24px; cursor: pointer; border-radius: 8px; background: #0f172a; color: white; border: none; font-weight: 600;">Close Summary</button>
+        <button type="button" class="btn-close-modal btn-primary" style="padding: 10px 24px; cursor: pointer; border-radius: 8px; background: #0f172a; color: white; border: none; font-weight: 600; touch-action: manipulation;">Close Summary</button>
       </div>
     </div>
   `;
 
   document.body.appendChild(modal);
+
+  const sumVoucherBtn = modal.querySelector(".btn-summary-open-voucher");
+  if (sumVoucherBtn) {
+    sumVoucherBtn.addEventListener("click", () => {
+      modal.remove();
+      if (typeof openLanicaReceiptModal === "function") {
+        openLanicaReceiptModal(order.id, "voucher");
+      }
+    });
+  }
+
+  const sumQuotationBtn = modal.querySelector(".btn-summary-open-quotation");
+  if (sumQuotationBtn) {
+    sumQuotationBtn.addEventListener("click", () => {
+      modal.remove();
+      if (typeof openLanicaReceiptModal === "function") {
+        openLanicaReceiptModal(order.id, "quotation");
+      }
+    });
+  }
 
   const receiveBtn = modal.querySelector(".btn-summary-receive-counter-downpayment");
   if (receiveBtn) {
@@ -7306,9 +8528,7 @@ async function showOrderSummaryModal(orderId) {
   modal.querySelectorAll(".btn-close-modal").forEach((btn) => {
     btn.addEventListener("click", () => modal.remove());
   });
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) modal.remove();
-  });
+  // Backdrop click dismissal disabled to avoid accidental close on phone
 }
 
 async function handleReceiveCounterDownpayment(orderId) {
@@ -7321,11 +8541,11 @@ async function handleReceiveCounterDownpayment(orderId) {
 
   const confirmed = await showAdminConfirmModal({
     title: "Receive Counter Downpayment",
-    message: `Confirm receipt of 30% counter cash downpayment of <strong>₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> for Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br>The order status will immediately advance to <strong>Crafting / In Production</strong>.`,
+    message: `Confirm receipt of 30% counter cash downpayment of <strong>₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> for Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br>The order status will advance to <strong>Deposit Verified</strong>. You can then assign a staff artisan and proceed to In Production.`,
     confirmText: "Yes, Confirm Receipt",
     cancelText: "Cancel",
     confirmType: "success",
-    icon: "💰",
+    icon: "payment",
   });
   if (!confirmed) return;
 
@@ -7333,8 +8553,8 @@ async function handleReceiveCounterDownpayment(orderId) {
     await updateDoc(orderRef, {
       paymentStatus: "downpayment_paid",
       downpaymentPaid: downpaymentRequired,
-      orderStatus: "crafting",
-      status: "In Production",
+      orderStatus: "downpayment confirmed",
+      status: "downpayment confirmed",
       downpaymentPaidAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -7343,7 +8563,7 @@ async function handleReceiveCounterDownpayment(orderId) {
       action: "DOWNPAYMENT_RECEIVED",
       targetType: "order",
       targetId: orderId,
-      description: `Marked 30% Downpayment (₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) received via Counter Cash for Order #${orderId.slice(0, 8)}`,
+      description: `Marked 30% Downpayment (₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) received via Counter Cash for Order #${orderId.slice(0, 8)}. Status updated to Deposit Verified.`,
       diff: {
         before: {
           orderStatus: current.orderStatus || current.status || "slot_reserved",
@@ -7351,17 +8571,17 @@ async function handleReceiveCounterDownpayment(orderId) {
           downpaymentPaid: current.downpaymentPaid || 0,
         },
         after: {
-          orderStatus: "crafting",
+          orderStatus: "downpayment confirmed",
           paymentStatus: "downpayment_paid",
           downpaymentPaid: downpaymentRequired,
-          status: "In Production",
+          status: "downpayment confirmed",
         },
       },
       performedBy: currentUser,
     });
 
-    console.log(`Received counter downpayment for order ${orderId} -> crafting`);
-    showAdminToast(`Counter downpayment of ₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} recorded! Order moved to crafting.`, "success");
+    console.log(`Received counter downpayment for order ${orderId} -> downpayment confirmed (Deposit Verified)`);
+    showAdminToast(`Counter downpayment of ₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} recorded! Order status is now Deposit Verified.`, "success");
   } catch (e) {
     console.error("Counter downpayment confirmation error:", e);
     showAdminToast(e.message || "Could not record counter downpayment.", "error");
@@ -7531,7 +8751,7 @@ async function handleMarkBalanceSettled(orderId) {
     confirmText: "Confirm Settled",
     cancelText: "Cancel",
     confirmType: "success",
-    icon: "💵",
+    icon: "payment",
   });
   if (!confirmed) return;
 
@@ -7689,11 +8909,7 @@ document.addEventListener("click", async (e) => {
   try {
     btn.disabled = true;
     btn.textContent = "Updating...";
-    await updateDoc(doc(db, "orders", orderId), {
-      status: nextStatus,
-      orderStatus: nextStatus,
-      updatedAt: Timestamp.now(),
-    });
+    await handleOrderStatusChange(orderId, nextStatus);
     console.log(`Advanced order ${orderId} to ${nextStatus}`);
   } catch (err) {
     console.error("Failed to advance crafting stage:", err);
@@ -7751,7 +8967,7 @@ function showChatNotificationToast(messageText, session) {
     "background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-left: 4px solid #ef4444; transition: transform 0.2s, opacity 0.2s;";
   toast.innerHTML = `
     <div style="flex: 1; margin-right: 10px;">
-      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px;">💬 New Customer Message</div>
+      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px; display: flex; align-items: center; gap: 5px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> New Customer Message</div>
       <div style="color: #f3f4f6; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;">
         <strong>${escapeHtml(session?.customerName || "Customer")}:</strong> ${escapeHtml(messageText)}
       </div>
@@ -8212,8 +9428,8 @@ function setupAdminLiveChat() {
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
               ${
                 isSupport
-                  ? `<span style="font-size: 0.66rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Support</span>`
-                  : `<span style="font-size: 0.66rem; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">🧵 #${escapeHtml(s.orderId || s.id)}</span>`
+                  ? `<span style="font-size: 0.66rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; display: inline-flex; align-items: center; gap: 3px;"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Support</span>`
+                  : `<span style="font-size: 0.66rem; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; display: inline-flex; align-items: center; gap: 3px;"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>#${escapeHtml(s.orderId || s.id)}</span>`
               }
               <span style="font-size: 0.66rem; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 500;">
                 ${escapeHtml(s.status || (isSupport ? "Active" : "Placed"))}
@@ -8406,11 +9622,11 @@ function setupAdminLiveChat() {
 
     if (customerNameEl) {
       if (isSupport) {
-        customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">💬 LIVE SUPPORT</span>${escapeHtml(
+        customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>LIVE SUPPORT</span>${escapeHtml(
           session.customerName || "Customer"
         )}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       } else {
-        customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">🧵 ORDER #${escapeHtml(
+        customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>ORDER #${escapeHtml(
           session.orderId || session.id
         )}</span>${escapeHtml(session.customerName || "Customer")}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       }
@@ -8453,7 +9669,7 @@ function setupAdminLiveChat() {
         const loadMoreBtn = document.createElement("div");
         loadMoreBtn.className = "chat-load-earlier-btn";
         loadMoreBtn.style.cssText = "text-align: center; margin: 4px auto 12px auto; font-size: 0.78rem; color: #2563eb; cursor: pointer; padding: 6px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; font-weight: 600; width: fit-content; user-select: none; transition: all 0.15s ease;";
-        loadMoreBtn.innerHTML = `📜 Load earlier messages (${hiddenCount} hidden)`;
+        loadMoreBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>Load earlier messages (${hiddenCount} hidden)`;
         loadMoreBtn.addEventListener("click", () => {
           const oldScrollHeight = messagesEl.scrollHeight;
           adminChatVisibleLimit += 20;
@@ -8671,3 +9887,5 @@ window.addEventListener("hashchange", () => {
   const currentHash = (window.location.hash || "").replace("#", "").toLowerCase();
   showAdminSection(currentHash || "dashboard");
 });
+
+

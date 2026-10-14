@@ -107,10 +107,6 @@ export function renderPagination({
       Showing <strong>${startItem}–${endItem}</strong> of <strong>${totalItems}</strong> entries
     </div>
     <div class="pagination-controls">
-      <div class="pagination-per-page">
-        <label>Per page:</label>
-        <select class="pagination-select">${perPageOptionsHtml}</select>
-      </div>
       <div class="pagination-buttons">
         <button type="button" class="pagination-btn first-btn" ${currentPage <= 1 ? "disabled" : ""} title="First Page" aria-label="First Page">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>
@@ -126,7 +122,13 @@ export function renderPagination({
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
         </button>
       </div>
-      ${jumpHtml}
+      <div class="pagination-extras">
+        <div class="pagination-per-page">
+          <label>Per page:</label>
+          <select class="pagination-select">${perPageOptionsHtml}</select>
+        </div>
+        ${jumpHtml}
+      </div>
     </div>
   `;
 
@@ -207,13 +209,20 @@ export function showTableSkeleton(tableBodyEl, colCount = 5, rowCount = 5) {
 /**
  * Renders a standardized empty state row inside a table body.
  */
-export function renderTableEmptyState(tableBodyEl, colCount = 5, message = "No records found.", icon = "📦") {
+export function renderTableEmptyState(tableBodyEl, colCount = 5, message = "No records found.", icon = null) {
   if (!tableBodyEl) return;
+  const iconHtml = icon
+    ? (icon.startsWith("<svg") ? icon : `<span style="font-size: 2rem;">${icon}</span>`)
+    : `<svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+      </svg>`;
   tableBodyEl.innerHTML = `
     <tr>
       <td colspan="${colCount}" style="text-align: center; padding: 48px 24px; color: #64748b;">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-          <span style="font-size: 2rem;">${icon}</span>
+          ${iconHtml}
           <p style="margin: 0; font-size: 0.925rem; font-weight: 500; color: #475569;">${message}</p>
         </div>
       </td>

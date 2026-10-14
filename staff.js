@@ -553,7 +553,7 @@ const staffHeaderBlurb = document.getElementById("staff-header-blurb");
 const STAFF_HEADER_ORDERS_HTML = {
   title: "Staff Workshop & Order Updates",
   blurb:
-    'Crafting progression: <strong>Downpayment Confirmed → In Production → Quality Checked → Shipped → Delivered</strong>. Check item custom specs and customer consultations.',
+    'Crafting progression: <strong>Deposit Verified → In Production → Quality Checked → Shipped → Delivered</strong>. Check item custom specs and customer consultations.',
 };
 const STAFF_HEADER_CHATS_HTML = {
   title: "Customer Support & Consultations",
@@ -1062,7 +1062,7 @@ function normalizeOrderStatus(raw) {
   const s = String(raw).toLowerCase().trim();
   if (s === "slot reserved" || s === "slot_reserved") return "slot reserved";
   if (s === "pending") return "placed";
-  if (s === "accepted") return "downpayment confirmed";
+  if (s === "accepted" || s === "deposit confirmed" || s === "deposit verified" || s === "payment verified") return "downpayment confirmed";
   if (s === "processing" || s === "packed") return "in production";
   if (s === "declined") return "cancelled";
   if (s === "completed" || s === "received" || s === "arrived") return "delivered";
@@ -1171,14 +1171,14 @@ function renderOrders() {
     // Handle display for manual overrides vs automatic estimates
     let daysDisplay;
     if (deliveryEstimate.isManual || deliveryEstimate.daysRange === "Custom") {
-      daysDisplay = `<span style="color: #dc2626;">📅 Manual</span>`;
+      daysDisplay = `<span style="color: #dc2626; display: inline-flex; align-items: center; gap: 3px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>Manual</span>`;
     } else {
       daysDisplay = `(${deliveryEstimate.daysRange})`;
     }
 
     const deliveryDisplay =
       st === "delivered"
-        ? '<span style="color: #059669; font-size: 0.85rem;">✅ Delivered</span>'
+        ? '<span style="color: #059669; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Delivered</span>'
         : `<div style="font-size: 0.82rem;">
           <div style="color: #1f2937; font-weight: 500;">${deliveryEstimate.minDate}</div>
           <div style="color: #6b7280; font-size: 0.75rem;">to ${deliveryEstimate.maxDate}</div>
@@ -1210,7 +1210,7 @@ function renderOrders() {
 
     const addressObj = order.address || order.shippingAddress || order.deliveryAddress || {};
     const landmark = order.shippingAddress?.nearestLandmark || addressObj.nearestLandmark || order.nearestLandmark || addressObj.landmark || "";
-    const landmarkHtml = landmark ? `<div style="font-size:0.75rem; color:#d97706; font-weight:500; margin-top:2px;" title="Landmark: ${escapeHtml(landmark)}">📌 ${escapeHtml(landmark)}</div>` : "";
+    const landmarkHtml = landmark ? `<div style="font-size:0.75rem; color:#d97706; font-weight:500; margin-top:2px; display:flex; align-items:flex-start; gap:3px;" title="Landmark: ${escapeHtml(landmark)}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><span>${escapeHtml(landmark)}</span></div>` : "";
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -1225,8 +1225,8 @@ function renderOrders() {
       <td class="order-items-cell">${escapeHtml(formatOrderItemsSummary(order.items))}</td>
       <td>${totalStr}</td>
       <td>
-        <span class="order-status-badge order-status-${escapeHtml(st)}">${escapeHtml(
-          st.charAt(0).toUpperCase() + st.slice(1)
+        <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml(
+          st === "downpayment confirmed" ? "Deposit Verified" : (st.charAt(0).toUpperCase() + st.slice(1))
         )}</span>
       </td>
       <td>${deliveryDisplay}</td>
@@ -1239,8 +1239,10 @@ function renderOrders() {
                   <option value="">Select update</option>
                   ${updateOptions
                     .map(
-                      (opt) =>
-                        `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`
+                      (opt) => {
+                        const optLabel = opt === "downpayment confirmed" ? "Deposit Verified" : (opt.charAt(0).toUpperCase() + opt.slice(1));
+                        return `<option value="${opt}">${escapeHtml(optLabel)}</option>`;
+                      }
                     )
                     .join("")}
                 </select>`
@@ -3160,7 +3162,7 @@ function showStaffChatNotificationToast(messageText, session) {
     "background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-left: 4px solid #ef4444; transition: transform 0.2s, opacity 0.2s;";
   toast.innerHTML = `
     <div style="flex: 1; margin-right: 10px;">
-      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px;">💬 Customer Message</div>
+      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px; display: flex; align-items: center; gap: 5px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Customer Message</div>
       <div style="color: #f3f4f6; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;">
         <strong>${escapeHtml(session?.customerName || "Customer")}:</strong> ${escapeHtml(messageText)}
       </div>
@@ -3591,8 +3593,8 @@ function setupStaffLiveChat() {
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
               ${
                 isSupport
-                  ? `<span style="font-size: 0.66rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">💬 Support</span>`
-                  : `<span style="font-size: 0.66rem; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">🧵 #${escapeHtml(s.orderId || s.id)}</span>`
+                  ? `<span style="font-size: 0.66rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; display: inline-flex; align-items: center; gap: 3px;"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Support</span>`
+                  : `<span style="font-size: 0.66rem; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; display: inline-flex; align-items: center; gap: 3px;"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>#${escapeHtml(s.orderId || s.id)}</span>`
               }
               <span style="font-size: 0.66rem; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 500;">
                 ${escapeHtml(s.status || (isSupport ? "Live Support" : "Placed"))}
@@ -3754,11 +3756,11 @@ function setupStaffLiveChat() {
 
     if (customerNameEl) {
       if (isSupport) {
-        customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">💬 LIVE SUPPORT</span>${escapeHtml(
+        customerNameEl.innerHTML = `<span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>LIVE SUPPORT</span>${escapeHtml(
           session.customerName || "Customer"
         )}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       } else {
-        customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">🧵 ORDER #${escapeHtml(
+        customerNameEl.innerHTML = `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 6px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>ORDER #${escapeHtml(
           session.orderId || session.id
         )}</span>${escapeHtml(session.customerName || "Customer")}${session.isClosed ? ' <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">(Closed)</span>' : ""}`;
       }
@@ -3801,7 +3803,7 @@ function setupStaffLiveChat() {
         const loadMoreBtn = document.createElement("div");
         loadMoreBtn.className = "chat-load-earlier-btn";
         loadMoreBtn.style.cssText = "text-align: center; margin: 4px auto 12px auto; font-size: 0.78rem; color: #2563eb; cursor: pointer; padding: 6px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; font-weight: 600; width: fit-content; user-select: none; transition: all 0.15s ease;";
-        loadMoreBtn.innerHTML = `📜 Load earlier messages (${hiddenCount} hidden)`;
+        loadMoreBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>Load earlier messages (${hiddenCount} hidden)`;
         loadMoreBtn.addEventListener("click", () => {
           const oldScrollHeight = messagesEl.scrollHeight;
           staffChatVisibleLimit += 20;

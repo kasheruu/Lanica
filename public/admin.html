@@ -22,8 +22,8 @@
     }
   </script>
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <!-- Include Firebase Web SDK -->
   <script type="module" src="admin.js" defer></script>
   <link rel="stylesheet" href="admin.css" />
@@ -39,16 +39,16 @@
     </div>
     <nav class="sidebar-nav">
       <a href="#" class="nav-item active" id="nav-dashboard" data-section="dashboard">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"></rect>
-          <rect x="14" y="3" width="7" height="7"></rect>
-          <rect x="14" y="14" width="7" height="7"></rect>
-          <rect x="3" y="14" width="7" height="7"></rect>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="7" height="9" x="3" y="3" rx="1.5"></rect>
+          <rect width="7" height="5" x="14" y="3" rx="1.5"></rect>
+          <rect width="7" height="9" x="14" y="12" rx="1.5"></rect>
+          <rect width="7" height="5" x="3" y="16" rx="1.5"></rect>
         </svg>
         Dashboard
       </a>
       <a href="#" class="nav-item" id="nav-inventory" data-section="inventory">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
           <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
           <line x1="12" y1="22.08" x2="12" y2="12"></line>
@@ -56,69 +56,70 @@
         Inventory
       </a>
       <a href="#" class="nav-item" id="nav-analytics" data-section="analytics">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="20" x2="18" y2="10"></line>
-          <line x1="12" y1="20" x2="12" y2="4"></line>
-          <line x1="6" y1="20" x2="6" y2="14"></line>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 20V14"></path>
+          <path d="M12 20V4"></path>
+          <path d="M18 20V10"></path>
         </svg>
         Analytics
       </a>
       <a href="#" class="nav-item" id="nav-workshop" data-section="workshop">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
         </svg>
         Workshop Queue
       </a>
       <a href="#" class="nav-item" id="nav-chats" data-section="chats" style="position: relative;">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>
         <span>Live Chat</span>
         <span id="nav-chat-unread-badge" style="display: none; margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">0</span>
       </a>
       <a href="#" class="nav-item" id="nav-orders" data-section="orders">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <path d="M16 10a4 4 0 0 1-8 0"></path>
         </svg>
         Orders
       </a>
       <a href="#" class="nav-item" id="nav-transactions" data-section="transactions">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-          <line x1="1" y1="10" x2="23" y2="10"></line>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <line x1="2" y1="10" x2="22" y2="10"></line>
         </svg>
         Transactions
       </a>
       <a href="#" class="nav-item" id="nav-users" data-section="users">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
           <circle cx="9" cy="7" r="4"></circle>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
           <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
         </svg>
         Users
       </a>
       <a href="#" class="nav-item" id="nav-audit-logs" data-section="audit-logs">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-          <polyline points="10 9 9 9 8 9"></polyline>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 6h4"></path>
+          <path d="M2 10h4"></path>
+          <path d="M2 14h4"></path>
+          <path d="M2 18h4"></path>
+          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+          <path d="M16 2v20"></path>
         </svg>
         Audit Logs
       </a>
       <a href="index.html" class="nav-item">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
           <polyline points="9 22 9 12 15 12 15 22"></polyline>
         </svg>
         Back to Site
       </a>
       <a href="#" class="nav-item" id="logout-btn" style="margin-top: auto">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
           <polyline points="16 17 21 12 16 7"></polyline>
           <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -148,20 +149,25 @@
         </div>
         <div class="dashboard-quick-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
           <button id="dash-action-add-product" class="btn-primary" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
-            <span>+</span> Add New Product
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+            Add New Product
           </button>
-          <button id="dash-action-view-orders" class="btn-secondary" type="button">
-            📦 Orders Hub
+          <button id="dash-action-view-orders" class="btn-secondary" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+            Orders Hub
           </button>
-          <button id="dash-action-workshop" class="btn-secondary" type="button">
-            🔨 Workshop Queue
+          <button id="dash-action-workshop" class="btn-secondary" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+            Workshop Queue
           </button>
-          <button id="dash-action-chats" class="btn-secondary" type="button" style="position: relative;">
-            💬 Live Chat
+          <button id="dash-action-chats" class="btn-secondary" type="button" style="display: inline-flex; align-items: center; gap: 6px; position: relative;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Live Chat
             <span id="dash-chat-badge" style="display: none; background: #ef4444; color: #fff; font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 9999px; margin-left: 4px;">0</span>
           </button>
-          <button id="dash-action-export-csv" class="btn-secondary" type="button" title="Export product inventory to CSV">
-            📥 Export CSV
+          <button id="dash-action-export-csv" class="btn-secondary" type="button" title="Export product inventory to CSV" style="display: inline-flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export CSV
           </button>
         </div>
       </header>
@@ -251,7 +257,8 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
           <div>
             <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-              <span>🔨</span> Made-to-Order Production Lifecycle Pipeline
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+              Made-to-Order Production Lifecycle Pipeline
             </h3>
             <span style="font-size: 0.78rem; color: #64748b;">Click any stage below to jump to orders filtered by stage</span>
           </div>
@@ -303,13 +310,16 @@
               <span style="font-size: 0.82rem; color: #64748b;">Live customer orders, stage tracking &amp; instant voucher generation</span>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
-              <input type="text" id="dash-orders-search-input" placeholder="🔍 Search recent orders..." style="padding: 6px 12px; font-size: 0.82rem; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; width: 200px;" />
+              <div style="position: relative; display: flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                <input type="text" id="dash-orders-search-input" placeholder="Search recent orders..." style="padding: 6px 12px 6px 30px; font-size: 0.82rem; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; width: 200px;" />
+              </div>
               <a href="#" id="dash-link-all-orders" style="font-size: 0.86rem; font-weight: 600; color: #d97706; text-decoration: none; white-space: nowrap;">
                 View All Orders &rarr;
               </a>
             </div>
           </div>
-          <table class="inventory-table orders-table">
+          <table class="orders-table dashboard-orders-table">
             <thead>
               <tr>
                 <th>Order ID</th>
@@ -337,7 +347,8 @@
           <div class="dash-widget-card" style="background: #ffffff; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                <span>💬</span> Customer Live Chat
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                Customer Live Chat
               </h4>
               <span id="dash-widget-chat-count" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #eff6ff; color: #2563eb;">0 Active</span>
             </div>
@@ -353,7 +364,8 @@
           <div class="dash-widget-card" style="background: #ffffff; border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                <span>⚠️</span> Stock Attention Watchlist
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                Stock Attention Watchlist
               </h4>
               <span id="dash-widget-lowstock-badge" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: #fef2f2; color: #dc2626;">0 Items</span>
             </div>
@@ -370,7 +382,7 @@
           <!-- Widget 3: Official Document & Voucher Generator Shortcut -->
           <div class="dash-widget-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; border-radius: 14px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <span style="font-size: 1.2rem;">📑</span>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
               <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #ffffff;">Financial Voucher Generator</h4>
             </div>
             <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 14px; line-height: 1.4;">
@@ -436,14 +448,13 @@
               <th>Material</th>
               <th>Stock</th>
               <th>Status</th>
-              <th>Date Added</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="inventory-list">
             <!-- Products will be dynamically loaded here from Firebase -->
             <tr>
-              <td colspan="8" style="text-align: center; padding: 20px">Loading inventory...</td>
+              <td colspan="7" style="text-align: center; padding: 20px">Loading inventory...</td>
             </tr>
           </tbody>
         </table>
@@ -760,6 +771,70 @@
             </div>
           </div>
 
+          <!-- Product Available Colors / Fabric Shades (Tags / Custom Input) -->
+          <div class="form-group" style="margin-top: 14px;">
+            <label for="product-color-input" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 600;">Available Colors / Fabric Shades (Tags)</span>
+              <span style="font-size: 0.75rem; color: #6b7280; font-weight: normal;">Type color &amp; press Enter or click Add</span>
+            </label>
+            <div class="material-tags-container" id="color-tags-container">
+              <div class="material-tags-list" id="color-tags-list"></div>
+              <div class="material-tags-input-row">
+                <input type="text" id="product-color-input" placeholder="e.g. Gamusa Bailey Mustang, Emerald Green, Charcoal Grey..." />
+                <button type="button" id="btn-add-color-tag" class="btn-tag-add">Add</button>
+              </div>
+            </div>
+            <input type="hidden" id="product-color" />
+            <div class="material-suggestions" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.75rem; color: #4b5563; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
+                  Recent Quick Add Colors:
+                </span>
+                <button type="button" id="btn-reset-quick-add-colors" style="background: none; border: none; color: #6b7280; font-size: 0.72rem; cursor: pointer; text-decoration: underline;" title="Reset default color suggestions">
+                  Reset defaults
+                </button>
+              </div>
+              <div id="quick-add-colors-list" class="quick-add-chips-container" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <!-- Populated dynamically with quick add chips -->
+              </div>
+            </div>
+            <div style="font-size: 0.74rem; color: #64748b; margin-top: 5px;">
+              Customers can pick from these colors in the storefront when viewing the product.
+            </div>
+          </div>
+
+          <!-- Product Freebies & Inclusions (Tags / Custom Input) -->
+          <div class="form-group" style="margin-top: 14px;">
+            <label for="product-freebie-input" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 600;">Standard Inclusions &amp; Freebies (Tags)</span>
+              <span style="font-size: 0.75rem; color: #6b7280; font-weight: normal;">Type freebie &amp; press Enter or click Add</span>
+            </label>
+            <div class="material-tags-container" id="freebie-tags-container">
+              <div class="material-tags-list" id="freebie-tags-list"></div>
+              <div class="material-tags-input-row">
+                <input type="text" id="product-freebie-input" placeholder="e.g. 5 Pillows, Footstool (Class A Foam), Wood Footings..." />
+                <button type="button" id="btn-add-freebie-tag" class="btn-tag-add">Add</button>
+              </div>
+            </div>
+            <input type="hidden" id="product-freebies" />
+            <div class="material-suggestions" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.75rem; color: #4b5563; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
+                  Recent Quick Add Freebies:
+                </span>
+                <button type="button" id="btn-reset-quick-add-freebies" style="background: none; border: none; color: #6b7280; font-size: 0.72rem; cursor: pointer; text-decoration: underline;" title="Reset default freebie suggestions">
+                  Reset defaults
+                </button>
+              </div>
+              <div id="quick-add-freebies-list" class="quick-add-chips-container" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <!-- Populated dynamically with quick add chips -->
+              </div>
+            </div>
+            <div style="font-size: 0.74rem; color: #64748b; margin-top: 5px;">
+              These freebies will automatically appear when clicked by customers and printed on the Official Quotation.
+            </div>
+          </div>
+
           <!-- Product Configuration / Layout Type -->
           <div class="form-group" style="margin-top: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -970,7 +1045,7 @@
     <div id="refund-modal" class="modal-overlay">
       <div class="modal-content" style="max-width: 620px;">
         <div class="modal-header" style="border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 16px;">
-          <h2 style="margin:0; font-size:1.2rem; color:#111827;">💸 Review & Approve Refund Request</h2>
+          <h2 style="margin:0; font-size:1.2rem; color:#111827; display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>Review &amp; Approve Refund Request</h2>
           <button id="close-refund-modal-btn" class="btn-close modal-close-btn" type="button" aria-label="Close Refund Modal">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1157,9 +1232,9 @@
           <!-- Dedicated Search Bar for Live Chat Conversations -->
           <div class="admin-chat-search-bar">
             <div style="position: relative; display: flex; align-items: center;">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 10px; pointer-events: none;">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; pointer-events: none;">
                 <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <path d="m21 21-4.3-4.3"></path>
               </svg>
               <input
                 type="text"
@@ -1179,9 +1254,15 @@
           </div>
           <div class="admin-chat-filters-bar">
             <button type="button" id="admin-chat-filter-all" class="chat-filter-btn active">All</button>
-            <button type="button" id="admin-chat-filter-unread" class="chat-filter-btn">🔴 Unread (<span id="admin-chat-unread-filter-badge">0</span>)</button>
-            <button type="button" id="admin-chat-filter-support" class="chat-filter-btn">💬 Support</button>
-            <button type="button" id="admin-chat-filter-orders" class="chat-filter-btn">🧵 Orders</button>
+            <button type="button" id="admin-chat-filter-unread" class="chat-filter-btn"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444; margin-right:4px;"></span>Unread (<span id="admin-chat-unread-filter-badge">0</span>)</button>
+            <button type="button" id="admin-chat-filter-support" class="chat-filter-btn" style="display: inline-flex; align-items: center; gap: 4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              Support
+            </button>
+            <button type="button" id="admin-chat-filter-orders" class="chat-filter-btn" style="display: inline-flex; align-items: center; gap: 4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+              Orders
+            </button>
             <button type="button" id="admin-chat-filter-closed" class="chat-filter-btn">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Archived
             </button>
@@ -1230,8 +1311,10 @@
                     <span class="messenger-item-icon">
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 6h18"></path>
-                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
                       </svg>
                     </span>
                     <span>Delete Conversation</span>
@@ -1266,8 +1349,8 @@
           <!-- Reply Input Bar -->
           <form id="admin-chat-form">
             <input type="file" id="admin-chat-file-input" accept="image/*" style="display: none;" />
-            <button type="button" id="admin-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 9px 12px; border-radius: 8px; cursor: pointer;" title="Attach photo or swatch">
-              📎
+            <button type="button" id="admin-chat-attach-btn" style="background: #f3f4f6; border: 1px solid #d1d5db; padding: 9px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Attach photo or swatch">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #4b5563;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
             </button>
             <input type="text" id="admin-chat-input" placeholder="Select a conversation to reply..." disabled style="flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; background: #f8fafc;" />
             <button type="submit" id="admin-chat-submit-btn" class="btn-primary" disabled style="padding: 10px 18px; border-radius: 8px; white-space: nowrap; opacity: 0.6; cursor: not-allowed;">
@@ -1314,9 +1397,9 @@
         <div class="orders-toolbar-inner users-toolbar-inner" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
           <!-- Dedicated Real-time Search Input Bar for Admin Orders -->
           <div class="admin-orders-search-box" style="position: relative; flex: 1; min-width: 260px; max-width: 360px; display: flex; align-items: center;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 12px; pointer-events: none;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; pointer-events: none;">
               <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              <path d="m21 21-4.3-4.3"></path>
             </svg>
             <input
               type="text"
@@ -1336,13 +1419,14 @@
           <label for="orders-status-filter" class="orders-filter-label">Filter</label>
           <select id="orders-status-filter" class="orders-filter-select">
             <option value="all">All statuses</option>
-            <option value="refund_requested" style="font-weight: bold; color: #dc2626;">💸 Refund Requests Queue</option>
+            <option value="refund_requested" style="font-weight: bold; color: #dc2626;">Refund Requests Queue</option>
             <option value="placed">Step 0: PLACED (Awaiting Deposit)</option>
             <option value="downpayment confirmed">Step 1: CONFIRMED (Deposit Verified)</option>
             <option value="in production">Step 2: CRAFTING (In Production)</option>
             <option value="quality checked">Step 3: INSPECTED (QC Passed)</option>
             <option value="shipped">Step 4: DISPATCHED (Out for Delivery)</option>
             <option value="delivered">Step 5: DELIVERED</option>
+            <option value="completed" style="font-weight: bold; color: #059669;">Step 6: COMPLETED (Customer Received)</option>
             <option value="refunded">Refunded</option>
             <option value="cancelled">Cancelled</option>
           </select>
@@ -1443,10 +1527,16 @@
         <div class="orders-tabs-wrapper">
           <div id="user-management-tabs" class="orders-tabs">
             <button type="button" class="tab-btn active" id="tab-user-customers" data-user-tab="customers">
-              <span>👤 Customer Accounts</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                Customer Accounts
+              </span>
             </button>
             <button type="button" class="tab-btn" id="tab-user-staff" data-user-tab="staff">
-              <span>🛡️ Admin & Staff Accounts</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                Admin &amp; Staff Accounts
+              </span>
             </button>
           </div>
         </div>
@@ -1455,9 +1545,9 @@
       <div class="table-container orders-toolbar">
         <div class="orders-toolbar-inner" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 240px; max-width: 340px; position: relative; display: flex; align-items: center;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 10px; pointer-events: none;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; pointer-events: none;">
               <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              <path d="m21 21-4.3-4.3"></path>
             </svg>
             <input type="text" id="users-search-input" placeholder="Search user name, email, or UID..." style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit;" autocomplete="off" />
           </div>
@@ -1533,9 +1623,9 @@
           <div style="display: flex; flex-wrap: wrap; gap: 12px; flex: 1; min-width: 280px;">
             <!-- Real-Time Search -->
             <div style="position: relative; flex: 1; min-width: 240px;">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
                 <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <path d="m21 21-4.3-4.3"></path>
               </svg>
               <input
                 type="text"
@@ -1555,15 +1645,15 @@
             <!-- Payment Gateway Filter -->
             <select id="admin-trans-method-filter" style="padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.86rem; background: #fff; cursor: pointer;">
               <option value="all">All Gateways / Methods</option>
-              <option value="qr">📱 QR Ph (PayMongo)</option>
-              <option value="cash">🏢 Cash (Counter)</option>
-              <option value="bpi">🏦 BPI / Bank Transfer</option>
+              <option value="qr">QR Ph (PayMongo)</option>
+              <option value="cash">Cash (Counter)</option>
             </select>
           </div>
 
           <div style="display: flex; gap: 8px;">
             <button type="button" id="btn-refresh-transactions" class="btn-secondary" style="padding: 8px 14px; font-size: 0.84rem; border-radius: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff;">
-              🔄 Refresh Ledger
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>
+              <span>Refresh Ledger</span>
             </button>
           </div>
         </div>
@@ -1613,9 +1703,9 @@
           <div style="display: flex; flex-wrap: wrap; gap: 12px; flex: 1; min-width: 280px;">
             <!-- Real-Time Search -->
             <div style="position: relative; flex: 1; min-width: 220px;">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
                 <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <path d="m21 21-4.3-4.3"></path>
               </svg>
               <input
                 type="text"
@@ -1650,7 +1740,8 @@
 
           <div style="display: flex; gap: 8px;">
             <button type="button" id="btn-refresh-audit-logs" class="btn-secondary" style="padding: 8px 14px; font-size: 0.84rem; border-radius: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff;">
-              🔄 Refresh Logs
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>
+              <span>Refresh Logs</span>
             </button>
           </div>
         </div>
@@ -1731,34 +1822,136 @@
   </div>
 
   <!-- Lanica Official Business Document Modal (Payment Request Voucher & Official Quotation) -->
-  <div id="lanica-receipt-modal" class="user-modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 10000; overflow-y: auto; padding: 20px;">
-    <div class="user-modal-card" style="max-width: 900px; width: 100%; max-height: 94vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #ffffff;">
+  <div id="lanica-receipt-modal" class="user-modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 10000; overflow-y: auto; padding: 12px;">
+    <div class="user-modal-card lanica-doc-modal-card" style="max-width: 920px; width: 100%; max-height: 96vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); background: #ffffff;">
       <!-- Top Modal Toolbar (Hidden when printing) -->
-      <div class="modal-no-print" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #0f172a; color: #fff; border-bottom: 1px solid #1e293b;">
-        <div style="display: flex; align-items: center; gap: 14px;">
-          <span style="font-weight: 700; font-size: 1.05rem; letter-spacing: 0.02em;">Official Lanica Financial Document</span>
-          <div style="display: inline-flex; background: #1e293b; border-radius: 8px; padding: 3px; gap: 4px;">
-            <button type="button" id="tab-btn-voucher" class="receipt-tab-btn active" style="padding: 6px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #2563eb; color: #fff;">
-              📑 Payment Voucher
-            </button>
-            <button type="button" id="tab-btn-quotation" class="receipt-tab-btn" style="padding: 6px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: transparent; color: #94a3b8;">
-              📋 Official Quotation
-            </button>
+      <div class="modal-no-print lanica-doc-toolbar" style="background: #0f172a; color: #fff; border-bottom: 1px solid #1e293b; padding: 12px 18px;">
+        <!-- Header row with title and prominent close button -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+            <span style="font-weight: 700; font-size: 0.98rem; letter-spacing: 0.02em; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Official Lanica Financial Document</span>
           </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <button type="button" id="btn-print-lanica-doc" style="display: flex; align-items: center; gap: 6px; background: #059669; color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
-            🖨️ Print / Save PDF
-          </button>
-          <button type="button" id="btn-close-lanica-modal" style="background: transparent; border: none; color: #94a3b8; font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 4px 8px;">
+          <button type="button" id="btn-close-lanica-modal" aria-label="Close modal" title="Close document preview" style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; min-width: 42px; min-height: 42px; width: 42px; height: 42px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; line-height: 1; cursor: pointer; transition: all 0.15s ease; touch-action: manipulation; flex-shrink: 0;">
             &times;
           </button>
+        </div>
+
+        <!-- Toolbar row: Tab switcher, branch switcher & print button -->
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+          <!-- Document Switcher Tabs -->
+          <div style="display: inline-flex; background: #1e293b; border-radius: 8px; padding: 3px; gap: 4px;">
+            <button type="button" id="tab-btn-voucher" class="receipt-tab-btn active" style="padding: 7px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #2563eb; color: #fff; touch-action: manipulation; display: inline-flex; align-items: center; gap: 5px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+              Payment Voucher
+            </button>
+            <button type="button" id="tab-btn-quotation" class="receipt-tab-btn" style="padding: 7px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: transparent; color: #94a3b8; touch-action: manipulation; display: inline-flex; align-items: center; gap: 5px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M12 2v4"></path><path d="M16 2v4"></path><rect width="16" height="18" x="4" y="4" rx="2"></rect><path d="M8 10h6"></path><path d="M8 14h8"></path><path d="M8 18h5"></path></svg>
+              Official Quotation
+            </button>
+          </div>
+
+          <!-- Branch Switcher & Print Action -->
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <!-- Branch Selector -->
+            <div style="display: inline-flex; align-items: center; background: #1e293b; border-radius: 8px; padding: 3px 6px; gap: 4px;">
+              <span style="font-size: 0.74rem; font-weight: 700; color: #94a3b8; padding-left: 4px;">Branch:</span>
+              <button type="button" id="btn-branch-calamba" class="receipt-branch-btn active" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #2563eb; color: #ffffff; touch-action: manipulation;">
+                Calamba
+              </button>
+              <button type="button" id="btn-branch-pila" class="receipt-branch-btn" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: transparent; color: #94a3b8; touch-action: manipulation;">
+                Pila
+              </button>
+            </div>
+
+            <!-- Print / PDF Button -->
+            <button type="button" id="btn-print-lanica-doc" style="display: inline-flex; align-items: center; gap: 6px; background: #059669; color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer; touch-action: manipulation;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14"></rect></svg>
+              Print / Save PDF
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Printable Document Container (Scrollable on screen, 100% visible on print) -->
-      <div id="lanica-printable-area" style="overflow-y: auto; padding: 36px 42px; background: #ffffff; color: #000; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+      <div id="lanica-printable-area" style="overflow-y: auto; overflow-x: auto; padding: 28px 36px; background: #ffffff; color: #000; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <!-- Injected dynamic voucher or quotation HTML -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Lanica Signatory E-Sign & Upload Signature Modal -->
+  <div id="lanica-esign-modal" class="user-modal-backdrop modal-no-print" style="display: none; align-items: center; justify-content: center; z-index: 10002; padding: 16px;">
+    <div class="user-modal-card" style="max-width: 460px; width: 100%; border-radius: 16px; background: #ffffff; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); overflow: hidden; display: flex; flex-direction: column;">
+      <!-- Header -->
+      <div style="background: #0f172a; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="font-weight: 700; font-size: 0.96rem; display: flex; align-items: center; gap: 8px;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          <span id="esign-modal-title">Attach Signatory E-Signature</span>
+        </div>
+        <button type="button" id="btn-close-esign-modal" aria-label="Close" style="background: rgba(255, 255, 255, 0.15); border: none; color: #fff; width: 32px; height: 32px; border-radius: 8px; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;">&times;</button>
+      </div>
+
+      <!-- Mode Switcher Tabs -->
+      <div style="display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 6px 12px; gap: 8px;">
+        <button type="button" id="tab-esign-draw" style="flex: 1; padding: 8px; border-radius: 6px; border: none; font-weight: 600; font-size: 0.82rem; cursor: pointer; background: #2563eb; color: #ffffff; touch-action: manipulation; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Draw Signature
+        </button>
+        <button type="button" id="tab-esign-upload" style="flex: 1; padding: 8px; border-radius: 6px; border: none; font-weight: 600; font-size: 0.82rem; cursor: pointer; background: transparent; color: #64748b; touch-action: manipulation; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          Upload Image
+        </button>
+      </div>
+
+      <!-- Body Content -->
+      <div style="padding: 16px 20px;">
+        <!-- Draw Panel -->
+        <div id="panel-esign-draw">
+          <div style="font-size: 0.78rem; color: #64748b; margin-bottom: 8px;">
+            Sign inside the box with your finger, stylus, or mouse:
+          </div>
+          <div style="border: 2px dashed #cbd5e1; border-radius: 10px; background: #ffffff; position: relative; touch-action: none; overflow: hidden; height: 160px;">
+            <canvas id="lanica-esign-canvas" width="420" height="160" style="width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none;"></canvas>
+            <div id="esign-placeholder-text" style="position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.82rem; font-style: italic;">
+              Sign here with finger / mouse...
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+            <button type="button" id="btn-clear-esign-canvas" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.76rem; font-weight: 600; color: #475569; padding: 4px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+              Clear
+            </button>
+            <span style="font-size: 0.72rem; color: #94a3b8;">Solid Black Pen</span>
+          </div>
+        </div>
+
+        <!-- Upload Panel -->
+        <div id="panel-esign-upload" style="display: none;">
+          <div style="font-size: 0.78rem; color: #64748b; margin-bottom: 8px;">
+            Select an image of your signature (PNG or JPG):
+          </div>
+          <label style="border: 2px dashed #93c5fd; border-radius: 10px; background: #f0f7ff; padding: 22px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; text-align: center;">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 6px;"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>
+            <span style="font-size: 0.82rem; font-weight: 600; color: #1d4ed8;">Choose signature image file</span>
+            <span style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Transparent PNG or clear background</span>
+            <input type="file" id="input-esign-file" accept="image/*" style="display: none;" />
+          </label>
+          <div id="esign-upload-preview-container" style="display: none; margin-top: 10px; text-align: center; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px;">
+            <img id="esign-upload-preview" src="" alt="Signature Preview" style="max-height: 80px; max-width: 100%; object-fit: contain; margin: 0 auto; display: block;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Buttons -->
+      <div style="padding: 12px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" id="btn-cancel-esign" style="padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; color: #475569; font-weight: 600; font-size: 0.82rem; cursor: pointer;">
+          Cancel
+        </button>
+        <button type="button" id="btn-apply-esign" style="padding: 8px 20px; border: none; border-radius: 8px; background: #2563eb; color: #ffffff; font-weight: 600; font-size: 0.82rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Apply Signature
+        </button>
       </div>
     </div>
   </div>

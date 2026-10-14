@@ -57,8 +57,9 @@ export function createChatPaginationController({
         hasMoreOlder = false;
         if (!initialLoaded) {
           chatContainerEl.innerHTML = `
-            <div style="text-align: center; padding: 32px 16px; color: #94a3b8; font-size: 0.85rem;">
-              No messages yet. Send a message to start the conversation! 💬
+            <div style="text-align: center; padding: 32px 16px; color: #94a3b8; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.6;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span>No messages yet. Send a message to start the conversation!</span>
             </div>
           `;
           initialLoaded = true;

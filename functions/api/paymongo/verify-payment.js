@@ -107,7 +107,7 @@ export async function onRequestPost(context) {
               paymentIntentId: { stringValue: paymentIntentId },
               downpaymentPaidAt: { timestampValue: new Date().toISOString() },
               orderStatus: { stringValue: "downpayment confirmed" },
-              status: { stringValue: "Downpayment Confirmed" },
+              status: { stringValue: "Deposit Verified" },
             },
           }),
         });

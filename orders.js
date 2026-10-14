@@ -25,6 +25,7 @@ import {
   getTrackingStepIndex,
   calculateEstimatedDelivery,
   formatOrderDate,
+  completeCustomerOrder,
 } from "./orderService.js";
 
 import { ensureAuth, subscribeToCart, parsePrice, updateCartItemQuantity, removeCartItem, renderCartDrawerComponent } from "./cartService.js";
@@ -367,6 +368,7 @@ function updateTabBadges(orders) {
     inProduction: 0,
     shipped: 0,
     delivered: 0,
+    completed: 0,
     cancelled: 0,
   };
 
@@ -377,9 +379,11 @@ function updateTabBadges(orders) {
 
     if (st === "Cancelled" || rawSt === "cancelled" || rawSt === "canceled" || rawOrdSt === "cancelled" || rawOrdSt === "canceled") {
       counts.cancelled++;
+    } else if (st === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || o.orderReceived === true) {
+      counts.completed++;
     } else if (st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") {
       counts.delivered++;
-    } else if (st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed") {
+    } else if (st === "Placed" || st === "Slot Reserved" || st === "Deposit Verified" || st === "Downpayment Confirmed") {
       counts.placed++;
     } else if (st === "In Production" || st === "Quality Checked") {
       counts.inProduction++;
@@ -393,6 +397,7 @@ function updateTabBadges(orders) {
   if (document.getElementById("badge-in-production")) document.getElementById("badge-in-production").textContent = counts.inProduction;
   if (document.getElementById("badge-shipped")) document.getElementById("badge-shipped").textContent = counts.shipped;
   if (document.getElementById("badge-delivered")) document.getElementById("badge-delivered").textContent = counts.delivered;
+  if (document.getElementById("badge-completed")) document.getElementById("badge-completed").textContent = counts.completed;
   if (document.getElementById("badge-cancelled")) document.getElementById("badge-cancelled").textContent = counts.cancelled;
 }
 
@@ -529,10 +534,10 @@ function renderCustomerTransactionsList(orders) {
     const payStatus = isPaidDownpayment
       ? (isDownpayment ? "Downpayment Paid (PayMongo)" : "Paid in Full")
       : isWalkInPending
-        ? "⏳ Counter Downpayment Pending"
+        ? "Counter Downpayment Pending"
         : (isDownpayment ? "Downpayment Pending" : "Payment Pending");
     const pMethod = order.paymentMethod === "walk_in_cash"
-      ? "🏢 Walk-in Workshop Cash"
+      ? "Walk-in Workshop Cash"
       : (order.paymentMethod || "QR Ph (PayMongo)");
     const refNum = order.orderId || order.id || "N/A";
     const dateStr = formatOrderDate(order.createdAt || order.timestamp);
@@ -572,8 +577,26 @@ function renderCustomerTransactionsList(orders) {
           <strong style="font-size: 1rem; color: ${remainingVal > 0 ? '#dc2626' : '#64748b'};">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
         </div>
       </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9;">
+        <button type="button" class="btn-download-receipt btn-trans-receipt" data-order-id="${escapeHtml(refNum)}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; background: #0284c7; color: #ffffff; font-weight: 700; font-size: 0.8rem; border: none; cursor: pointer; transition: all 0.2s;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          <span>DOWNLOAD OFFICIAL RECEIPT</span>
+        </button>
+      </div>
     `;
     container.appendChild(card);
+  });
+
+  // Bind transaction receipt buttons
+  container.querySelectorAll(".btn-trans-receipt").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetRef = btn.getAttribute("data-order-id");
+      const matchedOrder = (historyOrders || []).find((o) => (o.orderId || o.id) === targetRef);
+      if (matchedOrder) {
+        openLanicaCustomerReceiptModal(matchedOrder);
+      }
+    });
   });
 
   renderPagination({
@@ -674,11 +697,13 @@ function filterOrdersByTab(orders, tabStatus) {
     const st = getOrderCanonicalStatus(o);
     const rawSt = String(o.status || "").toLowerCase();
     const rawOrdSt = String(o.orderStatus || "").toLowerCase();
+    const isCompleted = st === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || o.orderReceived === true;
 
-    if (tabStatus === "placed") return st === "Placed" || st === "Slot Reserved" || st === "Downpayment Confirmed";
+    if (tabStatus === "placed") return st === "Placed" || st === "Slot Reserved" || st === "Deposit Verified" || st === "Downpayment Confirmed";
     if (tabStatus === "in-production") return st === "In Production" || st === "Quality Checked";
     if (tabStatus === "shipped") return st === "Shipped";
-    if (tabStatus === "delivered") return st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered";
+    if (tabStatus === "delivered") return (st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
+    if (tabStatus === "completed") return isCompleted;
     if (tabStatus === "cancelled") return st === "Cancelled" || rawSt === "cancelled" || rawSt === "canceled" || rawOrdSt === "cancelled" || rawOrdSt === "canceled";
     return true;
   });
@@ -810,6 +835,8 @@ function getTabDisplayName(statusKey) {
       return "Shipped";
     case "delivered":
       return "Delivered";
+    case "completed":
+      return "Completed";
     case "cancelled":
       return "Cancelled";
     case "all":
@@ -896,7 +923,7 @@ function createOrderCardElement(order) {
       heroSubtitle = isReserved
         ? "Crafting slot reserved! Please settle 30% downpayment at our workshop counter within 48 hours to start crafting."
         : "Order placed! Our workshop team is reviewing your custom order details.";
-    } else if (normStatus === "Downpayment Confirmed") {
+    } else if (normStatus === "Deposit Verified" || normStatus === "Downpayment Confirmed") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>`;
       heroSubtitle = "30% Downpayment verified! Timber and materials are allocated for production.";
     } else if (normStatus === "In Production") {
@@ -910,7 +937,10 @@ function createOrderCardElement(order) {
       heroSubtitle = "Your piece is carefully padded and on the delivery truck.";
     } else if (normStatus === "Delivered") {
       heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
-      heroSubtitle = "Your handcrafted Lanica furniture has arrived safely!";
+      heroSubtitle = "Your handcrafted Lanica furniture has arrived safely! Please inspect and tap Order Received below.";
+    } else if (normStatus === "Completed") {
+      heroIconSVG = `<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+      heroSubtitle = "Order completed! Handcrafted furniture received by customer. Enjoy your furniture!";
     }
 
     // Rider Card
@@ -951,7 +981,7 @@ function createOrderCardElement(order) {
         </div>
         <div>
           <div class="est-delivery-label">Estimated Delivery / Lead Time</div>
-          <div class="est-delivery-date">📅 ${estDeliveryText}</div>
+          <div class="est-delivery-date" style="display:flex; align-items:center; gap:4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>${estDeliveryText}</span></div>
         </div>
       </div>
     `;
@@ -964,7 +994,7 @@ function createOrderCardElement(order) {
         icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`,
       },
       {
-        key: "Downpayment Confirmed",
+        key: "Deposit Verified",
         label: "DEPOSIT",
         icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>`,
       },
@@ -1119,12 +1149,12 @@ function createOrderCardElement(order) {
           }">
             ${
               isBalanceSettled
-                ? "✓ Settled"
+                ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Settled'
                 : isPaidDownpayment
-                  ? "⏳ Pending Final Collection"
+                  ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pending Final Collection'
                   : isWalkInPending
-                    ? "⏳ Counter Downpayment Pending"
-                    : "❌ Downpayment Unpaid"
+                    ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Counter Downpayment Pending'
+                    : '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Downpayment Unpaid'
             }
           </span>
         </div>
@@ -1132,12 +1162,12 @@ function createOrderCardElement(order) {
           isWalkInPending
             ? `<div class="walk-in-counter-notice" style="margin-top: 10px; font-size: 0.82rem; background: #fffbeb; border: 1.5px solid #fef08a; padding: 12px 14px; border-radius: 8px; color: #92400e;">
                 <div style="font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                  <span>⚠️</span> <span>Custom Crafting Notice: Settle 30% downpayment at workshop to begin crafting.</span>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> <span>Custom Crafting Notice: Settle 30% downpayment at workshop to begin crafting.</span>
                 </div>
                 <div style="display: grid; gap: 5px; font-size: 0.79rem; line-height: 1.4;">
-                  <div>📍 <strong>Workshop Address:</strong> Lanica Woodworking & Upholstery Hub, San Jose, Antipolo / Marikina Showroom</div>
-                  <div>📞 <strong>Contact Hotline:</strong> <a href="tel:09498136985" style="color: #b45309; font-weight: 700; text-decoration: underline;">09498136985</a></div>
-                  <div>⏳ <strong>48-Hour Reservation Deadline:</strong> ${escapeHtml(deadlineStr)}</div>
+                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><strong>Workshop Address:</strong> Lanica Woodworking & Upholstery Hub, San Jose, Antipolo / Marikina Showroom</div>
+                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg><strong>Contact Hotline:</strong> <a href="tel:09498136985" style="color: #b45309; font-weight: 700; text-decoration: underline;">09498136985</a></div>
+                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><strong>48-Hour Reservation Deadline:</strong> ${escapeHtml(deadlineStr)}</div>
                 </div>
               </div>`
             : ""
@@ -1149,7 +1179,7 @@ function createOrderCardElement(order) {
   const shippingAddrObj = order.shippingAddress || order.address || {};
   const landmark = shippingAddrObj.nearestLandmark || order.nearestLandmark || shippingAddrObj.landmark || "";
   const landmarkHTML = landmark
-    ? `<div style="font-size:0.8rem; color:#b45309; background:#fffbeb; border:1px solid #fef3c7; padding:6px 10px; border-radius:6px; margin-top:8px;">📌 <strong>Landmark / Instructions:</strong> ${escapeHtml(landmark)}</div>`
+    ? `<div style="font-size:0.8rem; color:#b45309; background:#fffbeb; border:1px solid #fef3c7; padding:6px 10px; border-radius:6px; margin-top:8px; display:flex; align-items:flex-start; gap:4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><span><strong>Landmark / Instructions:</strong> ${escapeHtml(landmark)}</span></div>`
     : "";
 
   const needsDownpayment =
@@ -1159,7 +1189,7 @@ function createOrderCardElement(order) {
     order.paymentStatus !== "paid";
 
   const displayPaymentMethod = order.paymentMethod === "walk_in_cash"
-    ? "🏢 Walk-in Workshop Cash (Counter)"
+    ? "Walk-in Workshop Cash (Counter)"
     : (paymentMethod || "QR Ph (PayMongo)");
 
   card.innerHTML = `
@@ -1207,6 +1237,30 @@ function createOrderCardElement(order) {
           <span>${isWalkInPending ? "Pay Online via QR Ph" : `Pay 30% Downpayment (₱${downpaymentDueAmount.toLocaleString()})`}</span>
         </button>
         ` : ""}
+        ${(() => {
+          const rawSt = String(order.status || "").toLowerCase();
+          const rawOrdSt = String(order.orderStatus || "").toLowerCase();
+          const isCompleted = normStatus === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || order.orderReceived === true;
+          const isDelivered = (normStatus === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
+
+          if (isDelivered) {
+            return `
+              <button type="button" class="btn-order-received" data-order-id="${orderId}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>ORDER RECEIVED</span>
+              </button>
+            `;
+          }
+          if (isCompleted) {
+            return `
+              <button type="button" class="btn-download-receipt" data-order-id="${orderId}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <span>DOWNLOAD RECEIPT</span>
+              </button>
+            `;
+          }
+          return "";
+        })()}
         ${cancelButtonHTML}
       </div>
     </div>
@@ -1223,6 +1277,75 @@ function createOrderCardElement(order) {
           setTimeout(() => window.location.reload(), 1500);
         },
       });
+    });
+  }
+
+  // Customer taps "ORDER RECEIVED" (Spec Section 1 & 2 & 3)
+  const receivedBtn = card.querySelector(".btn-order-received");
+  if (receivedBtn) {
+    receivedBtn.addEventListener("click", async () => {
+      const confirmed = await showConfirmModal({
+        title: "Confirm Order Receipt",
+        message: `Have you received your handcrafted furniture order <strong>#${escapeHtml(orderId)}</strong> in good condition?<br><br>This action will mark the order as <strong>COMPLETED</strong> and generate your Official Receipt &amp; Warranty.`,
+        confirmText: "Yes, Order Received",
+        cancelText: "Not Yet",
+        icon: "check",
+      });
+      if (!confirmed) return;
+
+      try {
+        receivedBtn.disabled = true;
+        receivedBtn.innerHTML = `<span>Finalizing...</span>`;
+
+        // 1. Send Firestore database payload & bot broadcast
+        await completeCustomerOrder(orderId, currentUser);
+
+        // 2. Local Notification (Section 3 of Spec)
+        // Title: "Order Delivered! 🎉", Body: "Your order #{orderId} has been delivered. Enjoy your furniture!"
+        const notifTitle = "Order Delivered! 🎉";
+        const notifBody = `Your order #${orderId} has been delivered. Enjoy your furniture!`;
+
+        showToast(`${notifTitle} ${notifBody}`, "success", 7000);
+
+        if ("Notification" in window) {
+          if (Notification.permission === "granted") {
+            try {
+              new Notification(notifTitle, { body: notifBody, icon: "assets/logo.png" });
+            } catch (_) {}
+          } else if (Notification.permission === "default") {
+            Notification.requestPermission().then((perm) => {
+              if (perm === "granted") {
+                try {
+                  new Notification(notifTitle, { body: notifBody, icon: "assets/logo.png" });
+                } catch (_) {}
+              }
+            });
+          }
+        }
+
+        // 3. Switches UI to Official Receipt View with "DOWNLOAD RECEIPT" feature (Section 3 of Spec)
+        const updatedOrder = {
+          ...order,
+          status: "completed",
+          orderStatus: "completed",
+          orderReceived: true,
+          completedAt: new Date(),
+        };
+        openLanicaCustomerReceiptModal(updatedOrder);
+      } catch (err) {
+        console.error("Failed to complete order:", err);
+        showToast(err.message || "Failed to update order status.", "error");
+        receivedBtn.disabled = false;
+        receivedBtn.innerHTML = `<span>ORDER RECEIVED</span>`;
+      }
+    });
+  }
+
+  // Customer taps "DOWNLOAD RECEIPT"
+  const downloadReceiptBtn = card.querySelector(".btn-download-receipt");
+  if (downloadReceiptBtn) {
+    downloadReceiptBtn.addEventListener("click", () => {
+      openLanicaCustomerReceiptModal(order);
     });
   }
 
@@ -1455,7 +1578,7 @@ function setupLiveChatWidget() {
     channelBar.style.display = "flex";
     let barHtml = `
       <button type="button" class="chat-channel-pill ${currentChannel === 'support' ? 'active' : ''}" data-channel="support">
-        💬 Live Support
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Live Support
       </button>
     `;
 
@@ -1465,7 +1588,7 @@ function setupLiveChatWidget() {
       const isSel = currentChannel === "order" && activeChatOrderId === oId;
       barHtml += `
         <button type="button" class="chat-channel-pill ${isSel ? 'active' : ''}" data-channel="order" data-order-id="${oId}">
-          🧵 #${orderNum}
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>#${orderNum}
         </button>
       `;
     });
@@ -1838,4 +1961,386 @@ function setupLiveChatWidget() {
 
   return { initUserChat, openOrderChat, openSupportChat, renderChannelBar };
 }
+
+// ==============================================================================
+// LANICA OFFICIAL CUSTOMER RECEIPT & WARRANTY VOUCHER MODAL
+// ==============================================================================
+let activeCustomerReceiptOrder = null;
+let activeCustomerReceiptBranch = "calamba";
+
+const LANICA_BRANCHES = {
+  calamba: {
+    key: "calamba",
+    name: "Calamba Branch",
+    title: "LANICA'S SOFA SALA SET CALAMBA BRANCH",
+    address: "MILAN PRESTIGE BLDG. BRGY. HALANG NATIONAL HIGHWAY CALAMBA CITY LAGUNA",
+    contact: "0993-287-4937",
+    voucherLocation: "MILAN PRESTIGE BUILDING, BRGY. HALANG CALAMBA LAGUNA",
+  },
+  pila: {
+    key: "pila",
+    name: "Pila Branch",
+    title: "LANICA'S SOFA SALA SET PILA BRANCH",
+    address: "VILLASOL 1, BRGY. LABUIN NATIONAL HIGHWAY, PILA, LAGUNA",
+    contact: "0993-287-4937",
+    voucherLocation: "VILLASOL 1, BRGY. LABUIN NATIONAL HIGHWAY, PILA, LAGUNA",
+  },
+};
+
+export function openLanicaCustomerReceiptModal(order) {
+  if (!order) return;
+  activeCustomerReceiptOrder = order;
+  initLanicaReceiptModalListeners();
+  renderCustomerReceiptDocument();
+
+  const modal = document.getElementById("lanica-receipt-modal");
+  if (modal) {
+    modal.classList.add("active");
+    modal.style.display = "flex";
+  }
+}
+
+function renderCustomerReceiptDocument() {
+  const area = document.getElementById("lanica-printable-area");
+  const branchCalamba = document.getElementById("btn-branch-calamba");
+  const branchPila = document.getElementById("btn-branch-pila");
+
+  if (!area || !activeCustomerReceiptOrder) return;
+  const order = activeCustomerReceiptOrder;
+
+  // Toggle Branch button active states
+  const currentBranchKey = order._selectedBranch || activeCustomerReceiptBranch || "calamba";
+  const branch = LANICA_BRANCHES[currentBranchKey] || LANICA_BRANCHES.calamba;
+
+  if (branchCalamba && branchPila) {
+    if (currentBranchKey === "pila") {
+      branchPila.classList.add("active");
+      branchCalamba.classList.remove("active");
+      branchPila.style.background = "#2563eb";
+      branchPila.style.color = "#ffffff";
+      branchCalamba.style.background = "transparent";
+      branchCalamba.style.color = "#94a3b8";
+    } else {
+      branchCalamba.classList.add("active");
+      branchPila.classList.remove("active");
+      branchCalamba.style.background = "#2563eb";
+      branchCalamba.style.color = "#ffffff";
+      branchPila.style.background = "transparent";
+      branchPila.style.color = "#94a3b8";
+    }
+  }
+
+  const orderId = order.orderId || order.id || "N/A";
+  const customerName =
+    order.shippingAddress?.fullName ||
+    order.shippingAddress?.recipientName ||
+    order.recipientName ||
+    order.customerName ||
+    order.userName ||
+    currentUser?.displayName ||
+    "Valued Client";
+
+  const customerAddress =
+    order.shippingAddress?.fullAddress ||
+    order.shippingAddress?.address ||
+    order.address ||
+    order.customerAddress ||
+    "Metro Manila / Laguna Delivery";
+
+  const customerPhone =
+    order.shippingAddress?.phoneNumber ||
+    order.shippingAddress?.phone ||
+    order.phone ||
+    order.phoneNumber ||
+    "09498136985";
+
+  const purchaseDate = formatOrderDate(order.createdAt || order.timestamp);
+  const completionDate = formatOrderDate(order.completedAt || order.updatedAt || new Date());
+
+  const totalVal = Number(order.totalAmount || order.total || 0);
+  const deliveryCharge = Number(order.deliveryFee ?? order.shippingFee ?? order.shippingAddress?.shippingCost ?? 1000);
+  const itemsSubtotal = Math.max(0, totalVal - deliveryCharge);
+
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const downpaymentAmount = Number(order.downpaymentAmount || Math.round(totalVal * 0.30));
+  const remainingSettled = Math.max(0, totalVal - downpaymentAmount);
+  const methodDisplay = order.paymentMethod === "walk_in_cash"
+    ? "Workshop Cash Counter"
+    : (order.paymentMethod || "QR Ph (PayMongo)");
+
+  const items = (Array.isArray(order.items) && order.items.length > 0)
+    ? order.items
+    : [{
+        name: "LANICA HANDCRAFTED CUSTOM SOFA SET",
+        quantity: 1,
+        price: itemsSubtotal,
+        material: "Pure Goodlumber / Uratex 4in",
+        color: "Fabric / Gamusa",
+        customNotes: "Custom handcrafted upholstery specs",
+      }];
+
+  const itemsRowsHtml = items.map((item, idx) => {
+    const itemQty = Number(item.quantity || 1);
+    const itemPrice = Number(item.price || 0);
+    const itemTotal = itemPrice * itemQty;
+    const itemName = String(item.name || item.title || "CUSTOM SOFA SET").toUpperCase();
+    const itemColor = String(item.color || item.fabricColor || "STANDARD COLOR").toUpperCase();
+    const itemMaterial = String(item.material || (Array.isArray(item.materials) ? item.materials.join(", ") : "") || "PURE GOODLUMBER / URATEX 4IN").toUpperCase();
+    const itemSpecs = item.customNotes || item.specs || "Standard Artisan Custom Specs";
+
+    const rawFreebies = item.freebies || "5 Throw Pillows, Footstool (Class A Foam), Premium Wood Footings";
+    const freebiesList = (Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies).split(/[\n,]+/))
+      .map((f) => String(f).trim())
+      .filter(Boolean);
+
+    const isUpholsteryOnly = (val) => {
+      if (!val) return true;
+      const s = String(val).trim().toLowerCase();
+      return s === "fabric" || s === "leather" || s === "standard" || s === "custom";
+    };
+
+    let materialsList = [];
+    if (Array.isArray(item.materials) && item.materials.length > 0) {
+      materialsList = item.materials.map((m) => String(m).trim()).filter((m) => m && !isUpholsteryOnly(m));
+    }
+    if (materialsList.length === 0 && item.materials && typeof item.materials === "string" && !isUpholsteryOnly(item.materials)) {
+      materialsList = String(item.materials).split(/[\n,]+/).map((m) => m.trim()).filter((m) => m && !isUpholsteryOnly(m));
+    }
+    if (materialsList.length === 0) {
+      materialsList = [
+        "Pure Goodlumber Wood Frame (Kiln Dried)",
+        "Pure 4 Inches High-Density Uratex Foam",
+        "Anti Anay at Bukbok Treated",
+        "Plush Premium Upholstery Fabric"
+      ];
+    }
+
+    return `
+      <tr style="vertical-align: top; border-bottom: 1px solid #e5e7eb;">
+        <td style="padding: 10px 8px; font-weight: 700; width: 36px;">${idx + 1}</td>
+        <td style="padding: 10px 8px;">
+          <div style="font-weight: 800; font-size: 0.95rem; text-transform: uppercase; color: #000;">${escapeHtml(itemName)}</div>
+          <div style="font-weight: 700; font-size: 0.82rem; margin-top: 3px; color: #4b5563;">ARTISAN CUSTOM SPECIFICATION</div>
+          <div style="font-size: 0.82rem; margin-top: 2px; color: #374151;">${escapeHtml(itemSpecs)}</div>
+          <div style="font-weight: 700; font-size: 0.82rem; margin-top: 6px; color: #1f2937;">COLOR: ${escapeHtml(itemColor)}</div>
+          <div style="font-size: 0.8rem; margin-top: 2px; color: #4b5563;">MATERIAL &amp; FINISH: ${escapeHtml(itemMaterial)}</div>
+          
+          <div style="margin-top: 8px; font-size: 0.8rem; background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+            <div style="font-weight: 700; text-transform: uppercase; color: #0f172a; margin-bottom: 2px;">STANDARD INCLUSIONS &amp; FREEBIES:</div>
+            <div style="padding-left: 2px; line-height: 1.4; color: #475569;">
+              ${freebiesList.length > 0 ? freebiesList.map(f => `✓ ${escapeHtml(f)}`).join(" &bull; ") : "✓ Standard Inclusions"}
+            </div>
+            <div style="font-weight: 700; margin-top: 4px; color: #0f172a;">FRAMEWORK &amp; MATERIALS:</div>
+            <div style="padding-left: 2px; line-height: 1.4; color: #475569;">
+              ${materialsList.map(m => `✓ ${escapeHtml(m)}`).join(" &bull; ")}
+            </div>
+          </div>
+
+          <div style="margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 0.78rem; text-transform: uppercase; color: #047857;">
+            <span>🛡️</span> <span>6 MONTHS OFFICIAL WARRANTY ON FOAM SEAT ONLY</span>
+          </div>
+        </td>
+        <td style="padding: 10px 8px; text-align: center; font-weight: 700; width: 60px;">${itemQty}</td>
+        <td style="padding: 10px 8px; text-align: right; font-weight: 700; width: 110px;">₱ ${itemPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td style="padding: 10px 8px; text-align: right; font-weight: 700; width: 110px;">₱ ${itemTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      </tr>
+    `;
+  }).join("");
+
+  area.innerHTML = `
+    <div style="max-width: 760px; margin: 0 auto; color: #000;">
+      <!-- Document Header -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 14px; margin-bottom: 18px; flex-wrap: wrap; gap: 14px;">
+        <div style="flex: 1; min-width: 280px;">
+          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 900; letter-spacing: -0.02em; text-transform: uppercase;">${escapeHtml(branch.title)}</h2>
+          <p style="margin: 4px 0 0; font-size: 0.8rem; line-height: 1.4; text-transform: uppercase;">
+            ${escapeHtml(branch.address)}<br/>
+            CONTACT HOTLINE: ${escapeHtml(branch.contact)}
+          </p>
+        </div>
+        <div style="text-align: right; min-width: 200px;">
+          <div style="display: inline-block; border: 2px solid #059669; background: #ecfdf5; color: #047857; padding: 6px 14px; border-radius: 6px; font-weight: 900; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.05em;">
+            OFFICIAL RECEIPT
+          </div>
+          <div style="font-size: 0.78rem; font-weight: 600; color: #4b5563; margin-top: 4px;">
+            RECEIPT #: <strong>OR-${escapeHtml(String(orderId).slice(0, 10).toUpperCase())}</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customer & Meta Grid -->
+      <div style="display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; font-size: 0.86rem; line-height: 1.5; flex-wrap: wrap; background: #fafafa; padding: 12px 14px; border-radius: 8px; border: 1px solid #e5e7eb;">
+        <div style="flex: 1; min-width: 260px;">
+          <div><strong>CUSTOMER NAME:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerName)}</span></div>
+          <div><strong>DELIVERY ADDRESS:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerAddress)}</span></div>
+          <div><strong>CONTACT NUMBER:</strong> <span>${escapeHtml(customerPhone)}</span></div>
+        </div>
+        <div style="min-width: 240px; text-align: right;">
+          <div><strong>ORDER REFERENCE:</strong> <span>#${escapeHtml(orderId)}</span></div>
+          <div><strong>DATE OF PURCHASE:</strong> <span>${escapeHtml(purchaseDate)}</span></div>
+          <div><strong>DATE RECEIVED:</strong> <span style="font-weight: 700; color: #059669;">${escapeHtml(completionDate)}</span></div>
+        </div>
+      </div>
+
+      <!-- Items Breakdown Table -->
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 0.86rem;">
+        <thead>
+          <tr style="border-top: 2px solid #000; border-bottom: 2px solid #000; text-align: left; font-size: 0.85rem;">
+            <th style="padding: 8px 8px; width: 36px;">#</th>
+            <th style="padding: 8px 8px;">Description &amp; Handcrafting Specifications</th>
+            <th style="padding: 8px 8px; text-align: center; width: 60px;">QTY</th>
+            <th style="padding: 8px 8px; text-align: right; width: 110px;">PRICE</th>
+            <th style="padding: 8px 8px; text-align: right; width: 110px;">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRowsHtml}
+          <tr style="border-top: 1.5px solid #000;">
+            <td style="padding: 8px 8px;"></td>
+            <td style="padding: 8px 8px; font-weight: 800; color: #0284c7; text-transform: uppercase;">SPECIALIZED FURNITURE HANDLING &amp; DELIVERY</td>
+            <td style="padding: 8px 8px; text-align: center; font-weight: 700;">1</td>
+            <td style="padding: 8px 8px; text-align: right; font-weight: 700;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="padding: 8px 8px; text-align: right; font-weight: 700;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Totals & Payment Reconciled Summary Grid -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-top: 2px solid #000; padding-top: 14px; margin-bottom: 22px; flex-wrap: wrap;">
+        <!-- Left: Payment Reconciliation Ledger -->
+        <div style="flex: 1; min-width: 280px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 12px 14px; font-size: 0.82rem;">
+          <div style="font-weight: 800; color: #166534; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+            <span>✓</span> <span>FINALIZED REVENUE &amp; FULL SETTLEMENT RECONCILED</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #1e293b;">
+            <span>Initial 30% Downpayment:</span>
+            <strong>✓ ₱ ${downpaymentAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #1e293b;">
+            <span>Remaining 70% Balance Settled:</span>
+            <strong>✓ ₱ ${remainingSettled.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #86efac; color: #15803d; font-weight: 700;">
+            <span>Outstanding Balance:</span>
+            <span>₱ 0.00 (Fully Settled)</span>
+          </div>
+          <div style="font-size: 0.74rem; color: #64748b; margin-top: 4px;">
+            Payment Gateway / Channel: <strong>${escapeHtml(methodDisplay)}</strong>
+          </div>
+        </div>
+
+        <!-- Right: Contract Total Display -->
+        <div style="min-width: 260px; font-size: 0.9rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>Furniture Subtotal:</span>
+            <strong>₱ ${itemsSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>Delivery Fee:</span>
+            <strong>₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 2px solid #000; margin-top: 6px; padding-top: 6px; font-size: 1.15rem; font-weight: 900;">
+            <span>TOTAL CONTRACT PRICE:</span>
+            <span style="color: #059669;">₱ ${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signatures & Official Certificate Box -->
+      <div style="display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #e5e7eb; padding-top: 18px; margin-top: 10px; font-size: 0.8rem; text-align: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 180px;">
+          <div style="height: 38px; display: flex; align-items: flex-end; justify-content: center; font-family: monospace; font-weight: 700; color: #0284c7;">
+            LANICA WORKSHOP ARTISAN
+          </div>
+          <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">PREPARED &amp; CRAFTED BY</div>
+          <div style="font-size: 0.74rem; color: #64748b;">Lanica Master Carpenters</div>
+        </div>
+        <div style="flex: 1; min-width: 180px;">
+          <div style="height: 38px; display: flex; align-items: flex-end; justify-content: center; font-family: monospace; font-weight: 700; color: #059669;">
+            VERIFIED &amp; RECONCILED
+          </div>
+          <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">FINANCE &amp; AUDIT SEAL</div>
+          <div style="font-size: 0.74rem; color: #64748b;">Lanica Management</div>
+        </div>
+        <div style="flex: 1; min-width: 180px;">
+          <div style="height: 38px; display: flex; align-items: flex-end; justify-content: center; font-weight: 700; color: #111827;">
+            ${escapeHtml(customerName)}
+          </div>
+          <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">RECEIVED IN GOOD CONDITION</div>
+          <div style="font-size: 0.74rem; color: #64748b;">Customer / Recipient</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; padding: 10px 14px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; font-size: 0.75rem; color: #64748b;">
+        Thank you for trusting Lanica Furniture! For custom care guides, wood re-polishing, or warranty inquiries, contact our hotline at ${escapeHtml(branch.contact)} or visit our showroom.
+      </div>
+    </div>
+  `;
+}
+
+function initLanicaReceiptModalListeners() {
+  const modal = document.getElementById("lanica-receipt-modal");
+  const closeBtn = document.getElementById("btn-close-lanica-modal");
+  const printBtn = document.getElementById("btn-print-lanica-doc");
+  const branchCalamba = document.getElementById("btn-branch-calamba");
+  const branchPila = document.getElementById("btn-branch-pila");
+
+  const closeModal = () => {
+    if (modal) {
+      modal.classList.remove("active");
+      modal.style.display = "none";
+    }
+  };
+
+  if (closeBtn && !closeBtn.dataset.bound) {
+    closeBtn.dataset.bound = "true";
+    closeBtn.addEventListener("click", closeModal);
+  }
+
+  if (modal && !modal.dataset.bound) {
+    modal.dataset.bound = "true";
+    // Deliberately no background-click dismiss to prevent accidental close on mobile phones
+  }
+
+  if (printBtn && !printBtn.dataset.bound) {
+    printBtn.dataset.bound = "true";
+    printBtn.addEventListener("click", () => {
+      window.print();
+    });
+  }
+
+  const setBranch = (branchKey) => {
+    activeCustomerReceiptBranch = branchKey;
+    if (activeCustomerReceiptOrder) {
+      activeCustomerReceiptOrder._selectedBranch = branchKey;
+    }
+    renderCustomerReceiptDocument();
+  };
+
+  if (branchCalamba && !branchCalamba.dataset.bound) {
+    branchCalamba.dataset.bound = "true";
+    branchCalamba.addEventListener("click", () => setBranch("calamba"));
+  }
+
+  if (branchPila && !branchPila.dataset.bound) {
+    branchPila.dataset.bound = "true";
+    branchPila.addEventListener("click", () => setBranch("pila"));
+  }
+}
+
+// Blank document title during window print so browsers don't print "Lanica | My Orders"
+let savedDocTitle = "";
+window.addEventListener("beforeprint", () => {
+  const modal = document.getElementById("lanica-receipt-modal");
+  if (modal && modal.classList.contains("active")) {
+    savedDocTitle = document.title;
+    document.title = "";
+  }
+});
+window.addEventListener("afterprint", () => {
+  if (savedDocTitle) {
+    document.title = savedDocTitle;
+    savedDocTitle = "";
+  }
+});
 
