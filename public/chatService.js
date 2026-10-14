@@ -233,6 +233,7 @@ export function subscribeToUserSupportMessages(userId, callback, errorCallback) 
           isEdited: Boolean(d.isEdited),
           isUnsent: Boolean(d.isUnsent),
           replyTo: d.replyTo || null,
+          photoURL: d.photoURL || d.senderPhoto || d.senderPhotoURL || d.avatarUrl || d.senderAvatar || "",
           createdAt: d.timestamp || d.createdAt,
           timestamp: d.timestamp || d.createdAt,
         });
@@ -458,6 +459,7 @@ export function subscribeToMessages(targetId, callback, errorCallback, isUserSup
           isEdited: Boolean(d.isEdited),
           isUnsent: Boolean(d.isUnsent),
           replyTo: d.replyTo || null,
+          photoURL: d.photoURL || d.senderPhoto || d.senderPhotoURL || d.avatarUrl || d.senderAvatar || "",
           createdAt: d.timestamp || d.createdAt,
           timestamp: d.timestamp || d.createdAt,
         });

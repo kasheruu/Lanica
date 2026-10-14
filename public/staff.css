@@ -314,17 +314,28 @@
 
 .admin-chat-filters-bar {
   display: flex !important;
-  gap: 4px !important;
+  align-items: center !important;
+  gap: 5px !important;
   padding: 8px 10px !important;
   background: #f1f5f9 !important;
   border-bottom: 1px solid #e2e8f0 !important;
   flex-shrink: 0 !important;
   overflow-x: auto !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.admin-chat-filters-bar::-webkit-scrollbar {
+  display: none !important;
 }
 
 .admin-chat-filters-bar .chat-filter-btn {
-  flex: 1 !important;
-  padding: 6px 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  flex: 0 0 auto !important;
+  padding: 5px 10px !important;
   font-size: 0.74rem !important;
   font-weight: 600 !important;
   border-radius: 6px !important;
@@ -336,6 +347,7 @@
   transition: all 0.15s ease !important;
   text-align: center !important;
   user-select: none !important;
+  box-sizing: border-box !important;
 }
 
 .admin-chat-filters-bar .chat-filter-btn:hover {

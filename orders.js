@@ -1781,6 +1781,44 @@ function setupLiveChatWidget() {
     if (textInput) textInput.focus();
   }
 
+  function renderCustomerChatAvatarHtml(isSystem, isMe, senderLabel, photoURL, currentUser) {
+    if (isSystem) {
+      return `<div class="chat-msg-avatar chat-msg-avatar-system" style="width: 32px; height: 32px; border-radius: 50%; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700; flex-shrink: 0; border: 1.5px solid #fde68a;" title="Lanica System Notification">🤖</div>`;
+    }
+
+    if (isMe) {
+      const userPhoto = currentUser?.photoURL || photoURL || "";
+      const name = currentUser?.displayName || currentUser?.name || "You";
+      const nameParts = name.trim().split(/\s+/);
+      const initials = nameParts.length > 1
+        ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+        : (name.slice(0, 2)).toUpperCase() || "ME";
+
+      if (userPhoto && (userPhoto.startsWith("http://") || userPhoto.startsWith("https://") || userPhoto.startsWith("data:"))) {
+        return `
+          <div class="chat-msg-avatar chat-msg-avatar-customer" style="width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: #fef08a; border: 1.5px solid #fcd535; position: relative; display: flex; align-items: center; justify-content: center;" title="You">
+            <img src="${escapeHtml(userPhoto)}" alt="You" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+            <span style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; color: #854d0e; user-select: none;">${escapeHtml(initials)}</span>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="chat-msg-avatar chat-msg-avatar-customer" style="width: 32px; height: 32px; border-radius: 50%; background: #fef08a; border: 1.5px solid #fcd535; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="You">
+          <span style="font-size: 0.72rem; font-weight: 700; color: #854d0e; user-select: none;">${escapeHtml(initials)}</span>
+        </div>
+      `;
+    }
+
+    // Staff / Workshop / Support avatar
+    const staffPhoto = photoURL || "assets/lanicalogo.jpg";
+    return `
+      <div class="chat-msg-avatar chat-msg-avatar-staff" style="width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: #6b4423; border: 1.5px solid #d97706; display: flex; align-items: center; justify-content: center;" title="${escapeHtml(senderLabel)}">
+        <img src="${escapeHtml(staffPhoto)}" alt="${escapeHtml(senderLabel)}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.onerror=null; this.src='assets/logo.png';" />
+      </div>
+    `;
+  }
+
   function renderMessagesList(messages, channelType, orderNum = "") {
     if (!messagesArea) return;
     currentCustomerLoadedMessages = messages || [];
@@ -1825,31 +1863,18 @@ function setupLiveChatWidget() {
           : (m.createdAt?.toDate ? m.createdAt.toDate() : (m.timestamp || m.createdAt ? new Date(m.timestamp || m.createdAt) : null));
         const timeStr = timeDate ? timeDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
-        if (isSystem) {
-          const { displayText } = parseChatMessageContent(m);
-          html += `
-            <div class="chat-msg-row system" data-msg-id="${m.id}">
-              <div class="chat-system-card">
-                <div class="chat-system-card-header">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                  <span>${escapeHtml(senderLabel)}</span>
-                  ${timeStr ? `<span style="font-weight: 400; opacity: 0.8; font-size: 0.7rem; margin-left: auto;">${timeStr}</span>` : ""}
-                </div>
-                <div>${displayText ? `<p style="margin: 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}</div>
-              </div>
-            </div>
-          `;
-          return;
-        }
+        const avatarCol = renderCustomerChatAvatarHtml(isSystem, isMe, senderLabel, m.photoURL || m.senderPhoto || m.senderPhotoURL, currentUser);
 
         if (m.isUnsent) {
           html += `
             <div class="chat-msg-row ${roleClass}">
-              <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
-              <div class="chat-bubble-unsent">
-                ${isMe ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}
+              ${avatarCol}
+              <div class="chat-msg-content-wrap">
+                <span class="chat-msg-sender">${escapeHtml(senderLabel)} ${timeStr ? `• ${timeStr}` : ""}</span>
+                <div class="chat-bubble-unsent">
+                  ${isMe ? "You unsent a message" : `${escapeHtml(senderLabel)} unsent a message`}
+                </div>
               </div>
-              ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
             </div>
           `;
           return;
@@ -1868,29 +1893,31 @@ function setupLiveChatWidget() {
 
         html += `
           <div class="chat-msg-row ${roleClass}" data-msg-id="${m.id}">
-            <span class="chat-msg-sender">${escapeHtml(senderLabel)}</span>
-            <div class="chat-bubble-with-actions">
-              <div class="chat-msg-bubble">
-                ${quotedHtml}
-                ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
-                ${
-                  mediaUrl
-                    ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" class="chat-msg-img" alt="Attachment" /></a>`
-                    : ""
-                }
-              </div>
-              <div class="chat-msg-actions">
-                <button type="button" class="chat-msg-action-btn reply-btn" data-msg-id="${m.id}" title="Reply">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 9V5L3 12l7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
-                </button>
-                ${
-                  isMe
-                    ? `<button type="button" class="chat-msg-action-btn unsend unsend-btn" data-msg-id="${m.id}" title="More options / Unsend"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>`
-                    : ""
-                }
+            ${avatarCol}
+            <div class="chat-msg-content-wrap">
+              <span class="chat-msg-sender">${escapeHtml(senderLabel)} ${timeStr ? `• ${timeStr}` : ""}</span>
+              <div class="chat-bubble-with-actions">
+                <div class="chat-msg-bubble ${isSystem ? 'chat-bubble-system' : ''}">
+                  ${quotedHtml}
+                  ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
+                  ${
+                    mediaUrl
+                      ? `<a href="${mediaUrl}" target="_blank" rel="noopener"><img src="${mediaUrl}" class="chat-msg-img" alt="Attachment" /></a>`
+                      : ""
+                  }
+                </div>
+                <div class="chat-msg-actions">
+                  <button type="button" class="chat-msg-action-btn reply-btn" data-msg-id="${m.id}" title="Reply">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 9V5L3 12l7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+                  </button>
+                  ${
+                    isMe
+                      ? `<button type="button" class="chat-msg-action-btn unsend unsend-btn" data-msg-id="${m.id}" title="More options / Unsend"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>`
+                      : ""
+                  }
+                </div>
               </div>
             </div>
-            ${timeStr ? `<span class="chat-msg-time">${timeStr}</span>` : ""}
           </div>
         `;
       });
