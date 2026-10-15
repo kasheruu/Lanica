@@ -15,6 +15,7 @@ let currentOrderId = null;
 let currentQrImageUrl = null;
 let currentDownpaymentPhp = 0;
 let isPaymentVerified = false;
+let modalIsDeliveryBalance = false;
 let modalOnConfirmPaymentCallback = null;
 let modalOnSuccessCallback = null;
 let modalOnCloseCallback = null;
@@ -23,13 +24,13 @@ let modalOnCloseCallback = null;
  * Creates a dynamic PayMongo QR Ph payment intent, payment method, and attach action
  * via the serverless Cloudflare / Express backend.
  */
-export async function createPaymongoQrPayment({ orderId, totalAmount }) {
+export async function createPaymongoQrPayment({ orderId, totalAmount, exactAmount, description, isDeliveryBalance }) {
   if (!orderId) {
     throw new Error("Order ID is required to generate PayMongo QR Ph.");
   }
-  const parsedTotal = Number(totalAmount);
+  const parsedTotal = Number(totalAmount || exactAmount);
   if (isNaN(parsedTotal) || parsedTotal <= 0) {
-    throw new Error("Valid totalAmount is required.");
+    throw new Error("Valid totalAmount or exactAmount is required.");
   }
 
   const res = await fetch("/api/paymongo/create-qr", {
@@ -41,6 +42,9 @@ export async function createPaymongoQrPayment({ orderId, totalAmount }) {
     body: JSON.stringify({
       orderId: String(orderId).trim(),
       totalAmount: parsedTotal,
+      exactAmount: exactAmount ? Number(exactAmount) : undefined,
+      description: description || undefined,
+      isDeliveryBalance: Boolean(isDeliveryBalance),
     }),
   });
 
@@ -54,7 +58,7 @@ export async function createPaymongoQrPayment({ orderId, totalAmount }) {
     success: true,
     paymentIntentId: data.paymentIntentId,
     qrImageUrl: data.qrImageUrl,
-    downpaymentPhp: data.downpaymentPhp,
+    downpaymentPhp: data.chargePhp || data.downpaymentPhp,
   };
 }
 
@@ -103,13 +107,26 @@ export async function verifyPaymongoPayment({ paymentIntentId, orderId }) {
   if (data.isPaid && orderId && !modalOnConfirmPaymentCallback) {
     try {
       const orderRef = doc(db, "orders", String(orderId).trim());
-      await updateDoc(orderRef, {
-        paymentStatus: "downpayment_paid",
-        paymentIntentId: paymentIntentId,
-        downpaymentPaidAt: serverTimestamp(),
-        orderStatus: "downpayment confirmed",
-        status: "Deposit Verified",
-      });
+      if (modalIsDeliveryBalance) {
+        await updateDoc(orderRef, {
+          balanceStatus: "Settled",
+          outstandingBalance: 0,
+          remainingBalance: 0,
+          balanceDue: 0,
+          balanceSettledAt: serverTimestamp(),
+          balanceSettlementMethod: "paymongo_qrph",
+          balancePaymentIntentId: paymentIntentId,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(orderRef, {
+          paymentStatus: "downpayment_paid",
+          paymentIntentId: paymentIntentId,
+          downpaymentPaidAt: serverTimestamp(),
+          orderStatus: "downpayment confirmed",
+          status: "Deposit Verified",
+        });
+      }
     } catch (fsErr) {
       console.warn("Client Firestore update notice:", fsErr);
     }
@@ -508,7 +525,7 @@ async function handlePaymentSuccessful() {
 
   if (toast) {
     toast.className = "paymongo-status-toast success";
-    toast.textContent = "✓ 30% Downpayment Verified! Finalizing your order...";
+    toast.textContent = modalIsDeliveryBalance ? "✓ Delivery Balance Verified & Settled!" : "✓ 30% Downpayment Verified! Finalizing your order...";
   }
 
   if (verifyBtn) {
@@ -591,6 +608,9 @@ export function closePaymongoQrModal(isDismissedByUser = true) {
 export async function openPaymongoQrModal({
   orderId,
   totalAmount,
+  exactAmount,
+  isDeliveryBalance = false,
+  description,
   onConfirmPayment,
   onSuccess,
   onClose,
@@ -598,6 +618,7 @@ export async function openPaymongoQrModal({
   const modal = ensurePaymongoModalDom();
   currentOrderId = String(orderId).trim();
   isPaymentVerified = false;
+  modalIsDeliveryBalance = Boolean(isDeliveryBalance);
   modalOnConfirmPaymentCallback = onConfirmPayment || null;
   modalOnSuccessCallback = onSuccess || null;
   modalOnCloseCallback = onClose || null;
@@ -611,9 +632,14 @@ export async function openPaymongoQrModal({
   const verifyBtn = document.getElementById("paymongo-verify-btn");
   const saveBtn = document.getElementById("paymongo-save-qr-btn");
 
-  const expectedDownpayment = Math.round(Number(totalAmount) * 0.30);
+  const expectedAmount = exactAmount ? Math.round(Number(exactAmount)) : Math.round(Number(totalAmount) * 0.30);
   if (orderRefEl) orderRefEl.textContent = `Order #${currentOrderId}`;
-  if (amountDisplayEl) amountDisplayEl.textContent = `₱${expectedDownpayment.toLocaleString()}`;
+  if (amountDisplayEl) amountDisplayEl.textContent = `₱${expectedAmount.toLocaleString()}`;
+
+  const metricSubEl = modal.querySelector(".paymongo-metric-sub");
+  if (metricSubEl) {
+    metricSubEl.textContent = modalIsDeliveryBalance ? "Delivery Balance Due" : "30% Downpayment Due";
+  }
 
   if (qrImg) qrImg.style.display = "none";
   if (spinner) spinner.style.display = "block";
@@ -644,7 +670,10 @@ export async function openPaymongoQrModal({
     // Generate QR Ph via Backend
     const qrResult = await createPaymongoQrPayment({
       orderId: currentOrderId,
-      totalAmount: totalAmount,
+      totalAmount: totalAmount || exactAmount,
+      exactAmount: exactAmount,
+      description: description,
+      isDeliveryBalance: modalIsDeliveryBalance,
     });
 
     currentPaymentIntentId = qrResult.paymentIntentId;

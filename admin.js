@@ -388,7 +388,6 @@ renderQuickAddMaterials();
 // Custom Colors / Fabric Shades Tags Field & Dynamic Quick Add
 // ==========================================================================
 const DEFAULT_QUICK_ADD_COLORS = [
-  "Gamusa Bailey Mustang",
   "Emerald Green",
   "Charcoal Grey",
   "Cream Beige",
@@ -880,7 +879,7 @@ function toggleLTypeFields(isLType) {
 
 if (isLTypeSelect) {
   isLTypeSelect.addEventListener("change", () => {
-    const isL = isLTypeSelect.value === "true";
+    const isL = isLTypeSelect.value === "true" || isLTypeSelect.value === "right" || isLTypeSelect.value === "left";
     toggleLTypeFields(isL);
     if (typeof triggerDraftAutosave === "function") {
       triggerDraftAutosave();
@@ -1652,7 +1651,9 @@ function saveFormDraft() {
   const width = document.getElementById("product-width")?.value || "72";
   const length = document.getElementById("product-length")?.value || "72";
   const length2 = document.getElementById("product-length2")?.value || "72";
-  const isLType = document.getElementById("product-is-ltype")?.value === "true";
+  const lVal = document.getElementById("product-is-ltype")?.value || "false";
+  const isLType = lVal === "true" || lVal === "right" || lVal === "left";
+  const defaultOrientation = isLType ? (lVal === "left" ? "left" : "right") : null;
   const unit = document.getElementById("product-unit")?.value || "in";
   const color = document.getElementById("product-color")?.value || "";
   const freebies = document.getElementById("product-freebies")?.value || "";
@@ -1743,7 +1744,13 @@ function restoreFormDraft() {
     if (draft.price !== undefined) document.getElementById("product-price").value = formatPriceWithCommas(draft.price);
     if (draft.stock !== undefined) document.getElementById("product-stock").value = draft.stock;
     if (draft.isLType !== undefined && isLTypeSelect) {
-      isLTypeSelect.value = draft.isLType ? "true" : "false";
+      if (draft.defaultOrientation === "left") {
+        isLTypeSelect.value = "left";
+      } else if (draft.defaultOrientation === "right") {
+        isLTypeSelect.value = "right";
+      } else {
+        isLTypeSelect.value = draft.isLType ? "right" : "false";
+      }
       toggleLTypeFields(draft.isLType);
     }
     if (draft.height !== undefined && heightInput) {
@@ -2322,8 +2329,8 @@ productForm.addEventListener("submit", async (e) => {
     if (colorInput && colorInput.value.trim()) {
       addColorTag(colorInput.value);
     }
-    const colors = currentColorsList.length > 0 ? [...currentColorsList] : ["Gamusa Bailey Mustang"];
-    const color = colors[0] || "Gamusa Bailey Mustang";
+    const colors = currentColorsList.length > 0 ? [...currentColorsList] : [];
+    const color = colors[0] || "";
 
     // Auto-commit any freebie typed in the input
     if (freebieInput && freebieInput.value.trim()) {
@@ -2468,8 +2475,38 @@ productForm.addEventListener("submit", async (e) => {
     // 70% - 90%: Payload validation and database save
     updateSaveProgress(75, "Validating product details...");
 
+    // Sync current DOM rows for bed sizes before saving
+    const bedRows = document.querySelectorAll("#bed-sizes-repeater-list .bed-size-repeater-row");
+    bedRows.forEach((row) => {
+      const idx = parseInt(row.dataset.index, 10);
+      if (currentBedSizesList[idx]) {
+        const nameInp = row.querySelector(".bed-size-input-name");
+        const widthInp = row.querySelector(".bed-size-input-width");
+        const lengthInp = row.querySelector(".bed-size-input-length");
+        const priceInp = row.querySelector(".bed-size-input-price");
+        if (nameInp) currentBedSizesList[idx].name = nameInp.value;
+        if (widthInp) currentBedSizesList[idx].width = widthInp.value;
+        if (lengthInp) currentBedSizesList[idx].length = lengthInp.value;
+        if (priceInp) currentBedSizesList[idx].priceDelta = parseFloat(priceInp.value) || 0;
+      }
+    });
+
+    // Sync current DOM rows for addons before saving
+    const addonRows = document.querySelectorAll("#addons-repeater-list .addon-repeater-row");
+    addonRows.forEach((row) => {
+      const idx = parseInt(row.dataset.index, 10);
+      if (currentAddonsList[idx]) {
+        const nameInp = row.querySelector(".addon-input-name");
+        const priceInp = row.querySelector(".addon-input-price");
+        if (nameInp) currentAddonsList[idx].name = nameInp.value;
+        if (priceInp) currentAddonsList[idx].price = parseFloat(priceInp.value) || 0;
+      }
+    });
+
     const stock = parseInt(document.getElementById("product-stock").value, 10) || 0;
-    const isLType = isLTypeSelect ? (isLTypeSelect.value === "true") : false;
+    const lVal = isLTypeSelect ? isLTypeSelect.value : "false";
+    const isLType = lVal === "true" || lVal === "right" || lVal === "left";
+    const defaultOrientation = isLType ? (lVal === "left" ? "left" : "right") : null;
     const height = parseFloat(document.getElementById("product-height").value) || 0;
     const width = parseFloat(document.getElementById("product-width").value) || 0;
     const length = parseFloat(document.getElementById("product-length").value) || 0;
@@ -2477,6 +2514,7 @@ productForm.addEventListener("submit", async (e) => {
     const unit = document.getElementById("product-unit").value || "in";
     const dimensions = {
       isLType,
+      ...(defaultOrientation ? { defaultOrientation } : {}),
       height,
       width,
       length,
@@ -2529,7 +2567,14 @@ productForm.addEventListener("submit", async (e) => {
         rightBgImage: rightBgImage || "",
         backBgImage: backBgImage || "",
       },
-      addons: currentAddonsList.filter((a) => a && (a.name || "").trim() !== ""),
+      addons: currentAddonsList
+        .filter((a) => a && (a.name || "").trim() !== "")
+        .map((a, idx) => ({
+          id: a.id || `addon_${Date.now()}_${idx}`,
+          name: (a.name || "").trim(),
+          price: parseFloat(a.price) || 0,
+          active: a.active !== false,
+        })),
       bedSizes: currentBedSizesList
         .filter((s) => s && (s.name || "").trim() !== "")
         .map((s) => {
@@ -2920,10 +2965,6 @@ function updateBedSizesVisibility(category) {
     document.querySelectorAll(".bed-size-unit-indicator").forEach((el) => {
       el.textContent = currentUnit;
     });
-    if (currentBedSizesList.length === 0) {
-      currentBedSizesList = getDefaultBedSizes(currentUnit);
-      renderBedSizesRepeater();
-    }
   } else {
     container.style.display = "none";
   }
@@ -3274,7 +3315,14 @@ window.editProduct = (id, productJsonBase64) => {
 
     // Dimensions
     const isLType = (product.dimensions && product.dimensions.isLType === true) || product.isLType === true;
-    if (isLTypeSelect) isLTypeSelect.value = isLType ? "true" : "false";
+    const defaultOrient = product.dimensions?.defaultOrientation || (isLType ? "right" : "false");
+    if (isLTypeSelect) {
+      if (isLType) {
+        isLTypeSelect.value = defaultOrient === "left" ? "left" : "right";
+      } else {
+        isLTypeSelect.value = "false";
+      }
+    }
     toggleLTypeFields(isLType);
 
     let height = 72;
@@ -3365,8 +3413,6 @@ window.editProduct = (id, productJsonBase64) => {
           priceDelta: s.priceDelta != null ? s.priceDelta : 0,
         };
       });
-    } else if ((product.category || "").toLowerCase().includes("bed")) {
-      currentBedSizesList = getDefaultBedSizes(unit);
     }
     renderBedSizesRepeater();
     updateBedSizesVisibility(product.category);
@@ -5891,9 +5937,34 @@ function initLanicaEsignModalListeners() {
       }
 
       activeReceiptOrder._voucherSignatories.signatures[currentEsignRole] = signatureDataUrl;
+      activeReceiptOrder.signatureUrl = signatureDataUrl;
+      activeReceiptOrder.adminSignature = signatureDataUrl;
       closeEsignModal();
       renderLanicaDocumentContent();
       showToast("E-Signature attached successfully!", "success");
+
+      // Commit signature to Firestore and upload official PDF
+      if (activeReceiptOrder.id) {
+        const orderId = activeReceiptOrder.id;
+        try {
+          updateDoc(doc(db, "orders", orderId), {
+            signatureUrl: signatureDataUrl,
+            adminSignature: signatureDataUrl,
+            _voucherSignatories: activeReceiptOrder._voucherSignatories,
+            signatures: activeReceiptOrder._voucherSignatories.signatures,
+            updatedAt: serverTimestamp(),
+          }).catch((err) => {
+            console.error("Failed to commit signature to Firestore:", err);
+          });
+
+          // Generate official receipt PDF and upload to Firebase Storage
+          generateAndUploadOfficialReceiptPdf(orderId).catch((err) => {
+            console.error("Failed to upload official receipt PDF:", err);
+          });
+        } catch (err) {
+          console.error("Error saving signature to Firestore:", err);
+        }
+      }
     });
   }
 }
@@ -5948,6 +6019,96 @@ window.addEventListener("afterprint", () => {
 });
 
 /**
+ * Generates an official receipt PDF from #lanica-printable-area,
+ * uploads to Firebase Storage under receipts/{orderId}.pdf,
+ * and saves the receiptPdfUrl to the Firestore order document.
+ */
+async function generateAndUploadOfficialReceiptPdf(orderId) {
+  const printableArea = document.getElementById("lanica-printable-area");
+  if (!printableArea) return null;
+  const targetOrderId = orderId || (activeReceiptOrder ? activeReceiptOrder.id : null);
+  if (!targetOrderId) return null;
+
+  try {
+    if (typeof window.html2canvas !== "function" || !window.jspdf?.jsPDF) {
+      console.warn("html2canvas or jsPDF not available; skipping PDF generation.");
+      return null;
+    }
+
+    // Temporarily hide interactive buttons
+    const interactiveEls = printableArea.querySelectorAll(
+      ".btn-attach-esign, .btn-remove-esign, #btn-reset-voucher-sig, #btn-reset-branch-btn"
+    );
+    interactiveEls.forEach((el) => {
+      el.dataset.prevDisplay = el.style.display;
+      el.style.display = "none";
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const canvas = await window.html2canvas(printableArea, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+    });
+
+    // Restore interactive buttons
+    interactiveEls.forEach((el) => {
+      el.style.display = el.dataset.prevDisplay || "";
+    });
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4",
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+
+    const margin = 20;
+    const availWidth = pdfWidth - margin * 2;
+    const availHeight = pdfHeight - margin * 2;
+    const scaleFactor = Math.min(availWidth / canvasWidth, availHeight / canvasHeight);
+    const finalW = canvasWidth * scaleFactor;
+    const finalH = canvasHeight * scaleFactor;
+    const xOffset = margin + (availWidth - finalW) / 2;
+    const yOffset = margin;
+
+    pdf.addImage(imgData, "JPEG", xOffset, yOffset, finalW, finalH, undefined, "FAST");
+
+    const pdfBlob = pdf.output("blob");
+    const stRef = ref(storage, `receipts/${targetOrderId}.pdf`);
+    await uploadBytes(stRef, pdfBlob, {
+      contentType: "application/pdf",
+    });
+
+    const receiptPdfUrl = await getDownloadURL(stRef);
+
+    await updateDoc(doc(db, "orders", targetOrderId), {
+      receiptPdfUrl,
+      updatedAt: serverTimestamp(),
+    });
+
+    if (activeReceiptOrder && activeReceiptOrder.id === targetOrderId) {
+      activeReceiptOrder.receiptPdfUrl = receiptPdfUrl;
+    }
+
+    console.log(`Receipt PDF successfully generated and uploaded for order ${targetOrderId}:`, receiptPdfUrl);
+    return receiptPdfUrl;
+  } catch (err) {
+    console.error("Failed to generate and upload receipt PDF:", err);
+    return null;
+  }
+}
+
+/**
  * Initializes and wires up the official Lanica receipt/voucher modal events.
  */
 function initLanicaReceiptModalListeners() {
@@ -5985,14 +6146,16 @@ function initLanicaReceiptModalListeners() {
 
   if (printBtn && !printBtn.dataset.bound) {
     printBtn.dataset.bound = "true";
-    printBtn.addEventListener("click", (e) => {
+    const onPrint = async (e) => {
       e.preventDefault();
+      if (activeReceiptOrder?.id) {
+        showToast("Generating official PDF receipt...", "info");
+        await generateAndUploadOfficialReceiptPdf(activeReceiptOrder.id);
+      }
       window.print();
-    });
-    printBtn.addEventListener("touchend", (e) => {
-      e.preventDefault();
-      window.print();
-    });
+    };
+    printBtn.addEventListener("click", onPrint);
+    printBtn.addEventListener("touchend", onPrint);
   }
 
   if (tabVoucher && !tabVoucher.dataset.bound) {
@@ -6123,8 +6286,22 @@ function initLanicaReceiptModalListeners() {
         const role = removeSigBtn.getAttribute("data-sig-role");
         if (role && activeReceiptOrder._voucherSignatories && activeReceiptOrder._voucherSignatories.signatures) {
           delete activeReceiptOrder._voucherSignatories.signatures[role];
+          if (role === "approvedBy" || role === "checkedBy") {
+            delete activeReceiptOrder.signatureUrl;
+            delete activeReceiptOrder.adminSignature;
+          }
           renderLanicaDocumentContent();
           showToast("Signature removed.", "info");
+
+          if (activeReceiptOrder.id) {
+            updateDoc(doc(db, "orders", activeReceiptOrder.id), {
+              signatureUrl: activeReceiptOrder.signatureUrl || null,
+              adminSignature: activeReceiptOrder.adminSignature || null,
+              _voucherSignatories: activeReceiptOrder._voucherSignatories,
+              signatures: activeReceiptOrder._voucherSignatories.signatures,
+              updatedAt: serverTimestamp(),
+            }).catch((err) => console.error("Error removing signature in Firestore:", err));
+          }
         }
         return;
       }
@@ -6132,8 +6309,20 @@ function initLanicaReceiptModalListeners() {
       const resetSigBtn = e.target.closest("#btn-reset-voucher-sig");
       if (resetSigBtn && activeReceiptOrder) {
         delete activeReceiptOrder._voucherSignatories;
+        delete activeReceiptOrder.signatureUrl;
+        delete activeReceiptOrder.adminSignature;
         renderLanicaDocumentContent();
         showToast("Signatories reset to default.", "info");
+
+        if (activeReceiptOrder.id) {
+          updateDoc(doc(db, "orders", activeReceiptOrder.id), {
+            signatureUrl: null,
+            adminSignature: null,
+            _voucherSignatories: null,
+            signatures: null,
+            updatedAt: serverTimestamp(),
+          }).catch((err) => console.error("Error resetting signatures in Firestore:", err));
+        }
         return;
       }
 
@@ -6517,7 +6706,7 @@ function renderLanicaDocumentContent() {
       quantity: 1,
       price: itemsSubtotal,
       material: "Pure Goodlumber / Uratex 4in",
-      color: "Gamusa Bailey Mustang",
+      color: "Standard Color",
       customNotes: "With 1 arm sa kanan, with flesh lining"
     }];
 
@@ -6533,7 +6722,7 @@ function renderLanicaDocumentContent() {
         : null;
 
       // Dynamic Color
-      const rawColor = item.color || item.fabricColor || (matchedProduct && (matchedProduct.color || matchedProduct.fabricColor || (Array.isArray(matchedProduct.colors) && matchedProduct.colors[0]))) || "GAMUSA BAILEY MUSTANG";
+      const rawColor = item.color || item.fabricColor || (matchedProduct && (matchedProduct.color || matchedProduct.fabricColor || (Array.isArray(matchedProduct.colors) && matchedProduct.colors[0]))) || "STANDARD COLOR";
       const itemColor = String(rawColor).toUpperCase();
 
       const itemSpecs = item.customNotes || item.specs || "With 1 arm sa kanan, with flesh lining";
@@ -8272,8 +8461,14 @@ function renderOrdersList(orders) {
       ? Number(order.downpaymentPaid || 0)
       : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
     const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
-    const isBalanceSettled = order.balanceStatus === "settled" || remainingVal <= 0;
+    const isBalanceSettled = order.balanceStatus === "settled" || order.balanceStatus === "Settled" || remainingVal <= 0;
     const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? (isAwaitingCounterDownpayment ? 0 : 30) : 100);
+
+    const hasRiderProof = Boolean(order.riderCashProofUrl || order.balanceStatus === "Pending Admin Verification");
+    let riderRemittanceBadgeHtml = "";
+    if (hasRiderProof && !isBalanceSettled) {
+      riderRemittanceBadgeHtml = `<div><span class="balance-badge" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; display:inline-flex; align-items:center; gap:3px; font-weight:700; margin-top:3px; font-size:0.72rem;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>Rider Remittance Proof</span></div>`;
+    }
 
     const balanceBadgeHtml = isAwaitingCounterDownpayment
       ? `<span class="balance-badge pending" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; display:inline-flex; align-items:center; gap:3px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Counter DP Pending</span>`
@@ -8285,6 +8480,7 @@ function renderOrdersList(orders) {
         <div>Upfront: <span class="fin-paid">₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> <small style="color:#6b7280;">(${paidPct}%)</small></div>
         <div>Due: <span class="fin-due">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
         ${balanceBadgeHtml}
+        ${riderRemittanceBadgeHtml}
       </div>
     `;
 
@@ -8315,7 +8511,7 @@ function renderOrdersList(orders) {
       </div>
     `;
 
-    const isMarkSettledVisible = !isBalanceSettled && remainingVal > 0 && st !== "placed" && st !== "pending" && st !== "cancelled" && st !== "declined";
+    const isMarkSettledVisible = (!isBalanceSettled && remainingVal > 0 && st !== "placed" && st !== "pending" && st !== "cancelled" && st !== "declined") || (hasRiderProof && !isBalanceSettled);
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -8398,9 +8594,9 @@ function renderOrdersList(orders) {
               isMarkSettledVisible
                 ? `<button type="button" class="kebab-menu-item btn-settle-balance" data-order-id="${escapeHtml(
                     order.id
-                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: ${hasRiderProof ? '#ecfdf5' : 'none'}; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
-                    Mark Balance Settled
+                    Mark Balance Settled ${hasRiderProof ? '(Verify Proof)' : ''}
                   </button>`
                 : ""
             }
@@ -9101,6 +9297,22 @@ async function showOrderSummaryModal(orderId) {
         </div>
       ` : ""}
 
+      ${order.riderCashProofUrl ? `
+        <div style="margin-bottom: 16px; padding: 14px; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 0.85rem; font-weight: 700; color: #065f46; display: flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+              <span>Rider Remittance / Cash Proof Receipt</span>
+            </div>
+            <span style="font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: ${order.balanceStatus === "Settled" || order.balanceStatus === "settled" ? "#d1fae5; color: #065f46;" : "#fef3c7; color: #92400e;"}">${escapeHtml(order.balanceStatus || "Pending Verification")}</span>
+          </div>
+          <div style="font-size: 0.78rem; color: #047857; margin-bottom: 8px;">Customer uploaded cash proof upon delivery. Verify and settle balance to enable customer's "Order Received" action.</div>
+          <a href="${escapeHtml(order.riderCashProofUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block;">
+            <img src="${escapeHtml(order.riderCashProofUrl)}" alt="Rider Cash Proof" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid #6ee7b7; object-fit: contain; background: #fff;" />
+          </a>
+        </div>
+      ` : ""}
+
       <h4 style="margin: 0 0 8px; font-size: 0.95rem; color: #334155;">Ordered Items Breakdown</h4>
       <div style="margin-bottom: 16px;">${itemsListHtml || "<p style='color:#94a3b8;'>No items listed.</p>"}</div>
 
@@ -9124,6 +9336,16 @@ async function showOrderSummaryModal(orderId) {
           Official Quotation
         </button>
         ${
+          (order.riderCashProofUrl || order.balanceStatus === "Pending Admin Verification" || (remainingVal > 0 && canonicalStatus.toLowerCase().includes("deliver"))) && order.balanceStatus !== "Settled" && order.balanceStatus !== "settled"
+            ? `<button type="button" class="btn-summary-mark-balance-settled" data-order-id="${escapeHtml(
+                order.id
+              )}" style="padding: 10px 18px; cursor: pointer; border-radius: 8px; background: #10b981; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; touch-action: manipulation;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Mark Balance Settled
+              </button>`
+            : ""
+        }
+        ${
           order.paymentStatus === "awaiting_counter_downpayment"
             ? `<button type="button" class="btn-summary-receive-counter-downpayment" data-order-id="${escapeHtml(
                 order.id
@@ -9139,6 +9361,14 @@ async function showOrderSummaryModal(orderId) {
   `;
 
   document.body.appendChild(modal);
+
+  const markSettledBtn = modal.querySelector(".btn-summary-mark-balance-settled");
+  if (markSettledBtn) {
+    markSettledBtn.addEventListener("click", () => {
+      modal.remove();
+      handleMarkBalanceSettled(order.id);
+    });
+  }
 
   const sumVoucherBtn = modal.querySelector(".btn-summary-open-voucher");
   if (sumVoucherBtn) {
@@ -9390,7 +9620,7 @@ async function handleMarkBalanceSettled(orderId) {
 
   const confirmed = await showAdminConfirmModal({
     title: "Mark Balance Settled",
-    message: `Mark remaining balance of <strong>₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> as settled in cash for Order <strong>#${orderId.slice(0, 8)}</strong>?`,
+    message: `Mark remaining balance of <strong>₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> as settled in cash for Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br>This will verify the rider remittance and unlock the customer's "Order Received" confirmation.`,
     confirmText: "Confirm Settled",
     cancelText: "Cancel",
     confirmType: "success",
@@ -9401,12 +9631,15 @@ async function handleMarkBalanceSettled(orderId) {
   try {
     const now = Timestamp.now();
     await updateDoc(doc(db, "orders", orderId), {
+      outstandingBalance: 0,
       remainingBalance: 0,
       balanceDue: 0,
-      balanceStatus: "settled",
-      balanceSettlementMethod: "cash",
+      balanceStatus: "Settled",
+      balanceSettlementMethod: "cash_rider",
       balanceSettledAmount: currentBalance,
       balanceSettledAt: now,
+      riderCashVerified: true,
+      riderCashVerifiedAt: now,
       updatedAt: now,
     });
     console.log(`Marked balance settled for order ${orderId}`);

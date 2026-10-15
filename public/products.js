@@ -920,21 +920,31 @@ async function openProductQuickViewModal(productId) {
     }
 
     // Feature 1: Sofa Chaise Orientation Section
-    currentOrientation = "left";
+    const defaultOrient = (currentModalProduct.dimensions && currentModalProduct.dimensions.defaultOrientation)
+      ? String(currentModalProduct.dimensions.defaultOrientation).toLowerCase()
+      : "left";
+    currentOrientation = defaultOrient === "right" ? "right" : "left";
     const orientSection = document.getElementById("pv-orientation-section");
     const orientLeftBtn = document.getElementById("pv-orient-left-btn");
     const orientRightBtn = document.getElementById("pv-orient-right-btn");
     const orientBadge = document.getElementById("pv-selected-orientation-badge");
     const mainImgEl = document.getElementById("pv-image");
 
-    if (mainImgEl) mainImgEl.style.transform = "none";
-    if (orientLeftBtn) orientLeftBtn.classList.add("active");
-    if (orientRightBtn) orientRightBtn.classList.remove("active");
-    if (orientBadge) orientBadge.textContent = "Facing Left (Standard)";
+    if (mainImgEl) mainImgEl.style.transform = currentOrientation === "right" ? "scaleX(-1)" : "none";
+    if (orientLeftBtn) {
+      if (currentOrientation === "left") orientLeftBtn.classList.add("active");
+      else orientLeftBtn.classList.remove("active");
+    }
+    if (orientRightBtn) {
+      if (currentOrientation === "right") orientRightBtn.classList.add("active");
+      else orientRightBtn.classList.remove("active");
+    }
+    if (orientBadge) orientBadge.textContent = currentOrientation === "right" ? "Facing Right" : "Facing Left (Standard)";
 
     const isSofa = (currentModalProduct.category || "").toLowerCase().includes("sofa");
+    const isLType = (currentModalProduct.dimensions && currentModalProduct.dimensions.isLType === true) || isSofa;
     if (orientSection) {
-      orientSection.style.display = isSofa ? "block" : "none";
+      orientSection.style.display = isLType ? "block" : "none";
     }
 
     // Feature 2: Bed Sizes Section
@@ -943,13 +953,12 @@ async function openProductQuickViewModal(productId) {
     const bedSelect = document.getElementById("pv-bed-size-select");
     const bedBadge = document.getElementById("pv-selected-bed-size-badge");
     const isBed = (currentModalProduct.category || "").toLowerCase().includes("bed");
+    const hasConfiguredBedSizes = Array.isArray(currentModalProduct.bedSizes) && currentModalProduct.bedSizes.length > 0;
 
     if (bedSection) {
-      if (isBed) {
+      if (isBed && hasConfiguredBedSizes) {
         bedSection.style.display = "block";
-        const bedSizesToUse = Array.isArray(currentModalProduct.bedSizes) && currentModalProduct.bedSizes.length > 0
-          ? currentModalProduct.bedSizes
-          : DEFAULT_BED_SIZES;
+        const bedSizesToUse = currentModalProduct.bedSizes;
 
         if (bedSelect) {
           bedSelect.innerHTML = bedSizesToUse
@@ -1524,9 +1533,9 @@ function setupStorefrontUI() {
       if (!currentModalProduct) return;
       const bedSizesToUse = Array.isArray(currentModalProduct.bedSizes) && currentModalProduct.bedSizes.length > 0
         ? currentModalProduct.bedSizes
-        : DEFAULT_BED_SIZES;
+        : [];
       const idx = parseInt(e.target.value, 10);
-      selectedBedSize = bedSizesToUse[idx] || bedSizesToUse[0];
+      selectedBedSize = bedSizesToUse[idx] || bedSizesToUse[0] || null;
       if (bedBadge && selectedBedSize) bedBadge.textContent = `Selected: ${selectedBedSize.name}`;
       updateModalDimensionsUI();
       recalculatePdpTotals();
@@ -2289,43 +2298,11 @@ function setupLiveChatWidget() {
     }
   }
 
-  let backdrop = document.getElementById("lanica-chat-backdrop");
-  if (!backdrop) {
-    backdrop = document.createElement("div");
-    backdrop.id = "lanica-chat-backdrop";
-    backdrop.className = "chat-drawer-backdrop";
-    document.body.appendChild(backdrop);
-  }
-
-  function openChatDrawer() {
-    if (!drawer) return;
-    drawer.classList.add("active");
-    backdrop?.classList.add("active");
-    document.body.classList.add("chat-open-scroll-locked");
-  }
-
-  function closeChatDrawer() {
-    if (!drawer) return;
-    drawer.classList.remove("active");
-    backdrop?.classList.remove("active");
-    document.body.classList.remove("chat-open-scroll-locked");
-  }
-
-  backdrop.addEventListener("click", () => {
-    closeChatDrawer();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && drawer?.classList.contains("active")) {
-      closeChatDrawer();
-    }
-  });
-
   if (launcher && drawer) {
     launcher.addEventListener("click", () => {
       const isOpening = !drawer.classList.contains("active");
+      drawer.classList.toggle("active");
       if (isOpening) {
-        openChatDrawer();
         if (unreadBadge) unreadBadge.style.display = "none";
         if (!chatScreen?.classList.contains("active")) {
           showScreen("menu");
@@ -2335,15 +2312,13 @@ function setupLiveChatWidget() {
             scrollChatToBottom();
           }, 100);
         }
-      } else {
-        closeChatDrawer();
       }
     });
   }
 
   closeButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      closeChatDrawer();
+      drawer?.classList.remove("active");
     });
   });
 

@@ -3417,38 +3417,6 @@ textarea:focus-visible {
   }
 }
 
-/* Body Scroll Lock & Backdrop for Customer Live Chat */
-body.chat-open-scroll-locked {
-  overflow: hidden !important;
-  touch-action: none !important;
-  overscroll-behavior: none !important;
-}
-
-.chat-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  z-index: 999;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
-}
-
-.chat-drawer-backdrop.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-@media (min-width: 641px) {
-  .chat-drawer-backdrop {
-    background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-}
-
 /* Multi-screen container inside drawer */
 .support-screen {
   display: none;

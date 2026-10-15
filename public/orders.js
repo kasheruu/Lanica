@@ -45,6 +45,20 @@ import {
   updateURLQueryParam,
 } from "./paginationService.js";
 import { openPaymongoQrModal } from "./paymongoController.js";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+import { db } from "./orderService.js";
+
+const storage = getStorage();
 
 // Global State
 let currentUser = null;
@@ -1274,6 +1288,79 @@ function createOrderCardElement(order) {
         <span class="total-amount">₱${totalAmountFormatted}</span>
       </div>
 
+      ${(() => {
+        const rawSt = String(order.status || "").toLowerCase();
+        const rawOrdSt = String(order.orderStatus || "").toLowerCase();
+        const isCompleted = normStatus === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || order.orderReceived === true;
+        const isDelivered = (normStatus === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
+        const isBalanceSettled = order.balanceStatus === "Settled" || (order.balanceStatus || "").toLowerCase() === "settled" || (order.outstandingBalance === 0 && order.balanceStatus !== undefined) || remainingVal <= 0;
+        const hasUnpaidDeliveryBalance = isDelivered && !isBalanceSettled && remainingVal > 0;
+        const isVerificationPending = order.balanceStatus === "Pending Admin Verification" || order.balanceStatus === "Verification Pending";
+
+        if (!hasUnpaidDeliveryBalance) return "";
+
+        return `
+          <div class="delivery-balance-due-card" style="margin: 14px 0; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08); width: 100%; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #fef3c7; color: #b45309; font-weight: 800; font-size: 0.85rem;">₱</span>
+                  <strong style="font-size: 0.96rem; color: #92400e; text-transform: uppercase; letter-spacing: -0.01em;">Delivery Balance Due</strong>
+                </div>
+                <div style="font-size: 0.8rem; color: #78350f; margin-top: 4px; line-height: 1.4;">
+                  Your handcrafted furniture has arrived! Please settle the outstanding balance below before marking the order as received.
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 0.72rem; color: #b45309; font-weight: 600; text-transform: uppercase; display: block;">Balance Due:</span>
+                <span style="font-size: 1.25rem; font-weight: 900; color: #b45309;">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            ${isVerificationPending ? `
+              <div style="margin-top: 12px; padding: 12px 14px; background: #ffffff; border: 1.5px solid #fef08a; border-radius: 10px; display: flex; align-items: flex-start; gap: 10px;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <div style="font-size: 0.82rem; color: #92400e; line-height: 1.4;">
+                  <strong>Cash Remittance Proof Submitted — Awaiting Admin Verification</strong><br/>
+                  Our workshop administration is reviewing your proof of remittance. The <strong>"ORDER RECEIVED"</strong> button will automatically unlock once verified.
+                  ${order.riderCashProofUrl ? `<div style="margin-top: 6px;"><a href="${order.riderCashProofUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 0.78rem;">View Uploaded Remittance Receipt &rarr;</a></div>` : ""}
+                </div>
+              </div>
+            ` : `
+              <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px;">
+                <button type="button" class="btn-pay-balance-qrph" data-order-id="${orderId}" data-balance-amount="${remainingVal}" style="flex: 1; min-width: 220px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 8px; background: #0f172a; color: #FFD700; font-weight: 700; font-size: 0.84rem; border: 1.5px solid #FFD700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                  <span>Pay via PayMongo QR Ph (Auto Complete)</span>
+                </button>
+                <button type="button" class="btn-toggle-cash-rider-form" data-order-id="${orderId}" style="flex: 1; min-width: 200px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 8px; background: #ffffff; color: #15803d; font-weight: 700; font-size: 0.84rem; border: 1.5px solid #16a34a; cursor: pointer; transition: all 0.2s;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                  <span>Pay Cash to Rider (Admin Verified)</span>
+                </button>
+              </div>
+
+              <!-- Inline Remittance Upload Form -->
+              <div class="cash-rider-upload-box" style="display: none; margin-top: 12px; background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 14px;">
+                <div style="font-size: 0.84rem; font-weight: 700; color: #0f172a; margin-bottom: 4px;">Upload Cash Payment / Remittance Receipt</div>
+                <div style="font-size: 0.78rem; color: #64748b; margin-bottom: 10px;">Upload a photo of your remittance receipt or signed delivery note given to the rider.</div>
+                
+                <input type="file" class="input-rider-proof-file" accept="image/*" style="display: none;" />
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                  <button type="button" class="btn-choose-rider-proof" style="padding: 7px 14px; border-radius: 6px; background: #f1f5f9; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: #334155;">📷 Select Receipt Image</button>
+                  <span class="rider-proof-filename" style="font-size: 0.8rem; color: #64748b; font-style: italic;">No file selected</span>
+                </div>
+                <div class="rider-proof-preview-container" style="display: none; margin-top: 10px;">
+                  <img class="rider-proof-preview-img" src="" alt="Proof Preview" style="max-height: 120px; border-radius: 6px; border: 1px solid #e2e8f0; object-fit: contain;" />
+                </div>
+                <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;">
+                  <button type="button" class="btn-cancel-cash-rider" style="padding: 6px 14px; border: none; background: transparent; font-size: 0.82rem; color: #64748b; cursor: pointer;">Cancel</button>
+                  <button type="button" class="btn-submit-rider-proof" data-order-id="${orderId}" style="padding: 7px 16px; border-radius: 6px; background: #16a34a; color: #ffffff; border: none; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: none;">Submit Receipt for Verification</button>
+                </div>
+              </div>
+            `}
+          </div>
+        `;
+      })()}
+
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         <button type="button" class="btn-chat-order" data-order-id="${orderId}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: var(--clr-primary-light, #f4eee7); color: var(--clr-primary, #6b4423); font-weight: 600; font-size: 0.82rem; border: 1px solid var(--clr-primary, #6b4423); cursor: pointer; transition: all 0.2s;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
@@ -1290,8 +1377,21 @@ function createOrderCardElement(order) {
           const rawOrdSt = String(order.orderStatus || "").toLowerCase();
           const isCompleted = normStatus === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || order.orderReceived === true;
           const isDelivered = (normStatus === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
+          const isBalanceSettled = order.balanceStatus === "Settled" || (order.balanceStatus || "").toLowerCase() === "settled" || (order.outstandingBalance === 0 && order.balanceStatus !== undefined) || remainingVal <= 0;
+          const hasUnpaidDeliveryBalance = isDelivered && !isBalanceSettled && remainingVal > 0;
 
           if (isDelivered) {
+            if (hasUnpaidDeliveryBalance) {
+              return `
+                <div style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <button type="button" class="btn-order-received is-disabled" data-order-id="${orderId}" disabled style="opacity: 0.5; cursor: not-allowed; background: #9ca3af; border: 1.5px solid #9ca3af; color: #ffffff;" title="Delivery balance unpaid. Please settle remaining balance first.">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>ORDER RECEIVED</span>
+                  </button>
+                  <span style="font-size: 0.72rem; color: #b45309; margin-top: 4px; font-weight: 600;">🔒 Settle balance above to unlock</span>
+                </div>
+              `;
+            }
             return `
               <button type="button" class="btn-order-received" data-order-id="${orderId}">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -1314,17 +1414,111 @@ function createOrderCardElement(order) {
     </div>
   `;
 
-  const payBtn = card.querySelector(".btn-pay-downpayment-qr");
-  if (payBtn) {
-    payBtn.addEventListener("click", () => {
+  // Attach Delivery Balance Settlement Handlers
+  const balanceQrBtn = card.querySelector(".btn-pay-balance-qrph");
+  if (balanceQrBtn) {
+    balanceQrBtn.addEventListener("click", () => {
       openPaymongoQrModal({
         orderId: orderId,
-        totalAmount: totalVal,
-        onSuccess: (confirmedOrderId) => {
-          showToast(`PayMongo 30% Downpayment Verified for Order #${confirmedOrderId}!`, "success");
-          setTimeout(() => window.location.reload(), 1500);
+        exactAmount: remainingVal,
+        isDeliveryBalance: true,
+        description: `Remaining Delivery Balance for Order #${orderId}`,
+        onSuccess: async (confirmedOrderId) => {
+          try {
+            await updateDoc(doc(db, "orders", confirmedOrderId), {
+              balanceStatus: "Settled",
+              outstandingBalance: 0,
+              remainingBalance: 0,
+              balanceDue: 0,
+              balanceSettledAt: serverTimestamp(),
+              balanceSettlementMethod: "paymongo_qrph",
+              updatedAt: serverTimestamp(),
+            });
+          } catch (e) {
+            console.warn("Firestore balance update notice:", e);
+          }
+          showToast(`Delivery balance settled for Order #${confirmedOrderId}! "ORDER RECEIVED" is now unlocked.`, "success");
         },
       });
+    });
+  }
+
+  const toggleCashFormBtn = card.querySelector(".btn-toggle-cash-rider-form");
+  const cashUploadBox = card.querySelector(".cash-rider-upload-box");
+  const cancelCashBtn = card.querySelector(".btn-cancel-cash-rider");
+  const chooseProofBtn = card.querySelector(".btn-choose-rider-proof");
+  const fileInputEl = card.querySelector(".input-rider-proof-file");
+  const fileNameEl = card.querySelector(".rider-proof-filename");
+  const previewContainer = card.querySelector(".rider-proof-preview-container");
+  const previewImg = card.querySelector(".rider-proof-preview-img");
+  const submitProofBtn = card.querySelector(".btn-submit-rider-proof");
+
+  if (toggleCashFormBtn && cashUploadBox) {
+    toggleCashFormBtn.addEventListener("click", () => {
+      cashUploadBox.style.display = cashUploadBox.style.display === "none" ? "block" : "none";
+    });
+  }
+
+  if (cancelCashBtn && cashUploadBox) {
+    cancelCashBtn.addEventListener("click", () => {
+      cashUploadBox.style.display = "none";
+    });
+  }
+
+  if (chooseProofBtn && fileInputEl) {
+    chooseProofBtn.addEventListener("click", () => {
+      fileInputEl.click();
+    });
+  }
+
+  if (fileInputEl) {
+    fileInputEl.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        if (fileNameEl) fileNameEl.textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = (loadEvt) => {
+          if (previewImg) previewImg.src = loadEvt.target.result;
+          if (previewContainer) previewContainer.style.display = "block";
+          if (submitProofBtn) submitProofBtn.style.display = "inline-block";
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (submitProofBtn && fileInputEl) {
+    submitProofBtn.addEventListener("click", async () => {
+      const file = fileInputEl.files?.[0];
+      if (!file) {
+        showToast("Please select a photo of your remittance receipt.", "warning");
+        return;
+      }
+
+      submitProofBtn.disabled = true;
+      submitProofBtn.textContent = "Uploading...";
+
+      try {
+        const safeExt = file.name.split(".").pop() || "jpg";
+        const stRef = storageRef(storage, `rider_receipts/${orderId}_${Date.now()}.${safeExt}`);
+        const snap = await uploadBytes(stRef, file, { contentType: file.type || "image/jpeg" });
+        const downloadUrl = await getDownloadURL(snap.ref);
+
+        await updateDoc(doc(db, "orders", orderId), {
+          balanceStatus: "Pending Admin Verification",
+          riderCashProofUrl: downloadUrl,
+          riderCashRemittedAt: serverTimestamp(),
+          riderCashAmount: remainingVal,
+          updatedAt: serverTimestamp(),
+        });
+
+        showToast("Remittance proof submitted! Our admin will review and verify your payment shortly.", "success");
+      } catch (err) {
+        console.error("Proof upload failed:", err);
+        showToast(err.message || "Could not upload remittance proof. Please try again.", "error");
+        submitProofBtn.disabled = false;
+        submitProofBtn.textContent = "Submit Receipt for Verification";
+      }
     });
   }
 
@@ -1332,6 +1526,10 @@ function createOrderCardElement(order) {
   const receivedBtn = card.querySelector(".btn-order-received");
   if (receivedBtn) {
     receivedBtn.addEventListener("click", async () => {
+      if (hasUnpaidDeliveryBalance) {
+        showToast(`Please settle the remaining balance of ₱${remainingVal.toLocaleString()} before confirming order receipt.`, "warning");
+        return;
+      }
       const confirmed = await showConfirmModal({
         title: "Confirm Order Receipt",
         message: `Have you received your handcrafted furniture order <strong>#${escapeHtml(orderId)}</strong> in good condition?<br><br>This action will mark the order as <strong>COMPLETED</strong> and generate your Official Receipt &amp; Warranty.`,
@@ -1556,43 +1754,11 @@ function setupLiveChatWidget() {
     }
   }
 
-  let backdrop = document.getElementById("lanica-chat-backdrop");
-  if (!backdrop) {
-    backdrop = document.createElement("div");
-    backdrop.id = "lanica-chat-backdrop";
-    backdrop.className = "chat-drawer-backdrop";
-    document.body.appendChild(backdrop);
-  }
-
-  function openChatDrawer() {
-    if (!drawer) return;
-    drawer.classList.add("active");
-    backdrop?.classList.add("active");
-    document.body.classList.add("chat-open-scroll-locked");
-  }
-
-  function closeChatDrawer() {
-    if (!drawer) return;
-    drawer.classList.remove("active");
-    backdrop?.classList.remove("active");
-    document.body.classList.remove("chat-open-scroll-locked");
-  }
-
-  backdrop.addEventListener("click", () => {
-    closeChatDrawer();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && drawer?.classList.contains("active")) {
-      closeChatDrawer();
-    }
-  });
-
   if (launcher && drawer) {
     launcher.addEventListener("click", () => {
       const isOpening = !drawer.classList.contains("active");
+      drawer.classList.toggle("active");
       if (isOpening) {
-        openChatDrawer();
         if (unreadBadge) unreadBadge.style.display = "none";
         if (!chatScreen?.classList.contains("active")) {
           showScreen("menu");
@@ -1602,15 +1768,13 @@ function setupLiveChatWidget() {
             scrollChatToBottom();
           }, 100);
         }
-      } else {
-        closeChatDrawer();
       }
     });
   }
 
   closeButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      closeChatDrawer();
+      drawer?.classList.remove("active");
     });
   });
 
@@ -2066,14 +2230,14 @@ function setupLiveChatWidget() {
 
   function openOrderChat(orderId) {
     if (!orderId) return;
-    openChatDrawer();
+    if (drawer) drawer.classList.add("active");
     showScreen("chat");
     switchChannel("order", orderId);
     setTimeout(() => textInput?.focus(), 150);
   }
 
   function openSupportChat() {
-    openChatDrawer();
+    if (drawer) drawer.classList.add("active");
     showScreen("chat");
     switchChannel("support");
     setTimeout(() => textInput?.focus(), 150);
@@ -2442,29 +2606,55 @@ function renderCustomerReceiptDocument() {
       </div>
 
       <!-- Signatures & Official Certificate Box -->
-      <div style="display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #e5e7eb; padding-top: 18px; margin-top: 10px; font-size: 0.8rem; text-align: center; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 180px;">
-          <div style="height: 38px; display: flex; align-items: flex-end; justify-content: center; font-family: monospace; font-weight: 700; color: #0284c7;">
-            LANICA WORKSHOP ARTISAN
+      ${(() => {
+        const approvedSig =
+          order.signatureUrl ||
+          order.adminSignature ||
+          order._voucherSignatories?.signatures?.approvedBy ||
+          order._voucherSignatories?.signatures?.checkedBy ||
+          order.signatures?.approvedBy ||
+          order.signatures?.checkedBy ||
+          null;
+
+        const preparedSig =
+          order._voucherSignatories?.signatures?.preparedBy ||
+          order.signatures?.preparedBy ||
+          null;
+
+        return `
+          <div style="display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #e5e7eb; padding-top: 18px; margin-top: 10px; font-size: 0.8rem; text-align: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 180px;">
+              <div style="min-height: 48px; display: flex; align-items: flex-end; justify-content: center;">
+                ${
+                  preparedSig
+                    ? `<img src="${preparedSig}" alt="Artisan Signature" style="max-height: 46px; max-width: 130px; object-fit: contain; display: block;" />`
+                    : `<span style="font-family: monospace; font-weight: 700; color: #0284c7;">LANICA WORKSHOP ARTISAN</span>`
+                }
+              </div>
+              <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">PREPARED &amp; CRAFTED BY</div>
+              <div style="font-size: 0.74rem; color: #64748b;">Lanica Master Carpenters</div>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+              <div style="min-height: 48px; display: flex; align-items: flex-end; justify-content: center;">
+                ${
+                  approvedSig
+                    ? `<img src="${approvedSig}" alt="Admin Signature" style="max-height: 46px; max-width: 130px; object-fit: contain; display: block;" />`
+                    : `<span style="font-family: monospace; font-weight: 700; color: #059669;">VERIFIED &amp; RECONCILED</span>`
+                }
+              </div>
+              <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">FINANCE &amp; AUDIT SEAL</div>
+              <div style="font-size: 0.74rem; color: #64748b;">Lanica Management</div>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+              <div style="min-height: 48px; display: flex; align-items: flex-end; justify-content: center; font-weight: 700; color: #111827;">
+                ${escapeHtml(customerName)}
+              </div>
+              <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">RECEIVED IN GOOD CONDITION</div>
+              <div style="font-size: 0.74rem; color: #64748b;">Customer / Recipient</div>
+            </div>
           </div>
-          <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">PREPARED &amp; CRAFTED BY</div>
-          <div style="font-size: 0.74rem; color: #64748b;">Lanica Master Carpenters</div>
-        </div>
-        <div style="flex: 1; min-width: 180px;">
-          <div style="height: 38px; display: flex; align-items: flex-end; justify-content: center; font-family: monospace; font-weight: 700; color: #059669;">
-            VERIFIED &amp; RECONCILED
-          </div>
-          <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">FINANCE &amp; AUDIT SEAL</div>
-          <div style="font-size: 0.74rem; color: #64748b;">Lanica Management</div>
-        </div>
-        <div style="flex: 1; min-width: 180px;">
-          <div style="height: 38px; display: flex; align-items: flex-end; justify-content: center; font-weight: 700; color: #111827;">
-            ${escapeHtml(customerName)}
-          </div>
-          <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">RECEIVED IN GOOD CONDITION</div>
-          <div style="font-size: 0.74rem; color: #64748b;">Customer / Recipient</div>
-        </div>
-      </div>
+        `;
+      })()}
 
       <div style="margin-top: 20px; padding: 10px 14px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; font-size: 0.75rem; color: #64748b;">
         Thank you for trusting Lanica Furniture! For custom care guides, wood re-polishing, or warranty inquiries, contact our hotline at ${escapeHtml(branch.contact)} or visit our showroom.
@@ -2500,7 +2690,11 @@ function initLanicaReceiptModalListeners() {
   if (printBtn && !printBtn.dataset.bound) {
     printBtn.dataset.bound = "true";
     printBtn.addEventListener("click", () => {
-      window.print();
+      if (activeCustomerReceiptOrder && activeCustomerReceiptOrder.receiptPdfUrl) {
+        window.open(activeCustomerReceiptOrder.receiptPdfUrl, "_blank");
+      } else {
+        window.print();
+      }
     });
   }
 

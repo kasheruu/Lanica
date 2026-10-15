@@ -60,10 +60,11 @@ export async function onRequestPost(context) {
       return jsonResponse({ error: "Invalid or missing totalAmount. Must be a positive number." }, 400);
     }
 
-    // Dynamic 30% downpayment calculation:
-    // Centavos integer: Math.round((totalAmount * 0.30) * 100)
-    const downpaymentAmount = Math.round(rawTotal * 0.30 * 100);
-    const downpaymentPhp = Math.round(rawTotal * 0.30);
+    const rawExact = Number(body.exactAmount);
+    const hasExact = !isNaN(rawExact) && rawExact > 0;
+    const chargePhp = hasExact ? Math.round(rawExact) : Math.round(rawTotal * 0.30);
+    const chargeCentavos = hasExact ? Math.round(rawExact * 100) : Math.round(rawTotal * 0.30 * 100);
+    const intentDescription = body.description || (hasExact ? `Remaining Delivery Balance for Order #${orderId}` : `30% Downpayment for Order #${orderId}`);
 
     const secretAuth = "Basic " + btoa(`${secretKey}:`);
     const publicAuth = "Basic " + btoa(`${publicKey || secretKey}:`);
@@ -79,7 +80,7 @@ export async function onRequestPost(context) {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: downpaymentAmount,
+            amount: chargeCentavos,
             payment_method_allowed: ["qrph", "gcash", "paymaya"],
             payment_method_options: {
               card: {
@@ -87,7 +88,7 @@ export async function onRequestPost(context) {
               },
             },
             currency: "PHP",
-            description: `30% Downpayment for Order #${orderId}`,
+            description: intentDescription,
           },
         },
       }),
@@ -203,7 +204,8 @@ export async function onRequestPost(context) {
       success: true,
       paymentIntentId: intentId,
       qrImageUrl: qrImageUrl,
-      downpaymentPhp: downpaymentPhp,
+      downpaymentPhp: chargePhp,
+      chargePhp: chargePhp,
     });
   } catch (err) {
     console.error("PayMongo create-qr error:", err);
