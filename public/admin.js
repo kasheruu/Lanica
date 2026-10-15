@@ -7454,12 +7454,16 @@ function renderUsersList(users) {
 
       if (activeUserTab === "customers") {
         // Calculate Customer Metrics
-        const custOrders = (Array.isArray(allOrders) ? allOrders : []).filter(
-          (o) => (o.userId && o.userId === u.id) || (o.customerEmail && o.customerEmail.toLowerCase() === email.toLowerCase())
-        );
+        const custOrders = (Array.isArray(allOrders) ? allOrders : []).filter((o) => {
+          const matchesUid = (o.userId && (o.userId === u.id || o.userId === u.uid)) || (o.customerId && (o.customerId === u.id || o.customerId === u.uid));
+          const orderEmail = (o.customerEmail || o.email || o.userEmail || "").toLowerCase();
+          const matchesEmail = email !== "—" && orderEmail && orderEmail === email.toLowerCase();
+          const isNotCancelled = o.status !== "cancelled" && o.status !== "declined";
+          return (matchesUid || matchesEmail) && isNotCancelled;
+        });
         const totalOrdersCount = custOrders.length;
         const lifetimeValue = custOrders.reduce((sum, o) => {
-          const val = parseFloat(o.total || o.pricing?.total || o.amount || 0);
+          const val = parseFloat(o.totalAmount ?? o.total ?? o.pricing?.total ?? o.amount ?? 0);
           return sum + (isNaN(val) ? 0 : val);
         }, 0);
 

@@ -318,6 +318,9 @@ export function initAuthModalController() {
   // 9. Sign Out Button
   if (signOutBtn) {
     signOutBtn.addEventListener("click", async () => {
+      // Temporarily close auth modal so only the confirmation dialog appears
+      authModal?.classList.remove("active");
+
       const confirmed = await showConfirmModal({
         title: "Sign Out",
         message: "Are you sure you want to sign out of your Lanica account?",
@@ -325,7 +328,10 @@ export function initAuthModalController() {
         cancelText: "Stay Logged In",
         icon: "logout",
       });
-      if (!confirmed) return;
+      if (!confirmed) {
+        authModal?.classList.add("active");
+        return;
+      }
 
       try {
         await signOut(auth);
@@ -333,7 +339,14 @@ export function initAuthModalController() {
         authModal?.classList.remove("active");
         document.body.style.overflow = "";
         setTimeout(() => {
-          window.location.reload();
+          if (
+            window.location.pathname.includes("orders.html") ||
+            window.location.pathname.includes("profile.html")
+          ) {
+            window.location.href = "index.html";
+          } else {
+            window.location.reload();
+          }
         }, 500);
       } catch (err) {
         showToast(err.message || "Failed to sign out.", "error");

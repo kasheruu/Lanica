@@ -176,18 +176,6 @@ function setupHeaderAndAuthUI() {
   const cartOverlay = document.getElementById("cart-drawer-overlay");
   const closeCartBtn = document.getElementById("close-cart-btn");
 
-  const authModalBtn = document.getElementById("auth-modal-btn");
-  const authModal = document.getElementById("auth-modal");
-  const closeAuthBtn = document.getElementById("close-auth-modal-btn");
-
-  const signOutBtn = document.getElementById("customer-signout-btn");
-  const googleBtn = document.getElementById("google-signin-btn");
-
-  const tabLogin = document.getElementById("tab-login");
-  const tabRegister = document.getElementById("tab-register");
-  const loginForm = document.getElementById("customer-login-form");
-  const registerForm = document.getElementById("customer-register-form");
-
   // Cart Drawer Toggles
   if (cartBtn && cartOverlay) {
     cartBtn.addEventListener("click", () => cartOverlay.classList.add("active"));
@@ -201,111 +189,7 @@ function setupHeaderAndAuthUI() {
     });
   }
 
-
-
-  // SIGN OUT HANDLER
-  if (signOutBtn) {
-    signOutBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const confirmed = await showConfirmModal({
-        title: "Sign Out",
-        message: "Are you sure you want to sign out of your Lanica account?",
-        confirmText: "Sign Out",
-        cancelText: "Stay Logged In",
-        icon: "logout",
-      });
-      if (!confirmed) return;
-
-      try {
-        signOutBtn.disabled = true;
-        signOutBtn.textContent = "Signing out...";
-        await signOut(auth);
-        showToast("Signed out successfully.", "info");
-        authModal?.classList.remove("active");
-        setTimeout(() => {
-          window.location.href = "index.html";
-        }, 500);
-      } catch (err) {
-        console.error("Sign out error:", err);
-        showToast(err.message || "Failed to sign out.", "error");
-        signOutBtn.disabled = false;
-        signOutBtn.textContent = "Sign Out";
-      }
-    });
-  }
-
-  // Google Auth Button
-  if (googleBtn) {
-    googleBtn.addEventListener("click", async () => {
-      try {
-        const res = await signInWithGoogle();
-        showToast(res.message, "success");
-        authModal?.classList.remove("active");
-      } catch (err) {
-        console.error("Google Auth error:", err);
-        showToast(err.message || "Failed to sign in with Google.", "error");
-      }
-    });
-  }
-
-  // Login / Register Tabs
-  if (tabLogin && tabRegister && loginForm && registerForm) {
-    tabLogin.addEventListener("click", () => {
-      tabLogin.classList.add("active");
-      tabRegister.classList.remove("active");
-      loginForm.style.display = "flex";
-      registerForm.style.display = "none";
-    });
-
-    tabRegister.addEventListener("click", () => {
-      tabRegister.classList.add("active");
-      tabLogin.classList.remove("active");
-      registerForm.style.display = "flex";
-      loginForm.style.display = "none";
-    });
-  }
-
-  // Email Login Form
-  if (loginForm) {
-    loginForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = document.getElementById("cust-login-email").value;
-      const pwd = document.getElementById("cust-login-pwd").value;
-      const errEl = document.getElementById("cust-auth-error");
-
-      try {
-        if (errEl) errEl.textContent = "";
-        const res = await signInUser({ email, password: pwd });
-        showToast(res.message, "success");
-        authModal?.classList.remove("active");
-      } catch (err) {
-        if (errEl) errEl.textContent = err.message || "Failed to sign in.";
-        showToast(err.message, "error");
-      }
-    });
-  }
-
-  // Email Register Form
-  if (registerForm) {
-    registerForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = document.getElementById("cust-reg-email").value;
-      const pwd = document.getElementById("cust-reg-pwd").value;
-      const nameEl = document.getElementById("cust-reg-name");
-      const displayName = nameEl ? nameEl.value : "";
-      const errEl = document.getElementById("cust-reg-error");
-
-      try {
-        if (errEl) errEl.textContent = "";
-        const res = await signUpUser({ email, password: pwd, displayName });
-        showToast(res.message, "info");
-        authModal?.classList.remove("active");
-      } catch (err) {
-        if (errEl) errEl.textContent = err.message || "Failed to create account.";
-        showToast(err.message, "error");
-      }
-    });
-  }
+  // Customer Auth Modal and Sign Out are centrally handled by initAuthModalController()
 }
 
 function updateAuthUi(user) {
