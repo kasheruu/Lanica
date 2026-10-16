@@ -126,10 +126,9 @@ export function initAuthModalController() {
     updateRuleItem(ruleNumber, criteria.number, "1 number (0-9)");
     updateRuleItem(ruleSpecial, criteria.special, "1 special (!@#$)");
 
-    // Compute Strength Category
-    let category = "weak";
-    let pct = "25%";
-    let labelText = "WEAK PASSWORD";
+    let category;
+    let pct;
+    let labelText;
 
     if (!pwd) {
       pct = "0%";
@@ -203,6 +202,39 @@ export function initAuthModalController() {
 
       try {
         const res = await signInUser({ email, password: pass });
+
+        // Check if user is staff or admin in Firestore
+        let role = "";
+        try {
+          const userRef = doc(db, "users", res.user.uid);
+          const snap = await getDoc(userRef);
+          if (snap.exists()) {
+            role = (snap.data().role || "").toLowerCase();
+          }
+        } catch (rErr) {
+          console.warn("Could not check user role on sign in:", rErr);
+        }
+
+        if (role === "admin") {
+          showAuthToast("Welcome, Administrator! Redirecting to Management Portal...", "success");
+          authModal?.classList.remove("active");
+          document.body.style.overflow = "";
+          setTimeout(() => {
+            window.location.href = "admin.html";
+          }, 800);
+          return;
+        }
+
+        if (role === "staff") {
+          showAuthToast("Welcome, Staff Member! Redirecting to Staff Portal...", "success");
+          authModal?.classList.remove("active");
+          document.body.style.overflow = "";
+          setTimeout(() => {
+            window.location.href = "staff.html";
+          }, 800);
+          return;
+        }
+
         showAuthToast(res.message, "success");
         authModal?.classList.remove("active");
         document.body.style.overflow = "";
@@ -395,7 +427,7 @@ export function initAuthModalController() {
 
       updateAvatars(photoURL, name);
 
-      // Async fetch Firestore user document to pick up custom uploaded avatar
+      // Async fetch Firestore user document to pick up custom uploaded avatar & role
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
@@ -403,6 +435,30 @@ export function initAuthModalController() {
           if (udata.photoURL) photoURL = udata.photoURL;
           if (udata.displayName) name = udata.displayName;
           updateAvatars(photoURL, name);
+
+          const role = (udata.role || "").toLowerCase();
+          const existingPortalBtn = document.getElementById("nav-portal-dashboard-link");
+          if (role === "admin" || role === "staff") {
+            const roleBadge = role === "admin" ? "ADMINISTRATOR" : "STAFF";
+            const portalHref = role === "admin" ? "admin.html" : "staff.html";
+            const portalLabel = role === "admin" ? "MANAGEMENT DASHBOARD" : "STAFF DASHBOARD";
+
+            if (custName) {
+              custName.innerHTML = `${name} <span style="display:inline-block; font-size:0.7rem; font-weight:800; background:#111827; color:#FFD700; padding:2px 8px; border-radius:6px; margin-left:6px; vertical-align:middle; letter-spacing:0.04em;">${roleBadge}</span>`;
+            }
+
+            if (signedInView && !existingPortalBtn) {
+              const portalLink = document.createElement("a");
+              portalLink.id = "nav-portal-dashboard-link";
+              portalLink.href = portalHref;
+              portalLink.className = "btn-auth-primary";
+              portalLink.style.cssText = "text-decoration:none; margin-bottom:10px; background:#111827; color:#FFD700; border:1.5px solid #FFD700; display:block;";
+              portalLink.textContent = portalLabel;
+              signedInView.insertBefore(portalLink, signedInView.children[signedInView.children.length - 1]);
+            }
+          } else if (existingPortalBtn) {
+            existingPortalBtn.remove();
+          }
         }
       } catch (err) {
         console.warn("Could not query user doc:", err);

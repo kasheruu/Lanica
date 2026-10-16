@@ -1144,7 +1144,7 @@
         <div>
           <h1>Workshop Crafting Pipeline</h1>
           <p class="admin-subtitle">
-            Visual Artisan Kanban Board: Track timber allocation, carpentry, custom specifications, and quality inspection stages.
+            Visual Workshop Kanban Board: Track timber allocation, carpentry, custom specifications, and quality inspection stages.
           </p>
         </div>
       </header>
@@ -1158,7 +1158,7 @@
         <div class="stat-card">
           <h3>In Production</h3>
           <p class="stat-value" id="workshop-in-production" style="color: #d97706;">0</p>
-          <span style="font-size: 0.78rem; color: #6b7280;">Artisans currently crafting</span>
+          <span style="font-size: 0.78rem; color: #6b7280;">Staff currently crafting</span>
         </div>
         <div class="stat-card">
           <h3>QC Passed</h3>
@@ -1486,13 +1486,14 @@
               <th>Items</th>
               <th>Financial Breakdown</th>
               <th>Status & Refund</th>
+              <th>Est. Delivery</th>
               <th>Assigned to</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody id="orders-list">
             <tr>
-              <td colspan="8" style="text-align: center; padding: 20px">Loading orders…</td>
+              <td colspan="9" style="text-align: center; padding: 20px">Loading orders…</td>
             </tr>
           </tbody>
         </table>
@@ -1594,12 +1595,12 @@
         <table class="inventory-table orders-table">
           <thead id="users-table-thead">
             <tr>
-              <th>Name</th>
-              <th>Email</th>
+              <th>Staff Member</th>
+              <th>Email Address</th>
               <th>Role</th>
-              <th>Status</th>
-              <th>UID</th>
-              <th>Action</th>
+              <th>2FA / Verification</th>
+              <th>Account Status</th>
+              <th style="text-align: right;">Actions</th>
             </tr>
           </thead>
           <tbody id="users-list">
@@ -1819,13 +1820,21 @@
           <input type="text" id="role-modal-user-name" readonly style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 0.875rem; color: #334155;" />
         </div>
         <div>
-          <label for="role-modal-select" style="display: block; font-size: 0.825rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Assign Security Role</label>
-          <select id="role-modal-select" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.875rem; background: #ffffff;">
-            <option value="staff">Staff (Standard)</option>
-            <option value="artisan">Artisan / Workshop Lead</option>
-            <option value="inventory_manager">Inventory Manager</option>
-            <option value="admin">Administrator</option>
-            <option value="super_admin">Super Admin</option>
+          <label for="role-modal-status-select" style="display: block; font-size: 0.825rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Staff Account Status</label>
+          <select id="role-modal-status-select" style="width: 100%; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.875rem; color: #0f172a; cursor: pointer;">
+            <option value="active">Active (Access Allowed)</option>
+            <option value="inactive">Suspended / Inactive (Access Blocked)</option>
+          </select>
+          <p style="font-size: 0.74rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">
+            When suspended or inactive, the staff member cannot log in and their active sessions are revoked immediately.
+          </p>
+        </div>
+        <div>
+          <label for="role-modal-2fa-select" style="display: block; font-size: 0.825rem; font-weight: 600; color: #475569; margin-bottom: 6px;">2FA / Verification Status</label>
+          <select id="role-modal-2fa-select" style="width: 100%; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.875rem; color: #0f172a; cursor: pointer;">
+            <option value="unverified">Unverified</option>
+            <option value="email_verified">Verified (Email)</option>
+            <option value="2fa_verified">Verified (2FA)</option>
           </select>
         </div>
         <div>
@@ -1984,6 +1993,30 @@
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           Apply Signature
         </button>
+      </div>
+    </div>
+  </div>
+  <!-- Modern Delivery Date Override Modal (Admin) -->
+  <div id="admin-delivery-modal" class="user-modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 10000; padding: 16px;">
+    <div class="user-modal-card" style="max-width: 440px; width: 100%; background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          Set Delivery Estimate
+        </h3>
+        <button type="button" id="btn-close-admin-delivery-modal" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: #64748b; margin: 0 0 16px;">
+        Adjust or manually schedule the target delivery date for order <strong id="admin-delivery-modal-order-id" style="color: #0f172a;"></strong>.
+      </p>
+      <input type="hidden" id="admin-delivery-modal-order-id-val" />
+      <div style="margin-bottom: 20px;">
+        <label for="admin-delivery-modal-date-input" style="display: block; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 6px;">Target Delivery Date</label>
+        <input type="date" id="admin-delivery-modal-date-input" style="width: 100%; padding: 10px 12px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; font-family: inherit; outline: none; background: #fff;" />
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" id="btn-cancel-admin-delivery-modal" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Cancel</button>
+        <button type="button" id="btn-apply-admin-delivery-modal" class="btn-primary" style="padding: 8px 20px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Apply Delivery Date</button>
       </div>
     </div>
   </div>

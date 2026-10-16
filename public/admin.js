@@ -5439,12 +5439,13 @@ function showAdminSection(name) {
   window.location.hash = name || "dashboard";
 }
 
-function formatTransactionMethod(method) {
+function isCashPaymentMethod(method) {
   const m = String(method || "").toLowerCase();
-  if (m.includes("walk_in") || m.includes("cash") || m.includes("counter")) {
-    return "Cash (Counter)";
-  }
-  return "QR Ph (PayMongo)";
+  return m.includes("walk_in") || m.includes("cash") || m.includes("counter");
+}
+
+function formatTransactionMethod(method) {
+  return isCashPaymentMethod(method) ? "Cash (Counter)" : "QR Ph (PayMongo)";
 }
 
 function formatFormalDate(val, uppercase = false) {
@@ -5666,9 +5667,12 @@ function renderAdminTransactionsList(orders) {
     }
 
     if (adminTransMethodFilter !== "all") {
-      const m = String(tx.method || "").toLowerCase();
-      if (adminTransMethodFilter === "qr" && !m.includes("qr") && !m.includes("paymongo")) return false;
-      if (adminTransMethodFilter === "cash" && !m.includes("cash") && !m.includes("walk_in") && !m.includes("counter")) return false;
+      const isCash = isCashPaymentMethod(tx.method);
+      if (adminTransMethodFilter === "qr" || adminTransMethodFilter === "paymongo") {
+        if (isCash) return false;
+      } else if (adminTransMethodFilter === "cash") {
+        if (!isCash) return false;
+      }
     }
 
     return true;
@@ -6352,7 +6356,9 @@ function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
 
   const order =
     (allOrders || []).find((o) => o.id === orderId) ||
-    (currentSelectedOrder && currentSelectedOrder.id === orderId ? currentSelectedOrder : null);
+    (typeof currentSelectedOrder !== "undefined" && currentSelectedOrder && currentSelectedOrder.id === orderId
+      ? currentSelectedOrder
+      : null);
   if (!order) {
     showToast("Unable to load order details for receipt generation.", "error");
     return;
@@ -6547,7 +6553,7 @@ function renderLanicaDocumentContent() {
       order._voucherSignatories = {
         preparedBy: staffSignatory,
         preparedDate: signDate,
-        checkedBy: "Artisan Lead",
+        checkedBy: "Staff Lead",
         checkedDate: signDate,
         approvedBy: "SUPERVISOR",
         approvedDate: signDate,
@@ -6678,7 +6684,7 @@ function renderLanicaDocumentContent() {
         <div style="border-top: 2px solid #000; padding-top: 14px; margin-bottom: 24px;">
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; font-size: 0.78rem;">
             ${renderSignatoryCol("preparedBy", "PREPARED BY", staffSignatory, true)}
-            ${renderSignatoryCol("checkedBy", "CHECKED BY", "Artisan Lead", true)}
+            ${renderSignatoryCol("checkedBy", "CHECKED BY", "Staff Lead", true)}
             ${renderSignatoryCol("approvedBy", "APPROVED AND CHECK<br/>SIGNATORY", "SUPERVISOR", false)}
             ${renderSignatoryCol("receivedBy", "CHECK PAYMENT<br/>RECEIVE", "OWNER/REPRESENTATIVE", false)}
           </div>
@@ -7327,7 +7333,7 @@ async function loadStaffMembers() {
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((u) => {
         const r = String(u.role || "").toLowerCase().trim();
-        return r === "staff" || r === "artisan" || r === "admin";
+        return r === "staff" || r === "admin";
       })
       .map((u) => ({
         uid: u.uid || u.id,
@@ -7397,6 +7403,53 @@ function generateSmartPageNumbers(currentPage, totalPages) {
   return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
 }
 
+function getUserVerificationStatus(u) {
+  if (!u) return "unverified";
+
+  const isCurrentUser = !!currentUser && (u.id === currentUser.uid || u.uid === currentUser.uid);
+
+  // 1. Check if user is verified with 2FA / MFA
+  const is2FA =
+    u.is2faVerified === true ||
+    u.twoFactorEnabled === true ||
+    u.twoFactorVerified === true ||
+    u.isMfaVerified === true ||
+    u.mfaEnabled === true ||
+    u.twoFactor?.enabled === true ||
+    u.mfa?.enabled === true ||
+    u.verificationStatus === "2fa_verified" ||
+    u.verificationStatus === "2fa" ||
+    (isCurrentUser && Boolean(currentUser.multiFactor?.enrolledFactors?.length > 0));
+
+  if (is2FA) return "2fa_verified";
+
+  // 2. Check if user is verified via Email
+  const isEmail =
+    u.isEmailVerified === true ||
+    u.emailVerified === true ||
+    u.verified === true ||
+    u.verificationStatus === "email_verified" ||
+    (isCurrentUser && currentUser.emailVerified === true);
+
+  if (isEmail) return "email_verified";
+
+  return "unverified";
+}
+
+function renderVerificationBadge(u) {
+  const status = getUserVerificationStatus(u);
+
+  if (status === "2fa_verified") {
+    return `<span class="verification-badge verified-2fa" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:0.75rem;font-weight:600;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;" title="Verified with Two-Factor Authentication"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> Verified (2FA)</span>`;
+  }
+
+  if (status === "email_verified") {
+    return `<span class="verification-badge verified-email" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:0.75rem;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" title="Verified via Email"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Verified (Email)</span>`;
+  }
+
+  return `<span class="verification-badge unverified" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:0.75rem;font-weight:600;background:#fffbeb;color:#b45309;border:1px solid #fde68a;" title="Unverified Account"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Unverified</span>`;
+}
+
 function renderUsersList(users) {
   if (!usersListEl) return;
   usersListEl.innerHTML = "";
@@ -7410,6 +7463,7 @@ function renderUsersList(users) {
           <th>Email Address</th>
           <th>Total Orders</th>
           <th>Lifetime Value (LTV)</th>
+          <th>2FA / Verification</th>
           <th>Account Status</th>
           <th style="text-align: right;">Action</th>
         </tr>
@@ -7419,9 +7473,9 @@ function renderUsersList(users) {
         <tr>
           <th>Staff Member</th>
           <th>Email Address</th>
-          <th>Role & Access Level</th>
-          <th>Permissions Scope</th>
-          <th>Security Status</th>
+          <th>Role</th>
+          <th>2FA / Verification</th>
+          <th>Account Status</th>
           <th style="text-align: right;">Actions</th>
         </tr>
       `;
@@ -7440,7 +7494,7 @@ function renderUsersList(users) {
   const pagedUsers = users.slice(startIndex, startIndex + usersPerPage);
 
   if (!pagedUsers.length) {
-    usersListEl.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:#64748b;">No ${activeUserTab === "customers" ? "customer" : "staff"} accounts found matching your query.</td></tr>`;
+    usersListEl.innerHTML = `<tr><td colspan="${activeUserTab === "customers" ? 7 : 6}" style="text-align:center;padding:32px;color:#64748b;">No ${activeUserTab === "customers" ? "customer" : "staff"} accounts found matching your query.</td></tr>`;
   } else {
     pagedUsers.forEach((u) => {
       const name = pickFirstNonEmpty(u.displayName, u.name, u.fullName, "—");
@@ -7477,6 +7531,7 @@ function renderUsersList(users) {
           <td><span style="color:#334155;">${escapeHtml(email)}</span></td>
           <td><span style="font-weight:600;color:#0f172a;">${totalOrdersCount} ${totalOrdersCount === 1 ? "order" : "orders"}</span></td>
           <td><span style="font-weight:700;color:#059669;">₱${lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
+          <td>${renderVerificationBadge(u)}</td>
           <td><span class="status-badge ${status === "active" ? "active" : "inactive"}">${status === "active" ? "● Active" : "● Inactive"}</span></td>
           <td style="text-align: right;">
             <button type="button" class="btn-secondary toggle-status-btn" data-user-doc-id="${escapeHtml(u.id)}" data-current-status="${status}" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">
@@ -7485,21 +7540,18 @@ function renderUsersList(users) {
           </td>
         `;
       } else {
-        // Render Staff & Security Directory Row
+        // Render Staff Directory Row
         let roleBadgeClass = "staff";
         let roleLabel = "Staff";
         if (role === "admin" || role === "super_admin") {
           roleBadgeClass = "super-admin";
           roleLabel = role === "super_admin" ? "Super Admin" : "Administrator";
-        } else if (role === "artisan") {
-          roleBadgeClass = "artisan";
-          roleLabel = "Artisan Lead";
-        } else if (role === "inventory_manager") {
-          roleBadgeClass = "staff";
-          roleLabel = "Inventory Manager";
         }
 
-        const permSummary = role === "admin" || role === "super_admin" ? "Full Access" : "Orders & Inventory";
+        const isSuspended = status === "inactive" || status === "suspended";
+        const accountStatusHtml = isSuspended
+          ? `<span class="status-badge inactive" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;padding:3px 10px;border-radius:9999px;font-weight:600;font-size:0.78rem;">● Inactive / Suspended</span>`
+          : `<span class="status-badge active" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:3px 10px;border-radius:9999px;font-weight:600;font-size:0.78rem;">● Active</span>`;
 
         tr.innerHTML = `
           <td>
@@ -7510,13 +7562,18 @@ function renderUsersList(users) {
           </td>
           <td><span style="color:#334155;">${escapeHtml(email)}</span></td>
           <td><span class="role-badge ${roleBadgeClass}">${escapeHtml(roleLabel)}</span></td>
-          <td><span style="font-size:0.8rem;color:#475569;background:#f1f5f9;padding:3px 8px;border-radius:6px;font-weight:500;">${escapeHtml(permSummary)}</span></td>
-          <td><span class="status-badge active">● Verified (2FA)</span></td>
+          <td>${renderVerificationBadge(u)}</td>
+          <td>${accountStatusHtml}</td>
           <td style="text-align: right;">
             ${
               isSelf
                 ? `<span style="font-size:0.8rem;color:#94a3b8;font-style:italic;">Owner Account</span>`
-                : `<button type="button" class="btn-secondary open-role-modal-btn" data-user-doc-id="${escapeHtml(u.id)}" data-user-name="${escapeHtml(name)}" data-user-role="${escapeHtml(role)}" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Edit</button>`
+                : `<div style="display:inline-flex;gap:6px;align-items:center;justify-content:flex-end;">
+                    <button type="button" class="btn-secondary open-role-modal-btn" data-user-doc-id="${escapeHtml(u.id)}" data-user-name="${escapeHtml(name)}" data-user-role="${escapeHtml(role)}" data-user-status="${escapeHtml(status)}" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Edit</button>
+                    <button type="button" class="btn-secondary toggle-status-btn" data-user-doc-id="${escapeHtml(u.id)}" data-current-status="${status}" style="padding: 5px 10px; font-size: 0.78rem; border-radius: 6px; color: ${status === "active" ? "#dc2626" : "#16a34a"}; border-color: ${status === "active" ? "#fecaca" : "#bbf7d0"}; background: ${status === "active" ? "#fff5f5" : "#f0fdf4"};">
+                      ${status === "active" ? "Suspend" : "Activate"}
+                    </button>
+                  </div>`
             }
           </td>
         `;
@@ -7600,10 +7657,21 @@ function bindUserTableActions() {
       const permAnalytics = document.getElementById("perm-analytics");
       const permUsers = document.getElementById("perm-users");
 
-      if (modal && userIdInput && userNameInput && roleSelect) {
+      if (modal && userIdInput && userNameInput) {
         userIdInput.value = docId;
         userNameInput.value = name;
-        roleSelect.value = role || "staff";
+        if (roleSelect) roleSelect.value = role || "staff";
+
+        const statusSelect = document.getElementById("role-modal-status-select");
+        if (statusSelect) {
+          const uStatus = targetUser?.status ? String(targetUser.status).toLowerCase() : "";
+          statusSelect.value = uStatus === "inactive" || uStatus === "suspended" ? "inactive" : "active";
+        }
+
+        const twoFactorSelect = document.getElementById("role-modal-2fa-select");
+        if (twoFactorSelect) {
+          twoFactorSelect.value = getUserVerificationStatus(targetUser);
+        }
 
         const userPerms = targetUser?.permissions || {};
         const isFull = role === "admin" || role === "super_admin";
@@ -7657,7 +7725,7 @@ function setupUserManagementControls() {
       const permUsers = document.getElementById("perm-users");
 
       if (permOrders) permOrders.checked = true;
-      if (permInventory) permInventory.checked = r !== "artisan";
+      if (permInventory) permInventory.checked = true;
       if (permAnalytics) permAnalytics.checked = isFull;
       if (permUsers) permUsers.checked = isFull;
     });
@@ -7680,8 +7748,35 @@ function setupUserManagementControls() {
     roleForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const docId = document.getElementById("role-modal-user-id")?.value;
-      const newRole = document.getElementById("role-modal-select")?.value;
-      if (!docId || !newRole) return;
+      if (!docId) return;
+
+      const targetUser = allUsers.find((x) => String(x.id) === String(docId));
+      const roleSelectEl = document.getElementById("role-modal-select");
+      const newRole = roleSelectEl ? roleSelectEl.value : (targetUser?.role || "staff");
+
+      const statusSelectEl = document.getElementById("role-modal-status-select");
+      const newStatus = statusSelectEl ? statusSelectEl.value : (targetUser?.status || "active");
+
+      const twoFactorSelectEl = document.getElementById("role-modal-2fa-select");
+      const selected2FA = twoFactorSelectEl ? twoFactorSelectEl.value : getUserVerificationStatus(targetUser);
+
+      let is2faVerified = false;
+      let twoFactorEnabled = false;
+      let isEmailVerified = false;
+
+      if (selected2FA === "2fa_verified") {
+        is2faVerified = true;
+        twoFactorEnabled = true;
+        isEmailVerified = true;
+      } else if (selected2FA === "email_verified") {
+        is2faVerified = false;
+        twoFactorEnabled = false;
+        isEmailVerified = true;
+      } else {
+        is2faVerified = false;
+        twoFactorEnabled = false;
+        isEmailVerified = false;
+      }
 
       const permissionsPayload = {
         manageOrders: document.getElementById("perm-orders")?.checked ?? true,
@@ -7691,13 +7786,20 @@ function setupUserManagementControls() {
       };
 
       try {
-        const targetUser = allUsers.find((x) => String(x.id) === String(docId));
         const prevRole = targetUser?.role || "unknown";
+        const prevStatus = targetUser?.status || "active";
         const prevPermissions = targetUser?.permissions || {};
+        const prev2FA = getUserVerificationStatus(targetUser);
 
         await updateDoc(doc(db, "users", docId), {
           role: newRole,
+          status: newStatus,
           permissions: permissionsPayload,
+          is2faVerified,
+          twoFactorEnabled,
+          isEmailVerified,
+          emailVerified: isEmailVerified,
+          verificationStatus: selected2FA,
           updatedAt: new Date().toISOString(),
         });
 
@@ -7705,20 +7807,26 @@ function setupUserManagementControls() {
           action: "SETTINGS_CHANGED",
           targetType: "user",
           targetId: docId,
-          description: `Updated security role to "${newRole}" and updated permissions for ${targetUser?.name || targetUser?.email || docId}`,
+          description: `Updated permissions, status (${newStatus}), and verification (${selected2FA}) for ${targetUser?.name || targetUser?.email || docId}`,
           diff: {
-            before: { role: prevRole, permissions: prevPermissions },
-            after: { role: newRole, permissions: permissionsPayload },
+            before: { role: prevRole, status: prevStatus, permissions: prevPermissions, verificationStatus: prev2FA },
+            after: { role: newRole, status: newStatus, permissions: permissionsPayload, verificationStatus: selected2FA },
           },
           performedBy: currentUser,
         });
 
         if (targetUser) {
           targetUser.role = newRole;
+          targetUser.status = newStatus;
           targetUser.permissions = permissionsPayload;
+          targetUser.is2faVerified = is2faVerified;
+          targetUser.twoFactorEnabled = twoFactorEnabled;
+          targetUser.isEmailVerified = isEmailVerified;
+          targetUser.emailVerified = isEmailVerified;
+          targetUser.verificationStatus = selected2FA;
         }
 
-        showToast("Staff security role and permissions updated successfully!", "success");
+        showToast("Staff permission scopes and account status updated successfully!", "success");
         closeModal();
         applyUsersFilter();
       } catch (err) {
@@ -7751,7 +7859,7 @@ function applyUsersFilter() {
   } else {
     rows = rows.filter((u) => {
       const r = normalizeUserRole(u.role);
-      return r === "staff" || r === "admin" || r === "artisan" || r === "inventory_manager" || r === "super_admin";
+      return r === "staff" || r === "admin" || r === "inventory_manager" || r === "super_admin";
     });
   }
 
@@ -8344,7 +8452,7 @@ function startAdminRealtimeListeners(user) {
           staffMembers = allUsers
             .filter((u) => {
               const r = String(u.role || "").toLowerCase().trim();
-              return r === "staff" || r === "artisan" || r === "admin";
+              return r === "staff" || r === "admin";
             })
             .map((u) => ({
               uid: u.uid || u.id,
@@ -8414,12 +8522,234 @@ function getOrderConnectionIssues(order) {
   return issues;
 }
 
+function getLocationBasedDeliveryTimes(address) {
+  if (!address) {
+    return { min: 3, max: 5 };
+  }
+
+  const addressString =
+    typeof address === "string"
+      ? address.toLowerCase()
+      : (address.city || address.province || address.municipality || "").toLowerCase();
+
+  const deliveryZones = {
+    pila: { min: 1, max: 2 },
+    calamba: { min: 1, max: 2 },
+    cabuyao: { min: 1, max: 2 },
+    binan: { min: 1, max: 2 },
+    "santa rosa": { min: 1, max: 2 },
+    "san pedro": { min: 2, max: 3 },
+    losbanos: { min: 2, max: 3 },
+    "los banos": { min: 2, max: 3 },
+    bay: { min: 2, max: 3 },
+    calauan: { min: 2, max: 3 },
+    victoria: { min: 2, max: 3 },
+    pagsanjan: { min: 2, max: 3 },
+    sta_cruz: { min: 2, max: 3 },
+    "santa cruz": { min: 2, max: 3 },
+    lumban: { min: 2, max: 3 },
+    paete: { min: 2, max: 3 },
+    pakil: { min: 3, max: 5 },
+    pangil: { min: 3, max: 5 },
+    siniloan: { min: 3, max: 4 },
+    famy: { min: 3, max: 4 },
+    mabitac: { min: 3, max: 4 },
+    santa_maria: { min: 3, max: 5 },
+    kalayaan: { min: 2, max: 3 },
+    cavinti: { min: 3, max: 5 },
+    luisiana: { min: 3, max: 5 },
+    majayjay: { min: 2, max: 3 },
+    magdalena: { min: 2, max: 3 },
+    lilio: { min: 2, max: 3 },
+    liliw: { min: 2, max: 3 },
+    nagcarlan: { min: 2, max: 3 },
+    rizal: { min: 2, max: 3 },
+    "san pablo": { min: 2, max: 3 },
+    alaminos: { min: 2, max: 3 },
+    manila: { min: 3, max: 5 },
+    "quezon city": { min: 3, max: 5 },
+    makati: { min: 3, max: 5 },
+    taguig: { min: 3, max: 5 },
+    pasig: { min: 3, max: 5 },
+    mandaluyong: { min: 3, max: 5 },
+    san_juan: { min: 3, max: 5 },
+    pasay: { min: 3, max: 5 },
+    paranaque: { min: 3, max: 5 },
+    las_pinas: { min: 3, max: 5 },
+    muntinlupa: { min: 3, max: 5 },
+    marikina: { min: 3, max: 5 },
+    valenzuela: { min: 3, max: 5 },
+    malabon: { min: 3, max: 5 },
+    navotas: { min: 3, max: 5 },
+    caloocan: { min: 3, max: 5 },
+    cavite: { min: 3, max: 5 },
+    batangas: { min: 3, max: 5 },
+    rizal_prov: { min: 3, max: 5 },
+    quezon_prov: { min: 4, max: 6 },
+    bulacan: { min: 3, max: 5 },
+    pampanga: { min: 4, max: 6 },
+  };
+
+  for (const [location, timeRange] of Object.entries(deliveryZones)) {
+    if (addressString.includes(location.replace("_", " "))) {
+      return timeRange;
+    }
+  }
+
+  return { min: 3, max: 5 };
+}
+
+function calculateEstimatedDeliveryTime(order, manualOverride = null) {
+  const now = new Date();
+  const status = normalizeOrderStatus(order.status);
+
+  if (manualOverride && manualOverride.minDate && manualOverride.maxDate) {
+    return {
+      minDate: manualOverride.minDate,
+      maxDate: manualOverride.maxDate,
+      daysRange: manualOverride.daysRange || "Custom",
+      status: status,
+      isManual: true,
+    };
+  }
+
+  if (
+    order.manualDeliveryOverride &&
+    (order.manualOverrideApplied || order.estimatedDeliveryDays === "Custom")
+  ) {
+    return {
+      minDate: order.manualDeliveryOverride,
+      maxDate: order.manualDeliveryOverride,
+      daysRange: "Custom",
+      status: status,
+      isManual: true,
+    };
+  }
+
+  if (order.estimatedDeliveryMin && order.estimatedDeliveryMax && !order.manualOverrideApplied) {
+    return {
+      minDate: order.estimatedDeliveryMin,
+      maxDate: order.estimatedDeliveryMax,
+      daysRange: order.estimatedDeliveryDays || `${order.estimatedDeliveryDays}`,
+      status: status,
+      isManual: false,
+    };
+  }
+
+  const customerAddress = order.shippingAddress || order.deliveryAddress || order.address || "";
+  const statusMultipliers = {
+    accepted: 1.0,
+    processing: 0.8,
+    shipped: 0.6,
+    delivered: 0,
+  };
+
+  const locationTimes = getLocationBasedDeliveryTimes(customerAddress);
+  const multiplier = statusMultipliers[status] || 1.0;
+  const minDays = Math.ceil(locationTimes.min * multiplier);
+  const maxDays = Math.ceil(locationTimes.max * multiplier);
+
+  const minDeliveryDate = new Date(now.getTime() + minDays * 24 * 60 * 60 * 1000);
+  const maxDeliveryDate = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
+
+  const formatDate = (date) => {
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const addWeekendBuffer = (date) => {
+    const day = date.getDay();
+    if (day === 0) {
+      return new Date(date.getTime() + 24 * 60 * 60 * 1000);
+    }
+    return date;
+  };
+
+  const adjustedMinDate = addWeekendBuffer(minDeliveryDate);
+  const adjustedMaxDate = addWeekendBuffer(maxDeliveryDate);
+
+  return {
+    minDate: formatDate(adjustedMinDate),
+    maxDate: formatDate(adjustedMaxDate),
+    daysRange: `${minDays}-${maxDays} days`,
+    status: status,
+    location: customerAddress,
+    isManual: false,
+  };
+}
+
+async function applyManualDeliveryDate(orderId, manualDate) {
+  try {
+    const orderRef = doc(db, "orders", orderId);
+    const currentOrder = allOrders.find((o) => o.id === orderId);
+    if (!currentOrder) throw new Error("Order not found");
+
+    await updateDoc(orderRef, {
+      estimatedDeliveryMin: manualDate,
+      estimatedDeliveryMax: manualDate,
+      estimatedDeliveryDays: "Custom",
+      manualDeliveryOverride: manualDate,
+      manualOverrideApplied: true,
+      manualOverrideAppliedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await recordAuditLog({
+      action: "ORDER_STATUS_CHANGED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Manually set target delivery date to ${manualDate} for Order #${orderId.slice(0, 8)}`,
+      performedBy: currentUser,
+    });
+
+    return true;
+  } catch (e) {
+    console.error("Failed to apply manual delivery date:", e);
+    showToast("Failed to apply manual delivery date.", "error");
+    return false;
+  }
+}
+
+function openAdminDeliveryModal(orderId) {
+  const modal = document.getElementById("admin-delivery-modal");
+  const idEl = document.getElementById("admin-delivery-modal-order-id");
+  const valEl = document.getElementById("admin-delivery-modal-order-id-val");
+  const dateInput = document.getElementById("admin-delivery-modal-date-input");
+  if (!modal || !idEl || !valEl || !dateInput) return;
+
+  const order = allOrders.find((o) => o.id === orderId);
+  idEl.textContent = `#${orderId.slice(0, 8)}`;
+  valEl.value = orderId;
+
+  const today = new Date().toISOString().split("T")[0];
+  dateInput.min = today;
+  if (order && order.manualDeliveryOverride) {
+    dateInput.value = order.manualDeliveryOverride;
+  } else {
+    dateInput.value = today;
+  }
+
+  modal.style.display = "flex";
+  modal.classList.add("active");
+}
+
+function closeAdminDeliveryModal() {
+  const modal = document.getElementById("admin-delivery-modal");
+  if (modal) {
+    modal.style.display = "none";
+    modal.classList.remove("active");
+  }
+}
+
 function renderOrdersList(orders) {
   if (!ordersListEl) return;
   ordersListEl.innerHTML = "";
 
   if (orders.length === 0) {
-    ordersListEl.innerHTML = `<tr><td colspan="${isBatchDeleteMode ? 9 : 8}" style="text-align:center;padding:24px;color:#6b7280;">No orders found. Orders created by the customer app appear here.</td></tr>`;
+    ordersListEl.innerHTML = `<tr><td colspan="${isBatchDeleteMode ? 10 : 9}" style="text-align:center;padding:24px;color:#6b7280;">No orders found. Orders created by the customer app appear here.</td></tr>`;
     syncBatchDeleteUi();
     return;
   }
@@ -8515,6 +8845,28 @@ function renderOrdersList(orders) {
       </div>
     `;
 
+    // Delivery Estimate Display with Edit Button
+    const deliveryEstimate = calculateEstimatedDeliveryTime(order);
+    const daysDisplay =
+      deliveryEstimate.isManual || deliveryEstimate.daysRange === "Custom"
+        ? `<span style="color: #dc2626; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>Manual</span>`
+        : `<span style="color: #d97706; font-size: 0.72rem;">(${deliveryEstimate.daysRange})</span>`;
+
+    const deliveryDisplayHtml = st === "delivered"
+      ? '<span style="color: #059669; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>Delivered</span>'
+      : `
+        <div style="font-size: 0.82rem; line-height: 1.3;">
+          <div style="color: #1f2937; font-weight: 500;">${deliveryEstimate.minDate}</div>
+          <div style="color: #6b7280; font-size: 0.75rem;">to ${deliveryEstimate.maxDate}</div>
+          <div style="margin-top: 2px; display: flex; align-items: center; gap: 4px;">
+            ${daysDisplay}
+            <button type="button" class="btn-open-delivery-modal" data-order-id="${escapeHtml(order.id)}" title="Adjust delivery estimate" style="background: none; border: none; padding: 0; color: #2563eb; cursor: pointer; display: inline-flex; align-items: center;">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            </button>
+          </div>
+        </div>
+      `;
+
     const isMarkSettledVisible = (!isBalanceSettled && remainingVal > 0 && st !== "placed" && st !== "pending" && st !== "cancelled" && st !== "declined") || (hasRiderProof && !isBalanceSettled);
 
     const tr = document.createElement("tr");
@@ -8544,6 +8896,7 @@ function renderOrdersList(orders) {
       <td class="order-items-cell"><div class="order-items-summary">${escapeHtml(formatOrderItemsSummary(order.items))}</div></td>
       <td>${financialBreakdownHtml}</td>
       <td>${statusColumnHtml}</td>
+      <td>${deliveryDisplayHtml}</td>
       <td>
         <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; border: 1.5px solid ${!order.assignedToUid ? '#f59e0b' : '#cbd5e1'}; background: ${!order.assignedToUid ? '#fffbeb' : '#ffffff'}; color: ${!order.assignedToUid ? '#b45309' : '#1e293b'}; font-weight: ${!order.assignedToUid ? '600' : '400'}; cursor: pointer;">
           <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>Unassigned (Assign Staff)</option>
@@ -8565,6 +8918,10 @@ function renderOrdersList(orders) {
             <button type="button" class="kebab-menu-item btn-view-order-details" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #334155; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
               View Order Summary
+            </button>
+            <button type="button" class="kebab-menu-item action-amber btn-open-delivery-modal" data-order-id="${escapeHtml(order.id)}" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #d97706; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              Adjust Delivery Estimate
             </button>
             <button type="button" class="kebab-menu-item btn-open-lanica-receipt" data-order-id="${escapeHtml(order.id)}" data-default-tab="voucher" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; font-size: 0.82rem; font-weight: 600; color: #2563eb; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
@@ -8752,7 +9109,7 @@ function getStatusNotificationMessage(orderId, newStatus) {
     case "downpayment confirmed":
       return `💰 Deposit Confirmed (${ref}): 30% downpayment received and verified. Your order is now queued for workshop fabrication!`;
     case "in production":
-      return `🔨 In Production (${ref}): Our master artisans have officially begun woodworking, assembly, and upholstery for your handcrafted furniture!`;
+      return `🔨 In Production (${ref}): Our workshop craftsmen and staff have officially begun woodworking, assembly, and upholstery for your handcrafted furniture!`;
     case "quality checked":
       return `🔍 Quality Inspection Passed (${ref}): Your custom furniture has passed final workshop quality control and is being packaged for dispatch!`;
     case "shipped":
@@ -8822,11 +9179,11 @@ async function handleOrderStatusChange(orderId, newStatus) {
   const next = normalizeOrderStatus(newStatus);
   if (prev === next) return;
 
-  // Enterprise Workflow Rule: Order cannot proceed into production or fulfillment without an assigned artisan/staff member
+  // Enterprise Workflow Rule: Order cannot proceed into production or fulfillment without an assigned staff member
   const requiresStaffAssignment = ["in production", "quality checked", "shipped", "delivered"].includes(next);
   if (requiresStaffAssignment && !current.assignedToUid) {
     showAdminToast(
-      `Assignment Required: Please assign a staff artisan or team member to Order #${orderId.slice(0, 8)} before advancing to "${next.charAt(0).toUpperCase() + next.slice(1)}".`,
+      `Assignment Required: Please assign a staff member to Order #${orderId.slice(0, 8)} before advancing to "${next.charAt(0).toUpperCase() + next.slice(1)}".`,
       "warning"
     );
     const assignSelect = ordersListEl?.querySelector(`.order-assign-select[data-order-id="${orderId}"]`);
@@ -9113,7 +9470,7 @@ async function handleOrderAssign(orderId, staffUid) {
       action: "SETTINGS_CHANGED",
       targetType: "order",
       targetId: orderId,
-      description: `Assigned Order #${orderId.slice(0, 8)} to artisan/staff: ${staffName} (previously ${prevAssignedName})`,
+      description: `Assigned Order #${orderId.slice(0, 8)} to staff: ${staffName} (previously ${prevAssignedName})`,
       diff: {
         before: { assignedToUid: current?.assignedToUid || null, assignedToName: prevAssignedName },
         after: { assignedToUid: staffUid, assignedToName: staffName },
@@ -9193,11 +9550,94 @@ if (ordersListEl) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) handleOrderDecline(id);
     }
+    if (actionBtn.classList.contains("btn-open-delivery-modal")) {
+      const id = actionBtn.getAttribute("data-order-id");
+      if (id) openAdminDeliveryModal(id);
+    }
     if (actionBtn.classList.contains("btn-delete-order")) {
       const id = actionBtn.getAttribute("data-order-id");
       if (id) handleDeleteOrder(id);
     }
   });
+}
+
+// Admin Delivery Date Modal Event Listeners
+const adminDeliveryModal = document.getElementById("admin-delivery-modal");
+const closeAdminDeliveryModalBtn = document.getElementById("btn-close-admin-delivery-modal");
+const cancelAdminDeliveryModalBtn = document.getElementById("btn-cancel-admin-delivery-modal");
+const applyAdminDeliveryModalBtn = document.getElementById("btn-apply-admin-delivery-modal");
+
+if (closeAdminDeliveryModalBtn) closeAdminDeliveryModalBtn.addEventListener("click", closeAdminDeliveryModal);
+if (cancelAdminDeliveryModalBtn) cancelAdminDeliveryModalBtn.addEventListener("click", closeAdminDeliveryModal);
+if (adminDeliveryModal) {
+  adminDeliveryModal.addEventListener("click", (e) => {
+    if (e.target === adminDeliveryModal) closeAdminDeliveryModal();
+  });
+}
+
+if (applyAdminDeliveryModalBtn) {
+  applyAdminDeliveryModalBtn.addEventListener("click", async () => {
+    const valEl = document.getElementById("admin-delivery-modal-order-id-val");
+    const dateInput = document.getElementById("admin-delivery-modal-date-input");
+    const orderId = valEl?.value;
+    const selectedDate = dateInput?.value;
+
+    if (!orderId || !selectedDate) {
+      showToast("Please choose a valid target delivery date.", "warning");
+      return;
+    }
+
+    applyAdminDeliveryModalBtn.disabled = true;
+    applyAdminDeliveryModalBtn.textContent = "Saving...";
+    try {
+      const ok = await applyManualDeliveryDate(orderId, selectedDate);
+      if (ok) {
+        showToast(`Delivery estimate updated to ${selectedDate}.`, "success");
+        closeAdminDeliveryModal();
+        applyOrdersFilter();
+      }
+    } finally {
+      applyAdminDeliveryModalBtn.disabled = false;
+      applyAdminDeliveryModalBtn.textContent = "Apply Delivery Date";
+    }
+  });
+}
+
+function resolveOrderItemImage(item, productsList = []) {
+  if (!item) return "assets/product_sofa.png";
+
+  const direct = item.imageUrl || item.image || item.photo || item.thumbnail || item.productImage;
+  if (typeof direct === "string" && direct.trim() && !direct.includes("product_sofa.png") && !direct.includes("placeholder.com")) {
+    return direct.trim();
+  }
+
+  if (typeof item.url === "string" && item.url.trim() && !item.url.includes("product_sofa.png") && !item.url.includes("placeholder.com")) {
+    return item.url.trim();
+  }
+
+  const itemId = String(item.productId || item.id || "").trim();
+  const itemName = String(item.name || item.title || "").trim().toLowerCase();
+
+  const match = (productsList || []).find((p) => {
+    if (!p) return false;
+    if (itemId && String(p.id) === itemId) return true;
+    const pName = String(p.name || p.title || "").trim().toLowerCase();
+    return itemName && pName && (itemName === pName || pName.includes(itemName) || itemName.includes(pName));
+  });
+
+  if (match) {
+    const candidate =
+      match.thumbnail ||
+      (Array.isArray(match.thumbnails) && match.thumbnails[0]) ||
+      (match.images && (match.images.isoImage || match.images.frontBg || (Array.isArray(match.images) ? match.images[0] : null))) ||
+      match.imageUrl ||
+      match.image;
+    if (candidate && typeof candidate === "string" && candidate.trim() && !candidate.includes("product_sofa.png")) {
+      return candidate.trim();
+    }
+  }
+
+  return item.url || "assets/product_sofa.png";
 }
 
 async function showOrderSummaryModal(orderId) {
@@ -9234,6 +9674,28 @@ async function showOrderSummaryModal(orderId) {
     return;
   }
 
+  // Pre-fetch product info for items missing a valid photo thumbnail
+  if (Array.isArray(order.items)) {
+    for (const it of order.items) {
+      const currentResolved = resolveOrderItemImage(it, allProducts);
+      if (currentResolved === "assets/product_sofa.png") {
+        try {
+          if (it.productId) {
+            const snap = await getDoc(doc(db, "products", it.productId));
+            if (snap.exists()) {
+              allProducts.push({ id: snap.id, ...snap.data() });
+            }
+          } else if (it.name) {
+            const qSnap = await getDocs(query(collection(db, "products"), where("name", "==", it.name)));
+            qSnap.forEach((ds) => allProducts.push({ id: ds.id, ...ds.data() }));
+          }
+        } catch (e) {
+          console.warn("Could not load product image for item:", it.name, e);
+        }
+      }
+    }
+  }
+
   const modal = document.createElement("div");
   modal.className = "modal active";
   modal.style.cssText = "position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;";
@@ -9253,7 +9715,7 @@ async function showOrderSummaryModal(orderId) {
     .map(
       (item) => `
       <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
-        <img src="${item.url || 'assets/product_sofa.png'}" alt="${escapeHtml(item.name || 'Item')}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" onerror="this.onerror=null;this.src='assets/product_sofa.png';">
+        <img src="${resolveOrderItemImage(item, allProducts)}" alt="${escapeHtml(item.name || 'Item')}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc;" onerror="this.onerror=null;this.src='assets/product_sofa.png';">
         <div style="flex: 1;">
           <strong style="color: #0f172a; font-size: 0.9rem;">${escapeHtml(item.name || item.title || "Item")}</strong>
           <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">Variant / Material: <strong>${escapeHtml(item.material || "Standard")}</strong> &bull; Qty: <strong>${item.quantity || 1}</strong></div>
@@ -9286,10 +9748,12 @@ async function showOrderSummaryModal(orderId) {
 
       <div style="background: #f8fafc; padding: 14px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 0.85rem; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 6px;">
         <div><strong>Customer Name:</strong> ${escapeHtml(resolveCustomerDisplay(order))} ${phone !== "—" ? `(${escapeHtml(phone)})` : ""}</div>
+        <div><strong>Fulfillment:</strong> <span style="font-weight: 600;">${isPickup ? "Store Pickup (Lanica Workshop)" : "Home Delivery"}</span></div>
         <div><strong>Delivery Address:</strong> ${escapeHtml(fullAddress)}</div>
         ${landmark ? `<div style="color: #b45309; background: #fffbeb; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><strong>Landmark:</strong> ${escapeHtml(landmark)}</div>` : ""}
         <div><strong>Current Status:</strong> <span style="font-weight: 600; color: #1e293b; background: #e2e8f0; padding: 2px 8px; border-radius: 4px;">${escapeHtml(canonicalStatus)}</span></div>
-        <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod === "walk_in_cash" || order.paymentMethod === "cash" || String(order.paymentMethod || "").toLowerCase().includes("counter") ? "Cash (Counter)" : "QR Ph (PayMongo)")}</div>
+        <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod === "walk_in_cash" || order.paymentMethod === "cash" || String(order.paymentMethod || "").toLowerCase().includes("counter") ? "Cash (Counter)" : "Online / QR Ph (PayMongo)")}</div>
+        <div><strong>Assigned Staff:</strong> <span style="font-weight: 600; color: #0284c7;">${escapeHtml(order.assignedToName || (order.assignedToUid === currentUser?.uid ? "You" : "Unassigned"))}</span></div>
       </div>
 
       ${proofUrl ? `
@@ -9418,7 +9882,7 @@ async function handleReceiveCounterDownpayment(orderId) {
 
   const confirmed = await showAdminConfirmModal({
     title: "Receive Counter Downpayment",
-    message: `Confirm receipt of 30% counter cash downpayment of <strong>₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> for Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br>The order status will advance to <strong>Deposit Verified</strong>. You can then assign a staff artisan and proceed to In Production.`,
+    message: `Confirm receipt of 30% counter cash downpayment of <strong>₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> for Order <strong>#${orderId.slice(0, 8)}</strong>?<br><br>The order status will advance to <strong>Deposit Verified</strong>. You can then assign a staff member and proceed to In Production.`,
     confirmText: "Yes, Confirm Receipt",
     cancelText: "Cancel",
     confirmType: "success",

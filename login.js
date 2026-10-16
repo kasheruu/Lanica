@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
 import {
   getAuth,
   signInWithEmailAndPassword,
@@ -27,17 +27,81 @@ const firebaseConfig = {
   measurementId: "G-LQ41PCS4HD",
 };
 
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = getApp();
+} catch {
+  app = initializeApp(firebaseConfig);
+}
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 const actionCodeSettings = () => ({
-  url: `${window.location.origin}${window.location.pathname}`,
+  url: `${window.location.origin}/login.html`,
   handleCodeInApp: false,
 });
 
-const VERIFY_EMAIL_THROTTLE_MS = 10 * 60 * 1000; // Increased to 10 minutes to respect Firebase limits
-const RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000; // 15 minutes for rate limit errors
+const VERIFY_EMAIL_THROTTLE_MS = 10 * 60 * 1000; // 10 minutes session throttle
+const RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000; // 15 minutes for rate limit backoff
+
+// DOM Elements
+const loginFormWrapper = document.getElementById("login-form-wrapper");
+const verificationPanel = document.getElementById("verification-pending");
+const verificationEmailEl = document.getElementById("verification-email");
+const loginForm = document.getElementById("login-form");
+const emailInput = document.getElementById("admin-email");
+const pwdInput = document.getElementById("admin-pwd");
+const alertBanner = document.getElementById("login-error");
+const submitBtn = document.getElementById("login-submit-btn");
+const checkVerificationBtn = document.getElementById("check-verification-btn");
+const resendBtn = document.getElementById("resend-verification-btn");
+const signOutPendingBtn = document.getElementById("sign-out-pending-btn");
+const togglePwdBtn = document.getElementById("toggle-pwd-btn");
+
+let resendCountdownTimer = null;
+
+/* ==========================================================================
+   Helper Utilities & Alerts
+   ========================================================================== */
+
+function showAlert(message, type = "error") {
+  if (!alertBanner) return;
+  if (!message) {
+    alertBanner.className = "login-alert is-hidden";
+    alertBanner.innerHTML = "";
+    return;
+  }
+
+  let iconSvg;
+  if (type === "success") {
+    iconSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+    alertBanner.className = "login-alert alert-success";
+  } else if (type === "warning") {
+    iconSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+    alertBanner.className = "login-alert alert-warning";
+  } else {
+    iconSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+    alertBanner.className = "login-alert alert-error";
+  }
+
+  alertBanner.innerHTML = `${iconSvg}<span>${escapeHtml(message)}</span>`;
+  alertBanner.classList.remove("is-hidden");
+}
+
+function clearAlert() {
+  showAlert("");
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 function shouldAutoSendVerification(uid) {
   if (!uid) return false;
@@ -65,84 +129,14 @@ function recordAutoSendVerification(uid) {
   if (uid) sessionStorage.setItem(`lanica_verify_sent_${uid}`, String(Date.now()));
 }
 
-async function getUserRole(user) {
-  if (!user) return null;
-  try {
-    const roleByUid = await getDoc(doc(db, "users", user.uid));
-    if (roleByUid.exists()) return (roleByUid.data().role || "").toLowerCase();
-  } catch (e) {
-    console.warn("Could not read user role by uid:", e);
-  }
-
-  try {
-    const q = query(collection(db, "users"), where("email", "==", user.email || ""));
-    const snap = await getDocs(q);
-    if (!snap.empty) return ((snap.docs[0].data() || {}).role || "").toLowerCase();
-  } catch (e) {
-    console.warn("Could not read user role by email:", e);
-  }
-  return null;
-}
-
-async function routeUserByRole(user) {
-  const role = await getUserRole(user);
-
-  console.log("=== LOGIN ROUTING DEBUG ===");
-  console.log("Login - User UID:", user.uid);
-  console.log("Login - User Email:", user.email);
-  console.log("Login - Detected Role:", role);
-
-  if (role === "admin") {
-    window.location.replace("/admin.html");
-  } else if (role === "staff") {
-    window.location.replace("/staff.html");
-  } else {
-    console.warn("Access denied on login: User role is null or unauthorized. Role:", role);
-    if (errorMsg) {
-      errorMsg.textContent = "Access denied. Only staff and admin accounts can sign in to the management portal.";
-      errorMsg.style.color = "#c5221f";
-    }
-    showLoginFormOnly();
-    try {
-      await signOut(auth);
-    } catch (_) {
-      /* ignore signout error */
-    }
-  }
-}
-
-const loginFormWrapper = document.getElementById("login-form-wrapper");
-const verificationPanel = document.getElementById("verification-pending");
-const verificationEmailEl = document.getElementById("verification-email");
-const loginForm = document.getElementById("login-form");
-const errorMsg = document.getElementById("login-error");
-const submitBtn = document.querySelector(".login-btn");
-const resendBtn = document.getElementById("resend-verification-btn");
-const signOutPendingBtn = document.getElementById("sign-out-pending-btn");
-
-function getRecaptchaSiteKey() {
-  return String((typeof window !== "undefined" && window.LANICA_RECAPTCHA_SITE_KEY) || "").trim();
-}
-
-function getRecaptchaWidgetId() {
-  const wid = typeof window !== "undefined" ? window.LANICA_RECAPTCHA_WIDGET_ID : undefined;
-  if (wid === undefined || wid === null) return null;
-  return wid;
-}
-
-function resetRecaptcha() {
-  const wid = getRecaptchaWidgetId();
-  if (wid === null || typeof window.grecaptcha === "undefined") return;
-  try {
-    window.grecaptcha.reset(wid);
-  } catch (_) {
-    /* ignore */
-  }
-}
+/* ==========================================================================
+   UI State Changers
+   ========================================================================== */
 
 function showLoginFormOnly() {
   if (loginFormWrapper) loginFormWrapper.classList.remove("is-hidden");
   if (verificationPanel) verificationPanel.classList.add("is-hidden");
+  resetSubmitBtn();
 }
 
 function showVerificationPendingUi(user) {
@@ -151,75 +145,143 @@ function showVerificationPendingUi(user) {
   if (verificationEmailEl && user && user.email) {
     verificationEmailEl.textContent = user.email;
   }
-  if (submitBtn) {
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Sign In";
+  resetSubmitBtn();
+}
+
+function setSubmitLoading(isLoading) {
+  if (!submitBtn) return;
+  if (isLoading) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `
+      <svg class="spinner-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-linecap="round"></circle></svg>
+      <span>Authenticating...</span>
+    `;
+  } else {
+    resetSubmitBtn();
   }
 }
+
+function resetSubmitBtn() {
+  if (!submitBtn) return;
+  submitBtn.disabled = false;
+  submitBtn.innerHTML = `
+    <span class="btn-text">Sign In to Dashboard</span>
+    <svg class="btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+      <polyline points="12 5 19 12 12 19"></polyline>
+    </svg>
+  `;
+}
+
+function startResendCooldown(seconds = 60) {
+  if (!resendBtn) return;
+  resendBtn.disabled = true;
+  let remaining = seconds;
+  resendBtn.innerHTML = `<span>Resend in ${remaining}s</span>`;
+  clearInterval(resendCountdownTimer);
+  resendCountdownTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(resendCountdownTimer);
+      resendBtn.disabled = false;
+      resendBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+        <span>Resend Verification Email</span>
+      `;
+    } else {
+      resendBtn.innerHTML = `<span>Resend in ${remaining}s</span>`;
+    }
+  }, 1000);
+}
+
+/* ==========================================================================
+   User Profile & Role-Based Routing
+   ========================================================================== */
+
+async function getUserProfile(user) {
+  if (!user) return null;
+  try {
+    const snapByUid = await getDoc(doc(db, "users", user.uid));
+    if (snapByUid.exists()) return snapByUid.data();
+  } catch (e) {
+    console.warn("Could not read user profile by uid:", e);
+  }
+
+  try {
+    const q = query(collection(db, "users"), where("email", "==", user.email || ""));
+    const snap = await getDocs(q);
+    if (!snap.empty) return snap.docs[0].data();
+  } catch (e) {
+    console.warn("Could not read user profile by email:", e);
+  }
+  return null;
+}
+
+async function routeUserByRole(user) {
+  const profile = await getUserProfile(user);
+  const role = (profile?.role || "").toLowerCase();
+  const status = (profile?.status || "active").toLowerCase();
+
+  console.log("Portal login routing for user:", user.email, "role:", role, "status:", status);
+
+  if (status === "inactive" || status === "suspended") {
+    showAlert("Your account has been deactivated or suspended by an administrator. Portal access denied.", "error");
+    showLoginFormOnly();
+    try {
+      await signOut(auth);
+    } catch (_) {
+      // Ignored
+    }
+    return;
+  }
+
+  if (role === "admin") {
+    window.location.replace("/admin.html");
+  } else if (role === "staff") {
+    window.location.replace("/staff.html");
+  } else {
+    showAlert("Access denied. Only authorized staff and administrator accounts can access this portal.", "error");
+    showLoginFormOnly();
+    try {
+      await signOut(auth);
+    } catch (_) {
+      // Ignored
+    }
+  }
+}
+
+/* ==========================================================================
+   Email Verification Sender
+   ========================================================================== */
 
 async function maybeSendVerificationEmail(user) {
-  console.log("=== EMAIL VERIFICATION DEBUG ===");
-  console.log("User:", user?.uid, user?.email);
-  console.log("Should auto send:", shouldAutoSendVerification(user?.uid));
-  console.log("Is rate limited:", isRateLimited(user?.uid));
+  if (!user || !shouldAutoSendVerification(user.uid)) return;
 
-  if (!user || !shouldAutoSendVerification(user.uid)) {
-    console.log("Skipping email verification - user not found or not ready");
-    return;
-  }
-
-  // Check if user is currently rate limited
   if (isRateLimited(user.uid)) {
-    console.log("User is rate limited for email verification");
-    if (errorMsg) {
-      errorMsg.textContent =
-        "Too many verification attempts. Please wait 15 minutes before trying again.";
-      errorMsg.style.color = "#c5221f";
-    }
+    showAlert("Too many verification attempts. Please wait a few minutes before requesting another link.", "warning");
     return;
   }
 
-  console.log("Attempting to send email verification...");
   try {
-    const actionSettings = actionCodeSettings();
-    console.log("Action code settings:", actionSettings);
-
-    await sendEmailVerification(user, actionSettings);
-    console.log("Email verification sent successfully");
-
+    await sendEmailVerification(user, actionCodeSettings());
     recordAutoSendVerification(user.uid);
-    clearRateLimit(user.uid); // Clear any existing rate limit on success
-    if (errorMsg) {
-      errorMsg.textContent = "";
-      errorMsg.style.color = "#c5221f";
-    }
+    clearRateLimit(user.uid);
+    startResendCooldown(60);
+    showAlert("A verification link has been sent to your email. Please check your inbox.", "success");
   } catch (e) {
     console.error("sendEmailVerification failed:", e);
-    console.error("Error code:", e.code);
-    console.error("Error message:", e.message);
-
-    // Handle specific rate limiting error
     if (e.code === "auth/too-many-requests") {
-      console.log("Rate limit detected, setting rate limit");
       setRateLimit(user.uid);
-      if (errorMsg) {
-        errorMsg.textContent =
-          "Too many verification attempts. Please wait 15 minutes before trying again.";
-        errorMsg.style.color = "#c5221f";
-      }
+      showAlert("Too many attempts. Please wait 15 minutes before requesting a new verification link.", "warning");
     } else {
-      // Handle other errors
-      console.log("Other error occurred:", e.code);
-      if (errorMsg) {
-        errorMsg.textContent =
-          e && e.message
-            ? "Could not send verification email. Use Resend or try again later."
-            : "Could not send verification email.";
-        errorMsg.style.color = "#c5221f";
-      }
+      showAlert("Could not send verification email right now. Please use Resend or try again later.", "warning");
     }
   }
 }
+
+/* ==========================================================================
+   Auth State Synchronization
+   ========================================================================== */
 
 async function syncLoginUi(user) {
   if (!user) {
@@ -230,16 +292,17 @@ async function syncLoginUi(user) {
   try {
     await reload(user);
   } catch (e) {
-    console.warn("reload user:", e);
+    console.warn("Could not reload auth user token:", e);
   }
 
+  // Enforce email verification for admin & staff
   if (!user.emailVerified) {
     showVerificationPendingUi(user);
     await maybeSendVerificationEmail(user);
-    resetRecaptcha();
     return;
   }
 
+  // Verified user -> route to portal
   await routeUserByRole(user);
 }
 
@@ -247,157 +310,174 @@ onAuthStateChanged(auth, (user) => {
   syncLoginUi(user);
 });
 
-if (resendBtn) {
-  resendBtn.addEventListener("click", async () => {
+/* ==========================================================================
+   Interactive Event Listeners
+   ========================================================================== */
+
+// 1. Password Visibility Eye Toggle
+if (togglePwdBtn && pwdInput) {
+  togglePwdBtn.addEventListener("click", () => {
+    const isPassword = pwdInput.type === "password";
+    pwdInput.type = isPassword ? "text" : "password";
+
+    togglePwdBtn.innerHTML = isPassword
+      ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>`
+      : `<svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  });
+}
+
+// 2. Immediate Email Verification Check Button
+if (checkVerificationBtn) {
+  checkVerificationBtn.addEventListener("click", async () => {
     const user = auth.currentUser;
-    console.log("=== RESEND VERIFICATION DEBUG ===");
-    console.log("User:", user?.uid, user?.email);
-
     if (!user) {
-      console.log("No user found for resend");
+      showLoginFormOnly();
       return;
     }
 
-    // Check if user is rate limited
-    if (isRateLimited(user.uid)) {
-      console.log("User is rate limited for resend");
-      if (errorMsg) {
-        errorMsg.textContent =
-          "Too many verification attempts. Please wait 15 minutes before trying again.";
-        errorMsg.style.color = "#c5221f";
-      }
-      return;
-    }
-
-    resendBtn.disabled = true;
-    resendBtn.textContent = "Sending…";
-    console.log("Attempting to resend verification email...");
+    checkVerificationBtn.disabled = true;
+    const originalContent = checkVerificationBtn.innerHTML;
+    checkVerificationBtn.innerHTML = `
+      <svg class="spinner-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-linecap="round"></circle></svg>
+      <span>Checking Verification...</span>
+    `;
 
     try {
-      const actionSettings = actionCodeSettings();
-      console.log("Action code settings:", actionSettings);
-
-      await sendEmailVerification(user, actionSettings);
-      console.log("Resend verification email sent successfully");
-
-      recordAutoSendVerification(user.uid);
-      clearRateLimit(user.uid); // Clear any existing rate limit on success
-      if (errorMsg) {
-        errorMsg.textContent = "Verification link sent. Check your inbox.";
-        errorMsg.style.color = "#059669";
+      await reload(user);
+      if (user.emailVerified) {
+        showAlert("Email verified successfully! Entering dashboard...", "success");
+        setTimeout(() => {
+          routeUserByRole(user);
+        }, 700);
+        return;
       }
-    } catch (e) {
-      console.error("Resend verification failed:", e);
-      console.error("Error code:", e.code);
-      console.error("Error message:", e.message);
-
-      // Handle specific rate limiting error
-      if (e.code === "auth/too-many-requests") {
-        console.log("Rate limit detected during resend");
-        setRateLimit(user.uid);
-        if (errorMsg) {
-          errorMsg.textContent =
-            "Too many verification attempts. Please wait 15 minutes before trying again.";
-          errorMsg.style.color = "#c5221f";
-        }
-      } else {
-        // Handle other errors
-        console.log("Other error during resend:", e.code);
-        if (errorMsg) {
-          errorMsg.textContent = e.message || "Could not resend email.";
-          errorMsg.style.color = "#c5221f";
-        }
-      }
+      showAlert("Email is not verified yet. Please check your inbox and click the verification link, then try again.", "warning");
+    } catch (err) {
+      showAlert(err.message || "Failed to check email verification status.", "error");
     } finally {
-      resendBtn.disabled = false;
-      resendBtn.textContent = "Resend verification email";
+      checkVerificationBtn.disabled = false;
+      checkVerificationBtn.innerHTML = originalContent;
     }
   });
 }
 
+// 3. Resend Verification Button
+if (resendBtn) {
+  resendBtn.addEventListener("click", async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      showLoginFormOnly();
+      return;
+    }
+
+    if (isRateLimited(user.uid)) {
+      showAlert("Too many verification attempts. Please wait 15 minutes before trying again.", "warning");
+      return;
+    }
+
+    resendBtn.disabled = true;
+    resendBtn.innerHTML = `<span>Sending Link...</span>`;
+
+    try {
+      await sendEmailVerification(user, actionCodeSettings());
+      recordAutoSendVerification(user.uid);
+      clearRateLimit(user.uid);
+      startResendCooldown(60);
+      showAlert("Verification link sent! Please check your inbox or spam folder.", "success");
+    } catch (e) {
+      console.error("Resend verification error:", e);
+      if (e.code === "auth/too-many-requests") {
+        setRateLimit(user.uid);
+        showAlert("Too many attempts. Please wait 15 minutes before trying again.", "warning");
+      } else {
+        showAlert(e.message || "Could not resend email. Please try again later.", "error");
+        resendBtn.disabled = false;
+        resendBtn.innerHTML = `<span>Resend Verification Email</span>`;
+      }
+    }
+  });
+}
+
+// 4. Sign Out / Switch Account Button
 if (signOutPendingBtn) {
   signOutPendingBtn.addEventListener("click", async () => {
     try {
       await signOut(auth);
     } catch (e) {
-      console.error(e);
+      console.error("Sign out error:", e);
     }
-    resetRecaptcha();
+    clearInterval(resendCountdownTimer);
+    clearAlert();
     showLoginFormOnly();
   });
 }
 
+// 5. Sign-In Form Submission
 if (loginForm) {
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const email = document.getElementById("admin-email").value;
-    const password = document.getElementById("admin-pwd").value;
+    const email = emailInput ? emailInput.value.trim() : "";
+    const password = pwdInput ? pwdInput.value : "";
 
-    const siteKey = getRecaptchaSiteKey();
-    if (siteKey) {
-      if (typeof window.grecaptcha === "undefined") {
-        if (errorMsg) {
-          errorMsg.textContent = "Captcha is still loading. Wait a moment and try again.";
-          errorMsg.style.color = "#c5221f";
-        }
-        return;
-      }
-      const wid = getRecaptchaWidgetId();
-      if (wid === null) {
-        if (errorMsg) {
-          errorMsg.textContent = "Captcha is still loading. Wait a moment and try again.";
-          errorMsg.style.color = "#c5221f";
-        }
-        return;
-      }
-      const token = window.grecaptcha.getResponse(wid);
-      if (!token) {
-        if (errorMsg) {
-          errorMsg.textContent = "Please complete the captcha.";
-          errorMsg.style.color = "#c5221f";
-        }
-        return;
-      }
+    if (!email || !password) {
+      showAlert("Please enter both email address and password.", "warning");
+      return;
     }
 
+    clearAlert();
+    setSubmitLoading(true);
+
     try {
-      if (submitBtn) {
-        submitBtn.textContent = "Verifying...";
-        submitBtn.disabled = true;
-      }
-      if (errorMsg) {
-        errorMsg.textContent = "";
-        errorMsg.style.color = "#c5221f";
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      try {
+        await reload(user);
+      } catch (_) {
+        // Ignored
       }
 
-      await signInWithEmailAndPassword(auth, email, password);
+      if (!user.emailVerified) {
+        showVerificationPendingUi(user);
+        await maybeSendVerificationEmail(user);
+      } else {
+        await routeUserByRole(user);
+      }
     } catch (error) {
-      console.error("Login Error:", error);
-      if (submitBtn) {
-        submitBtn.textContent = "Sign In";
-        submitBtn.disabled = false;
-      }
-      resetRecaptcha();
+      console.error("Portal Sign-In Error:", error);
+      setSubmitLoading(false);
 
-      if (errorMsg) {
-        switch (error.code) {
-          case "auth/invalid-credential":
-            errorMsg.textContent = "Invalid email or password.";
-            break;
-          case "auth/user-not-found":
-            errorMsg.textContent = "No admin account found with this email.";
-            break;
-          case "auth/wrong-password":
-            errorMsg.textContent = "Incorrect password.";
-            break;
-          case "auth/too-many-requests":
-            errorMsg.textContent = "Too many failed attempts. Try again later.";
-            break;
-          default:
-            errorMsg.textContent = "Authentication failed. Please try again.";
-        }
+      switch (error.code) {
+        case "auth/invalid-credential":
+          showAlert("Invalid email address or password. Please verify your credentials.", "error");
+          break;
+        case "auth/user-not-found":
+          showAlert("No registered account found with this email.", "error");
+          break;
+        case "auth/wrong-password":
+          showAlert("Incorrect password. Please try again.", "error");
+          break;
+        case "auth/invalid-email":
+          showAlert("Please enter a valid email address.", "error");
+          break;
+        case "auth/too-many-requests":
+          showAlert("Too many failed sign-in attempts. Please wait a few moments or try again later.", "warning");
+          break;
+        case "auth/user-disabled":
+          showAlert("This account has been disabled. Please contact an administrator.", "error");
+          break;
+        default:
+          showAlert(error.message || "Authentication failed. Please try again.", "error");
       }
     }
   });
+}
+
+// Handle URL query parameters (e.g. redirected from session timeout or suspension)
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("suspended") === "true") {
+  showAlert("Your account has been deactivated or suspended by an administrator. Access denied.", "error");
+} else if (urlParams.get("reason") === "session_expired") {
+  showAlert("Your session has expired. Please sign in again to continue.", "warning");
 }

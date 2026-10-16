@@ -63,7 +63,7 @@ export function validatePasswordStrength(password) {
   const length = password.length >= 8;
   const uppercase = /[A-Z]/.test(password);
   const number = /[0-9]/.test(password);
-  const special = /[!@#$%^&*()_+\-=\[\]{}|;:'",.<>?/\\~`-]/.test(password);
+  const special = /[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/\\~`-]/.test(password);
 
   const criteriaList = [
     { key: "length", pass: length, label: "At least 8 characters" },
@@ -146,7 +146,7 @@ export async function signUpUser({ email, password, displayName }) {
   try {
     userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
   } catch (err) {
-    throw new Error(getFriendlyAuthErrorMessage(err));
+    throw new Error(getFriendlyAuthErrorMessage(err), { cause: err });
   }
 
   const user = userCredential.user;
@@ -210,7 +210,7 @@ export async function signInUser({ email, password }) {
       err.isMfaRequired = true;
       throw err;
     }
-    throw new Error(getFriendlyAuthErrorMessage(err));
+    throw new Error(getFriendlyAuthErrorMessage(err), { cause: err });
   }
 
   const user = userCredential.user;
@@ -225,13 +225,19 @@ export async function signInUser({ email, password }) {
     Boolean(userData.isEmailVerified) ||
     Boolean(userData.emailVerified) ||
     Boolean(userData.verified) ||
-    Boolean(userData.preSeeded) ||
-    userData.role === "admin" ||
-    userData.role === "staff";
+    Boolean(userData.preSeeded);
 
   if (!isVerified) {
+    try {
+      await sendEmailVerification(user);
+    } catch (verr) {
+      console.warn("Could not send verification email on sign-in:", verr);
+    }
     await signOut(auth);
-    throw new Error("Please verify your email address before logging in.");
+    const verifyErr = new Error("Please verify your email address before logging in. A verification link has been sent to your inbox.");
+    verifyErr.code = "auth/unverified-email";
+    verifyErr.email = cleanEmail;
+    throw verifyErr;
   }
 
   // Step 4: Update lastLogin in Firestore
@@ -309,7 +315,7 @@ export async function signInWithGoogle() {
   try {
     userCredential = await signInWithPopup(auth, provider);
   } catch (err) {
-    throw new Error(getFriendlyAuthErrorMessage(err));
+    throw new Error(getFriendlyAuthErrorMessage(err), { cause: err });
   }
 
   const user = userCredential.user;
@@ -365,6 +371,6 @@ export async function sendPasswordReset(email) {
       message: "Password reset link sent to your email address.",
     };
   } catch (err) {
-    throw new Error(getFriendlyAuthErrorMessage(err));
+    throw new Error(getFriendlyAuthErrorMessage(err), { cause: err });
   }
 }

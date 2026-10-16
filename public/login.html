@@ -4,75 +4,204 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lanica | Admin Login</title>
+  <title>Lanica | Management Portal Access</title>
   <link rel="icon" type="image/jpeg" href="assets/lanicalogo.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="login.css" />
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
-        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/",
-        "three/": "https://cdn.jsdelivr.net/npm/three@0.173.0/"
-      }
-    }
-  </script>
 </head>
 
 <body class="login-body">
-  <div class="login-container">
-    <div class="login-card">
-      <h1 class="logo">Lanica.</h1>
-      <p class="login-subtitle">Admin / Staff Access</p>
-      <div id="login-error" class="error-msg" aria-live="polite"></div>
+  <div class="login-wrapper">
+    <!-- Ambient decorative lighting -->
+    <div class="login-ambient-glow" aria-hidden="true"></div>
 
-      <div id="login-form-wrapper">
-        <form id="login-form">
-          <div class="form-group">
-            <label for="admin-email">Email Address</label>
-            <input type="email" id="admin-email" maxlength="100" required placeholder="admin@lanica.com" autocomplete="username" />
+    <main class="login-container">
+      <div class="login-card">
+        <!-- Brand & Security Header -->
+        <header class="login-header">
+          <h1 class="logo">Lanica<span class="logo-accent">.</span></h1>
+          <div class="portal-badge" aria-label="Portal Security Level">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <path d="m9 12 2 2 4-4"></path>
+            </svg>
+            <span>Staff & Admin Portal</span>
           </div>
-          <div class="form-group">
-            <label for="admin-pwd">Password</label>
-            <input type="password" id="admin-pwd" maxlength="100" required placeholder="••••••••" autocomplete="current-password" />
+          <p class="login-subtitle">Enter your credentials to access the management dashboard</p>
+        </header>
+
+        <!-- Dynamic Status/Alert Banner -->
+        <div id="login-error" class="login-alert is-hidden" role="alert" aria-live="polite"></div>
+
+        <!-- Sign-In Form View -->
+        <div id="login-form-wrapper">
+          <form id="login-form" novalidate autocomplete="on">
+            <!-- Email Field -->
+            <div class="auth-input-group">
+              <label for="admin-email">Email Address</label>
+              <div class="auth-input-wrapper">
+                <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                <input
+                  type="email"
+                  id="admin-email"
+                  class="auth-input-field"
+                  maxlength="100"
+                  required
+                  placeholder="Enter authorized email"
+                  autocomplete="username"
+                  spellcheck="false"
+                  aria-required="true"
+                />
+              </div>
+            </div>
+
+            <!-- Password Field with Interactive Visibility Toggle -->
+            <div class="auth-input-group">
+              <label for="admin-pwd">Password</label>
+              <div class="auth-input-wrapper">
+                <svg class="leading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <input
+                  type="password"
+                  id="admin-pwd"
+                  class="auth-input-field"
+                  maxlength="100"
+                  required
+                  placeholder="••••••••"
+                  autocomplete="current-password"
+                  aria-required="true"
+                />
+                <button
+                  type="button"
+                  class="eye-toggle-btn"
+                  id="toggle-pwd-btn"
+                  data-target="admin-pwd"
+                  aria-label="Toggle password visibility"
+                  tabindex="0"
+                >
+                  <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Submit CTA Button -->
+            <button type="submit" class="btn-auth-primary login-btn" id="login-submit-btn">
+              <span class="btn-text">Sign In to Dashboard</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+
+            <!-- Security Badge Footer -->
+            <div class="login-security-notice">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Authorized personnel only • Email verification required</span>
+            </div>
+          </form>
+        </div>
+
+        <!-- Verification Pending Panel (Shown when email is unverified) -->
+        <div id="verification-pending" class="verification-panel is-hidden">
+          <div class="verification-badge-container">
+            <div class="verification-icon-pulse" aria-hidden="true"></div>
+            <div class="verification-icon-box">
+              <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h9"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+                <path d="m16 19 2 2 4-4"></path>
+              </svg>
+            </div>
           </div>
-          <!-- Widget rendered by recaptcha-init.js using LANICA_RECAPTCHA_SITE_KEY in recaptcha-config.js -->
-          <div class="form-group recaptcha-row">
-            <div id="login-recaptcha"></div>
+
+          <h2 class="verification-title">Verify Your Email Address</h2>
+          <p class="verification-lead">
+            For security, administrator and staff portal access requires a verified email address. We sent a verification link to:
+          </p>
+
+          <div class="verification-email-card">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <strong id="verification-email" class="verification-email-text"></strong>
           </div>
-          <button type="submit" class="btn-primary login-btn">Sign In</button>
-        </form>
+
+          <div class="verification-steps">
+            <div class="verification-step">
+              <span class="step-num">1</span>
+              <span>Open your inbox (or spam folder) for the verification email.</span>
+            </div>
+            <div class="verification-step">
+              <span class="step-num">2</span>
+              <span>Click the <strong>Verify</strong> link in the email from Lanica.</span>
+            </div>
+            <div class="verification-step">
+              <span class="step-num">3</span>
+              <span>Click <strong>I Have Verified</strong> below to access the portal.</span>
+            </div>
+          </div>
+
+          <div class="verification-actions">
+            <!-- Immediate verification check -->
+            <button type="button" class="btn-auth-primary verification-action-btn" id="check-verification-btn">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m9 12 2 2 4-4"></path>
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+              <span>I Have Verified</span>
+            </button>
+
+            <!-- Resend verification email with timer -->
+            <button type="button" class="btn-secondary-action" id="resend-verification-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+              <span>Resend Verification Email</span>
+            </button>
+
+            <!-- Sign out and cancel -->
+            <button type="button" class="btn-ghost-action" id="sign-out-pending-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span>Sign Out & Use Another Account</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer Link back to Storefront -->
+        <footer class="login-footer">
+          <a href="index.html" class="back-link">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Return to Storefront</span>
+          </a>
+        </footer>
       </div>
-
-      <div id="verification-pending" class="verification-panel is-hidden">
-        <p class="verification-title">Verify your email</p>
-        <p class="verification-lead">
-          Sign-in is blocked until you confirm your address. We sent a link to:
-        </p>
-        <p class="verification-email-line"><strong id="verification-email"></strong></p>
-        <p class="verification-hint">
-          Open the email and click <strong>Verify</strong>, then return here and use <strong>Sign out</strong> below,
-          or refresh this page after verifying.
-        </p>
-        <button type="button" class="btn-secondary verification-action" id="resend-verification-btn">
-          Resend verification email
-        </button>
-        <button type="button" class="btn-outline verification-action" id="sign-out-pending-btn">Sign out</button>
-      </div>
-
-      <a href="index.html" class="back-link">Return to Home</a>
-    </div>
+    </main>
   </div>
-  <script src="recaptcha-config.js"></script>
-  <script src="recaptcha-init.js"></script>
-  <script src="https://www.google.com/recaptcha/api.js?onload=onLanicaRecaptchaLoad&render=explicit" async
-    defer></script>
+
   <script type="module" src="login.js"></script>
 </body>
 

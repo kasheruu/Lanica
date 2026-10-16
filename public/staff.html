@@ -6,7 +6,6 @@
     <title>Lanica | Staff Dashboard</title>
     <link rel="icon" type="image/jpeg" href="assets/lanicalogo.jpg" />
 
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://ui-avatars.com data: blob:; connect-src 'self' https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://www.gstatic.com https://cdn.jsdelivr.net https://ajax.googleapis.com; frame-src 'self' https://js.stripe.com;">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
@@ -37,64 +36,55 @@
         <h2 class="logo">Lanica. <span class="admin-badge">Staff</span></h2>
       </div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" id="nav-orders">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
+        <a href="#" class="nav-item active" id="nav-staff-dashboard" data-section="dashboard">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="7" height="9" x="3" y="3" rx="1.5"></rect>
+            <rect width="7" height="5" x="14" y="3" rx="1.5"></rect>
+            <rect width="7" height="9" x="14" y="12" rx="1.5"></rect>
+            <rect width="7" height="5" x="3" y="16" rx="1.5"></rect>
+          </svg>
+          Dashboard
+        </a>
+        <a href="#" class="nav-item" id="nav-orders" data-section="orders">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <path d="M16 10a4 4 0 0 1-8 0"></path>
           </svg>
           Orders
         </a>
-        <a href="#" class="nav-item" id="nav-staff-chats" style="position: relative;">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
+        <a href="#" class="nav-item" id="nav-staff-workshop" data-section="workshop">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+          Workshop Queue
+        </a>
+        <a href="#" class="nav-item" id="nav-staff-chats" data-section="chats" style="position: relative;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
           <span>Live Chat</span>
           <span id="staff-nav-chat-unread-badge" style="display: none; margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">0</span>
         </a>
-        <a href="#" class="nav-item" id="nav-my-account">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M20 21a8 8 0 0 0-16 0"></path>
-            <circle cx="12" cy="7" r="4"></circle>
+        <!-- Dynamic Modules based on Role Permissions Scope -->
+        <a href="#" class="nav-item is-hidden" id="nav-staff-inventory" data-section="inventory">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
           </svg>
-          My Profile
+          Inventory
+        </a>
+        <a href="#" class="nav-item is-hidden" id="nav-staff-analytics" data-section="analytics">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 20V14"></path>
+            <path d="M12 20V4"></path>
+            <path d="M18 20V10"></path>
+          </svg>
+          Analytics
         </a>
         <a href="#" class="nav-item" id="logout-btn" style="margin-top: auto">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>
             <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -107,94 +97,330 @@
     <main class="admin-main">
       <header class="admin-header">
         <div>
-          <h1 id="staff-header-title">Staff Workshop & Order Updates</h1>
+          <h1 id="staff-header-title">Staff Workshop & Order Hub</h1>
           <p class="admin-subtitle" id="staff-header-blurb">
             Crafting progression:
             <strong>Deposit Verified → In Production → Quality Checked → Shipped → Delivered</strong>.
-            Check item custom specs and customer chat messages.
+            Check item custom specs, track workshop progression, and fulfill customer orders.
           </p>
         </div>
-        <button id="staff-account-chip" class="staff-account-chip" type="button">
-          <img
-            id="staff-chip-avatar"
-            class="staff-avatar"
-            src="https://ui-avatars.com/api/?name=Staff&background=111827&color=fff&size=128"
-            alt="Staff profile"
-          />
-          <span class="staff-account-meta">
-            <strong id="staff-chip-name">My Profile</strong>
-            <small>Profile</small>
-          </span>
-        </button>
       </header>
 
-      <div id="staff-orders-section">
-      <div class="stats-grid orders-stats">
-        <div class="stat-card">
-          <h3>Deposit Confirmed</h3>
-          <p class="stat-value" id="staff-accepted">0</p>
+      <!-- Staff Dashboard Section (Default Active Landing Section) -->
+      <div id="staff-dashboard-section">
+        <!-- Quick Stats Overview for Staff -->
+        <div class="stats-grid orders-stats" style="margin-bottom: 20px;">
+          <div class="stat-card" style="border-left: 4px solid #6b4423;">
+            <h3>My Assigned Orders</h3>
+            <p class="stat-value" id="staff-dash-my-orders" style="color: #6b4423;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Orders currently assigned to you</span>
+          </div>
+          <div class="stat-card" style="border-left: 4px solid #2563eb;">
+            <h3>Crafting in Workshop</h3>
+            <p class="stat-value" id="staff-dash-in-prod" style="color: #2563eb;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Pieces currently in production</span>
+          </div>
+          <div class="stat-card" style="border-left: 4px solid #7c3aed;">
+            <h3>Awaiting QC Check</h3>
+            <p class="stat-value" id="staff-dash-qc-pending" style="color: #7c3aed;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Inspection & finishing queue</span>
+          </div>
+          <div class="stat-card" style="border-left: 4px solid #059669;">
+            <h3>Completed by Me</h3>
+            <p class="stat-value" id="staff-dash-completed" style="color: #059669;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Delivered / completed orders</span>
+          </div>
         </div>
-        <div class="stat-card">
-          <h3>In Production</h3>
-          <p class="stat-value" id="staff-processing">0</p>
+
+        <!-- Quick Navigation Action Shortcuts -->
+        <div style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+          <button type="button" id="staff-dash-btn-workshop" class="btn-primary" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+            Open Workshop Queue
+          </button>
+          <button type="button" id="staff-dash-btn-orders" class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; border: 1.5px solid #cbd5e1; background: #fff;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line></svg>
+            Active Orders Hub
+          </button>
+          <button type="button" id="staff-dash-btn-chats" class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; border: 1.5px solid #cbd5e1; background: #fff;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Customer Inquiries
+          </button>
         </div>
-        <div class="stat-card">
-          <h3>QC Passed</h3>
-          <p class="stat-value" id="staff-shipped">0</p>
-        </div>
-        <div class="stat-card">
-          <h3>Delivered</h3>
-          <p class="stat-value" id="staff-delivered">0</p>
+
+        <!-- Active Workshop Crafting Table / Watchlist -->
+        <div class="table-container" style="margin-bottom: 24px;">
+          <div style="padding: 14px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.05rem; color: #1f2937;">Active Workshop Production Watchlist</h3>
+              <p style="margin: 4px 0 0; font-size: 0.85rem; color: #6b7280;">
+                Live list of furniture pieces currently undergoing carpentry, upholstery, and finishing.
+              </p>
+            </div>
+            <span id="staff-dash-watchlist-badge" style="font-size: 0.8rem; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
+              0 Pieces in Workshop
+            </span>
+          </div>
+          <table class="inventory-table orders-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Furniture Items & Specs</th>
+                <th>Workshop Stage</th>
+                <th>Lead Time</th>
+                <th>Assigned Staff</th>
+                <th>Quick Action</th>
+              </tr>
+            </thead>
+            <tbody id="staff-dashboard-watchlist-body">
+              <tr>
+                <td colspan="7" style="text-align: center; padding: 24px; color: #6b7280;">Loading workshop watchlist…</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div class="table-container">
-        <table class="inventory-table orders-table">
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Est. Delivery</th>
-              <th>Manual Override</th>
-              <th>Update</th>
-            </tr>
-          </thead>
-          <tbody id="staff-orders-list">
-            <tr>
-              <td colspan="8" style="text-align: center; padding: 20px">Loading assigned orders…</td>
-            </tr>
-          </tbody>
-        </table>
+      <div id="staff-orders-section" class="is-hidden">
+        <!-- Modernized Metric Cards matching Admin Orders -->
+        <div class="stats-grid orders-stats users-stats">
+          <div class="stat-card" id="card-filter-placed" style="cursor: pointer;" title="Filter by Placed / Awaiting Deposit">
+            <h3>Placed</h3>
+            <p class="stat-value" id="staff-placed">0</p>
+          </div>
+          <div class="stat-card" id="card-filter-accepted" style="cursor: pointer;" title="Filter by Deposit Confirmed">
+            <h3>Deposit Verified</h3>
+            <p class="stat-value" id="staff-accepted">0</p>
+          </div>
+          <div class="stat-card" id="card-filter-processing" style="cursor: pointer;" title="Filter by In Production">
+            <h3>In Production</h3>
+            <p class="stat-value" id="staff-processing">0</p>
+          </div>
+          <div class="stat-card" id="card-filter-shipped" style="cursor: pointer;" title="Filter by QC Passed">
+            <h3>QC Passed</h3>
+            <p class="stat-value" id="staff-shipped">0</p>
+          </div>
+          <div class="stat-card" id="card-filter-delivered" style="cursor: pointer;" title="Filter by Delivered">
+            <h3>Delivered</h3>
+            <p class="stat-value" id="staff-delivered">0</p>
+          </div>
+        </div>
+
+        <!-- Clean Operational Toolbar: Search Bar & Status Filter ONLY -->
+        <div class="table-container orders-toolbar users-toolbar" style="margin-bottom: 16px;">
+          <div class="orders-toolbar-inner users-toolbar-inner" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; flex: 1;">
+              <!-- Dedicated Real-time Search Input Bar with Debounce & Quick Clear -->
+              <div class="admin-orders-search-box" style="position: relative; flex: 1; min-width: 240px; max-width: 380px; display: flex; align-items: center;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; pointer-events: none;">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.3-4.3"></path>
+                </svg>
+                <input
+                  type="text"
+                  id="staff-orders-search-input"
+                  placeholder="Search Order ID, customer, item, or status..."
+                  maxlength="80"
+                  style="width: 100%; padding: 9px 32px 9px 36px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; outline: none; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;"
+                  autocomplete="off"
+                  aria-label="Search Orders"
+                />
+                <button
+                  type="button"
+                  id="staff-orders-search-clear"
+                  style="display: none; position: absolute; right: 10px; background: #e2e8f0; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 0.75rem; color: #475569; cursor: pointer; align-items: center; justify-content: center; padding: 0;"
+                  aria-label="Clear order search"
+                >✕</button>
+              </div>
+
+              <!-- Status Filter Select -->
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label for="staff-orders-status-filter" class="orders-filter-label" style="font-size: 0.82rem; font-weight: 600; color: #475569;">Status</label>
+                <select id="staff-orders-status-filter" class="orders-filter-select">
+                  <option value="all">All statuses</option>
+                  <option value="placed">Step 0: PLACED (Awaiting Deposit)</option>
+                  <option value="downpayment confirmed">Step 1: CONFIRMED (Deposit Verified)</option>
+                  <option value="in production">Step 2: CRAFTING (In Production)</option>
+                  <option value="quality checked">Step 3: INSPECTED (QC Passed)</option>
+                  <option value="shipped">Step 4: DISPATCHED (Out for Delivery)</option>
+                  <option value="delivered">Step 5: DELIVERED</option>
+                  <option value="completed" style="font-weight: bold; color: #059669;">Step 6: COMPLETED (Customer Received)</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Synchronized Active Orders Table with Pagination Container -->
+        <div class="table-container" id="staff-orders-table-container">
+          <table class="inventory-table orders-table users-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Fulfillment</th>
+                <th>Items</th>
+                <th>Financial Breakdown</th>
+                <th>Status</th>
+                <th>Est. Delivery</th>
+                <th>Assigned to</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="staff-orders-list">
+              <tr>
+                <td colspan="9" style="text-align: center; padding: 24px; color: #6b7280;">Loading assigned orders…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Completed Transactions History Table with Pagination Container -->
+        <div class="table-container" id="staff-history-table-container" style="margin-top: 20px">
+          <div style="padding: 14px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.05rem; color: #1f2937">Completed Transactions History</h3>
+              <p style="margin: 4px 0 0; font-size: 0.85rem; color: #6b7280">
+                Orders listed here are completed only after the customer clicks "Order Received" in the app.
+              </p>
+            </div>
+          </div>
+          <table class="inventory-table orders-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Staff Assigned</th>
+                <th>Completed At</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="staff-history-list">
+              <tr>
+                <td colspan="7" style="text-align: center; padding: 24px; color: #6b7280;">Loading completed history…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="table-container" style="margin-top: 16px">
-        <div style="padding: 14px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.05)">
-          <h3 style="margin: 0; font-size: 1.05rem; color: #1f2937">Completed Transactions History</h3>
-          <p style="margin: 4px 0 0; font-size: 0.85rem; color: #6b7280">
-            Completed only when customer clicks "Order Received" in the app.
-          </p>
+      <!-- Workshop Production Queue (Made-to-Order Visual Kanban Pipeline) -->
+      <div id="staff-workshop-section" class="is-hidden" style="margin-top: 16px;">
+        <div class="stats-grid orders-stats" style="margin-bottom: 20px;">
+          <div class="stat-card">
+            <h3>Deposit Verified</h3>
+            <p class="stat-value" id="staff-ws-deposit-verified" style="color: #4338ca;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Queued for timber allocation</span>
+          </div>
+          <div class="stat-card">
+            <h3>In Production</h3>
+            <p class="stat-value" id="staff-ws-in-production" style="color: #d97706;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Staff currently crafting</span>
+          </div>
+          <div class="stat-card">
+            <h3>QC Passed</h3>
+            <p class="stat-value" id="staff-ws-qc-passed" style="color: #059669;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Ready for logistics dispatch</span>
+          </div>
+          <div class="stat-card">
+            <h3>Dispatched / Shipped</h3>
+            <p class="stat-value" id="staff-ws-shipped" style="color: #2563eb;">0</p>
+            <span style="font-size: 0.78rem; color: #6b7280;">Out for customer delivery</span>
+          </div>
         </div>
-        <table class="inventory-table orders-table">
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Staff Assigned</th>
-              <th>Completed At</th>
-            </tr>
-          </thead>
-          <tbody id="staff-history-list">
-            <tr>
-              <td colspan="6" style="text-align: center; padding: 20px">Loading completed history…</td>
-            </tr>
-          </tbody>
-        </table>
+
+        <!-- Workshop Visual Kanban Board Grid -->
+        <div class="workshop-kanban-board">
+          <!-- Column 1: Deposit Verified -->
+          <div class="kanban-column" data-stage="downpayment confirmed">
+            <div class="kanban-column-header">
+              <div class="kanban-header-title">
+                <span class="kanban-dot dot-queued"></span>
+                <h3>Deposit Verified</h3>
+              </div>
+              <span class="kanban-badge" id="staff-kanban-count-queued">0</span>
+            </div>
+            <div class="kanban-cards-container" id="staff-kanban-list-queued">
+              <div class="kanban-empty">No queued orders</div>
+            </div>
+          </div>
+
+          <!-- Column 2: In Production -->
+          <div class="kanban-column" data-stage="in production">
+            <div class="kanban-column-header">
+              <div class="kanban-header-title">
+                <span class="kanban-dot dot-production"></span>
+                <h3>In Production</h3>
+              </div>
+              <span class="kanban-badge" id="staff-kanban-count-production">0</span>
+            </div>
+            <div class="kanban-cards-container" id="staff-kanban-list-production">
+              <div class="kanban-empty">No orders in crafting</div>
+            </div>
+          </div>
+
+          <!-- Column 3: Quality Checked -->
+          <div class="kanban-column" data-stage="quality checked">
+            <div class="kanban-column-header">
+              <div class="kanban-header-title">
+                <span class="kanban-dot dot-qc"></span>
+                <h3>Quality Checked</h3>
+              </div>
+              <span class="kanban-badge" id="staff-kanban-count-qc">0</span>
+            </div>
+            <div class="kanban-cards-container" id="staff-kanban-list-qc">
+              <div class="kanban-empty">No orders awaiting dispatch</div>
+            </div>
+          </div>
+
+          <!-- Column 4: Dispatched / Shipped -->
+          <div class="kanban-column" data-stage="shipped">
+            <div class="kanban-column-header">
+              <div class="kanban-header-title">
+                <span class="kanban-dot dot-shipped"></span>
+                <h3>Dispatched / Shipped</h3>
+              </div>
+              <span class="kanban-badge" id="staff-kanban-count-shipped">0</span>
+            </div>
+            <div class="kanban-cards-container" id="staff-kanban-list-shipped">
+              <div class="kanban-empty">No recently shipped orders</div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- Dynamic Modules based on Role Permissions Scope -->
+      <div id="staff-inventory-section" class="is-hidden" style="margin-top: 16px;">
+        <div class="table-container" style="padding: 24px; text-align: center;">
+          <div style="max-width: 500px; margin: 0 auto;">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#2563eb" stroke-width="1.8" style="margin-bottom: 12px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            <h3 style="margin: 0 0 8px; font-size: 1.2rem; color: #0f172a;">Staff Inventory Workspace</h3>
+            <p style="margin: 0 0 16px; font-size: 0.88rem; color: #64748b;">You have been granted Inventory Control scope by the Administrator. Access product materials, wood stocks, and catalog levels.</p>
+            <div id="staff-inventory-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px;">
+              <div class="stat-card"><h3>Wood Materials</h3><p class="stat-value" id="staff-inv-wood" style="color: #059669;">Available</p></div>
+              <div class="stat-card"><h3>Fabrics &amp; Foam</h3><p class="stat-value" id="staff-inv-fabric" style="color: #059669;">In Stock</p></div>
+              <div class="stat-card"><h3>Hardware &amp; Fixings</h3><p class="stat-value" id="staff-inv-hardware" style="color: #059669;">Ready</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="staff-analytics-section" class="is-hidden" style="margin-top: 16px;">
+        <div class="table-container" style="padding: 24px; text-align: center;">
+          <div style="max-width: 500px; margin: 0 auto;">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#059669" stroke-width="1.8" style="margin-bottom: 12px;"><path d="M6 20V14"></path><path d="M12 20V4"></path><path d="M18 20V10"></path></svg>
+            <h3 style="margin: 0 0 8px; font-size: 1.2rem; color: #0f172a;">Staff Production Analytics</h3>
+            <p style="margin: 0 0 16px; font-size: 0.88rem; color: #64748b;">You have been granted Analytics View scope by the Administrator. Review workshop turnaround and fulfillment metrics.</p>
+            <div id="staff-analytics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px;">
+              <div class="stat-card"><h3>Avg Crafting Lead Time</h3><p class="stat-value" id="staff-analytics-turnaround" style="color: #2563eb;">14–21 Days</p></div>
+              <div class="stat-card"><h3>On-Time Completion</h3><p class="stat-value" id="staff-analytics-rate" style="color: #059669;">98.5%</p></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Live Chat & Customer Inquiries Workspace for Staff -->
@@ -337,101 +563,91 @@
         </div>
       </div>
 
-      <div id="staff-account-section" class="is-hidden">
-        <div class="profile-page-grid">
-          <section class="profile-summary-card">
-            <div class="profile-card-header">
-              <div class="profile-avatar-stack">
-                <input
-                  type="file"
-                  id="staff-profile-photo-input"
-                  class="is-hidden"
-                  accept="image/jpeg,image/png,image/webp"
-                  aria-hidden="true"
-                  tabindex="-1"
-                />
-                <img
-                  id="staff-profile-avatar"
-                  class="profile-avatar-large"
-                  src="https://ui-avatars.com/api/?name=Staff&background=111827&color=fff&size=128"
-                  alt="Staff profile"
-                />
-                <div class="profile-avatar-actions">
-                  <button type="button" class="icon-btn" id="staff-edit-photo-btn" title="Edit profile photo" style="display: flex; align-items: center; justify-content: center;">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                  </button>
-                  <button type="button" class="icon-btn delete" id="staff-remove-photo-btn" title="Remove profile photo" style="display: flex; align-items: center; justify-content: center;">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p class="profile-label">My Profile</p>
-                <h3 class="profile-title" id="staff-account-name">Loading...</h3>
-                <p class="profile-subtitle">Manage your staff details and contact information.</p>
-              </div>
-            </div>
-            <div class="profile-summary-grid">
-              <div class="profile-summary-item">
-                <span>Email Address</span>
-                <strong id="staff-email-display">Loading...</strong>
-              </div>
-              <div class="profile-summary-item">
-                <span>Phone Number</span>
-                <strong id="staff-phone-display">Loading...</strong>
-              </div>
-              <div class="profile-summary-item">
-                <span>Account Role</span>
-                <strong id="staff-role-display">Staff</strong>
-              </div>
-              <div class="profile-summary-item">
-                <span>Joined</span>
-                <strong id="staff-created-display">Loading...</strong>
-              </div>
-            </div>
-          </section>
 
-          <section class="profile-edit-card">
-            <div class="profile-card-header">
-              <div>
-                <p class="profile-label">Edit Profile</p>
-                <h3 class="profile-title">Personal Information</h3>
-              </div>
+    </main>
+
+    <!-- Lanica Official Business Document Modal (Payment Request Voucher & Official Quotation) -->
+    <div id="lanica-receipt-modal" class="user-modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 10000; overflow-y: auto; padding: 12px;">
+      <div class="user-modal-card lanica-doc-modal-card" style="max-width: 920px; width: 100%; max-height: 96vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); background: #ffffff;">
+        <!-- Top Modal Toolbar (Hidden when printing) -->
+        <div class="modal-no-print lanica-doc-toolbar" style="background: #0f172a; color: #fff; border-bottom: 1px solid #1e293b; padding: 12px 18px;">
+          <!-- Header row with title and prominent close button -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+              <span style="font-weight: 700; font-size: 0.98rem; letter-spacing: 0.02em; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Official Lanica Financial Document</span>
             </div>
-            <form id="staff-profile-form" class="profile-form">
-              <div class="profile-fields-grid">
-                <div class="form-group">
-                  <label for="staff-first-name">First Name</label>
-                  <input id="staff-first-name" class="profile-input" placeholder="Herald" maxlength="40" />
-                </div>
-                <div class="form-group">
-                  <label for="staff-last-name">Last Name</label>
-                  <input id="staff-last-name" class="profile-input" placeholder="Zontix" maxlength="40" />
-                </div>
-                <div class="form-group full-width">
-                  <label for="staff-email-address">Email Address</label>
-                  <input id="staff-email-address" class="profile-input" type="email" readonly />
-                </div>
-                <div class="form-group">
-                  <label for="staff-phone-edit">Phone Number</label>
-                  <input id="staff-phone-edit" class="profile-input" type="tel" placeholder="0945 751 0291" maxlength="16" />
-                </div>
+            <button type="button" id="btn-close-lanica-modal" aria-label="Close modal" title="Close document preview" style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; min-width: 42px; min-height: 42px; width: 42px; height: 42px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; line-height: 1; cursor: pointer; transition: all 0.15s ease; touch-action: manipulation; flex-shrink: 0;">
+              &times;
+            </button>
+          </div>
+
+          <!-- Toolbar row: Tab switcher, branch switcher & print button -->
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+            <!-- Document Switcher Tabs -->
+            <div style="display: inline-flex; background: #1e293b; border-radius: 8px; padding: 3px; gap: 4px;">
+              <button type="button" id="tab-btn-voucher" class="receipt-tab-btn active" style="padding: 7px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #2563eb; color: #fff; touch-action: manipulation; display: inline-flex; align-items: center; gap: 5px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+                Payment Voucher
+              </button>
+              <button type="button" id="tab-btn-quotation" class="receipt-tab-btn" style="padding: 7px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: transparent; color: #94a3b8; touch-action: manipulation; display: inline-flex; align-items: center; gap: 5px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M12 2v4"></path><path d="M16 2v4"></path><rect width="16" height="18" x="4" y="4" rx="2"></rect><path d="M8 10h6"></path><path d="M8 14h8"></path><path d="M8 18h5"></path></svg>
+                Official Quotation
+              </button>
+            </div>
+
+            <!-- Branch Switcher & Print Action -->
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+              <!-- Branch Selector -->
+              <div style="display: inline-flex; align-items: center; background: #1e293b; border-radius: 8px; padding: 3px 6px; gap: 4px;">
+                <span style="font-size: 0.74rem; font-weight: 700; color: #94a3b8; padding-left: 4px;">Branch:</span>
+                <button type="button" id="btn-branch-calamba" class="receipt-branch-btn active" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: #2563eb; color: #ffffff; touch-action: manipulation;">
+                  Calamba
+                </button>
+                <button type="button" id="btn-branch-pila" class="receipt-branch-btn" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; background: transparent; color: #94a3b8; touch-action: manipulation;">
+                  Pila
+                </button>
               </div>
 
-              <input type="hidden" id="staff-display-name" />
-              <input type="hidden" id="staff-display-name-edit" />
+              <!-- Print / PDF Button -->
+              <button type="button" id="btn-print-lanica-doc" style="display: inline-flex; align-items: center; gap: 6px; background: #059669; color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer; touch-action: manipulation;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14"></rect></svg>
+                Print / Save PDF
+              </button>
+            </div>
+          </div>
+        </div>
 
-              <p class="profile-save-note">
-                You will be asked for your password when saving changes.
-              </p>
-              <div class="profile-actions-row">
-                <button type="button" id="profile-cancel-btn" class="btn-secondary">Cancel</button>
-                <button type="submit" id="staff-save-profile" class="btn-primary">Save</button>
-              </div>
-            </form>
-          </section>
+        <!-- Printable Document Container (Scrollable on screen, 100% visible on print) -->
+        <div id="lanica-printable-area" style="overflow-y: auto; overflow-x: auto; padding: 28px 36px; background: #ffffff; color: #000; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <!-- Injected dynamic voucher or quotation HTML -->
         </div>
       </div>
-    </main>
+    </div>
+
+    <!-- Modern Delivery Date Override Modal -->
+    <div id="staff-delivery-modal" class="user-modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 10000; padding: 16px;">
+      <div class="user-modal-card" style="max-width: 440px; width: 100%; background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            Set Delivery Estimate
+          </h3>
+          <button type="button" id="btn-close-delivery-modal" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+        <p style="font-size: 0.85rem; color: #64748b; margin: 0 0 16px;">
+          Adjust or manually schedule the target delivery date for order <strong id="delivery-modal-order-id" style="color: #0f172a;"></strong>.
+        </p>
+        <input type="hidden" id="delivery-modal-order-id-val" />
+        <div style="margin-bottom: 20px;">
+          <label for="delivery-modal-date-input" style="display: block; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 6px;">Target Delivery Date</label>
+          <input type="date" id="delivery-modal-date-input" style="width: 100%; padding: 10px 12px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; font-family: inherit; outline: none; background: #fff;" />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" id="btn-cancel-delivery-modal" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Cancel</button>
+          <button type="button" id="btn-apply-delivery-modal" class="btn-primary" style="padding: 8px 20px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Apply Delivery Date</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
