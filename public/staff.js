@@ -2757,7 +2757,9 @@ function renderLanicaDocumentContent() {
 
   if (activeReceiptTab === "voucher") {
     const firstItem = (order.items && order.items[0]) || null;
-    const firstItemName = firstItem ? (firstItem.name || firstItem.title || "SEMI ELEGANT") : "SEMI ELEGANT";
+    const firstItemName = firstItem
+      ? firstItem.name || firstItem.title || "Custom Furniture"
+      : (order.productName || "Custom Furniture");
     const particulars = `PAYMENT FOR ${escapeHtml(firstItemName.toUpperCase())} SOFA SET`;
     const staffSignatory = order.assignedStaffName || (currentUser?.displayName || "Staff Member");
     const signDate = purchaseDate;
@@ -2880,22 +2882,22 @@ function renderLanicaDocumentContent() {
   } else {
     // DOCUMENT 2: OFFICIAL QUOTATION
     const items = (order.items && order.items.length > 0) ? order.items : [{
-      name: "SEMI ELEGANT LTYPE FULLBACKREST",
+      name: order.productName || order.itemTitle || "Custom Handcrafted Furniture",
       quantity: 1,
       price: itemsSubtotal,
-      material: "Pure Goodlumber / Uratex 4in",
-      color: "Standard Color",
-      customNotes: "With 1 arm sa kanan, with flesh lining"
+      material: order.material || "Kiln-Dried Hardwood / High-Density Foam",
+      color: order.fabricColor || order.color || "Standard Color",
+      customNotes: order.customNotes || "Standard Artisan Custom Specs"
     }];
 
     const itemsRowsHtml = items.map((item, idx) => {
       const itemQty = Number(item.quantity || 1);
       const itemPrice = parseItemPrice(item.price);
       const itemTotal = itemPrice * itemQty;
-      const itemName = String(item.name || item.title || "SEMI ELEGANT LTYPE").toUpperCase();
+      const itemName = String(item.name || item.title || order.productName || "Custom Handcrafted Furniture").toUpperCase();
       const rawColor = item.color || item.fabricColor || "STANDARD COLOR";
       const itemColor = String(rawColor).toUpperCase();
-      const itemSpecs = item.customNotes || item.specs || "Standard handcrafted specifications";
+      const itemSpecs = item.customNotes || item.specs || order.customNotes || "Standard handcrafted specifications";
 
       return `
         <tr style="vertical-align: top; border-bottom: 1px solid #e5e7eb;">

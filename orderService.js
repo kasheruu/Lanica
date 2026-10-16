@@ -180,12 +180,39 @@ export function classifyOrderScope(order) {
     .trim()
     .toLowerCase();
 
-  const remainingBalance = Number(order.remainingBalance ?? order.balanceDue ?? 0);
+  const totalVal = Number(order.totalAmount || order.total || 0);
+  const isDownpayment =
+    order.paymentOption === "downpayment" ||
+    Number(order.downpaymentAmount) > 0 ||
+    order.paymentMethod === "walk_in_cash" ||
+    order.paymentType === "walk_in_cash";
+  const isPaidDownpayment =
+    order.paymentStatus === "downpayment_paid" ||
+    order.paymentStatus === "Paid" ||
+    order.paymentStatus === "paid" ||
+    Boolean(order.paymentDetails?.downpaymentPaid);
+
+  let remainingBalance = 0;
+  if (order.remainingBalance !== undefined && order.remainingBalance !== null && !isNaN(Number(order.remainingBalance))) {
+    remainingBalance = Number(order.remainingBalance);
+  } else if (order.balanceDue !== undefined && order.balanceDue !== null && !isNaN(Number(order.balanceDue))) {
+    remainingBalance = Number(order.balanceDue);
+  } else if (isDownpayment) {
+    const downpaymentDueAmount = Math.round(totalVal * 0.30);
+    const paidVal = isPaidDownpayment ? Number(order.downpaymentAmount || downpaymentDueAmount) : 0;
+    remainingBalance = Math.max(0, totalVal - paidVal);
+  } else {
+    remainingBalance = isPaidDownpayment ? 0 : totalVal;
+  }
+
   const balanceStatus = String(order.balanceStatus || "")
     .trim()
     .toLowerCase();
   const isBalanceSettled =
-    balanceStatus === "settled" || order.isBalanceSettled === true || remainingBalance <= 0;
+    balanceStatus === "settled" ||
+    order.isBalanceSettled === true ||
+    order.balanceSettled === true ||
+    (remainingBalance <= 0 && isPaidDownpayment);
 
   const refundStatus = String(order.refundStatus || "")
     .trim()
@@ -230,15 +257,14 @@ export function classifyOrderScope(order) {
   }
 
   // 3. Delivered Orders:
-  // - If remaining balance is settled (<= 0 or balanceStatus === "settled"), move to History.
-  // - If remaining balance is STILL PENDING (> 0), keep on Active Order Page.
+  // - Delivered orders remain on the Active Orders page until the customer explicitly clicks "Order Received".
+  // - Once the customer taps "Order Received", order.orderReceived is true (or status becomes "Completed"),
+  //   which is caught above by rule #2 and routed to History.
   if (status === "Delivered" || rawStatus === "delivered" || rawOrderStatus === "delivered") {
-    if (isBalanceSettled || remainingBalance <= 0) {
-      return "history";
-    }
+    return "active";
   }
 
-  // 3. Active / On-Process Orders (Placed, Downpayment Confirmed, In Production, Quality Checked, Shipped, or pending refund review)
+  // 4. Active / On-Process Orders (Placed, Downpayment Confirmed, In Production, Quality Checked, Shipped, or pending refund review)
   return "active";
 }
 

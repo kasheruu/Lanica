@@ -176,6 +176,14 @@ const MODAL_ICONS = {
       <line x1="12" y1="16" x2="12" y2="12"/>
       <line x1="12" y1="8" x2="12.01" y2="8"/>
     </svg>`,
+  check: `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/>
+    </svg>`,
+  success: `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/>
+    </svg>`,
   question: `
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/>
@@ -201,6 +209,7 @@ export function showConfirmModal({
   confirmText = "Confirm",
   cancelText = "Cancel",
   isDestructive = false,
+  isHtml = false,
   icon = null,
 } = {}) {
   return new Promise((resolve) => {
@@ -215,12 +224,12 @@ export function showConfirmModal({
     backdrop.innerHTML = `
       <div class="ui-dialog-card">
         <div class="ui-dialog-header">
-          <div class="ui-dialog-avatar ${isDestructive ? "destructive" : "info"}">
+          <div class="ui-dialog-avatar ${isDestructive ? "destructive" : (iconKey === "check" || iconKey === "success" ? "success" : "info")}">
             ${iconSvg}
           </div>
           <div class="ui-dialog-header-text">
             <h3 class="ui-dialog-title">${escapeHtml(title)}</h3>
-            <p class="ui-dialog-message">${escapeHtml(message)}</p>
+            <div class="ui-dialog-message" style="line-height: 1.55;">${isHtml || /<\/?(strong|b|i|em|br|span|p|small|u)\b/i.test(message) ? message : escapeHtml(message)}</div>
           </div>
         </div>
         <div class="ui-dialog-footer">

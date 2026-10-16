@@ -123,6 +123,37 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function isCashPaymentMethod(method) {
+  const m = String(method || "").toLowerCase();
+  return m.includes("walk_in") || m.includes("cash") || m.includes("counter");
+}
+
+function formatPaymentMethodLabel(orderOrMethod) {
+  const method = typeof orderOrMethod === "string"
+    ? orderOrMethod
+    : (orderOrMethod?.paymentMethod || orderOrMethod?.paymentType || orderOrMethod?.paymentDetails?.method || "");
+  const m = String(method).toLowerCase();
+  if (m.includes("walk_in") || m.includes("cash") || m.includes("counter")) {
+    return "Walk-in Workshop Cash (Counter)";
+  }
+  if (m.includes("qrph") || m.includes("qr_ph") || m.includes("paymongo")) {
+    return "QR Ph (PayMongo)";
+  }
+  if (m.includes("card") || m.includes("credit") || m.includes("debit")) {
+    return "Credit / Debit Card";
+  }
+  if (m.includes("gcash")) {
+    return "GCash";
+  }
+  if (m.includes("maya")) {
+    return "Maya";
+  }
+  if (method) {
+    return method;
+  }
+  return "QR Ph (PayMongo)";
+}
+
 
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -305,6 +336,22 @@ function updateTabBadges(orders) {
     cancelled: 0,
   };
 
+  activeOrders.forEach((o) => {
+    const st = getOrderCanonicalStatus(o);
+    const rawSt = String(o.status || "").toLowerCase();
+    const rawOrdSt = String(o.orderStatus || "").toLowerCase();
+
+    if (st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") {
+      counts.delivered++;
+    } else if (st === "Placed" || st === "Slot Reserved" || st === "Deposit Verified" || st === "Downpayment Confirmed") {
+      counts.placed++;
+    } else if (st === "In Production" || st === "Quality Checked") {
+      counts.inProduction++;
+    } else if (st === "Shipped") {
+      counts.shipped++;
+    }
+  });
+
   allList.forEach((o) => {
     const st = getOrderCanonicalStatus(o);
     const rawSt = String(o.status || "").toLowerCase();
@@ -314,14 +361,6 @@ function updateTabBadges(orders) {
       counts.cancelled++;
     } else if (st === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || o.orderReceived === true) {
       counts.completed++;
-    } else if (st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") {
-      counts.delivered++;
-    } else if (st === "Placed" || st === "Slot Reserved" || st === "Deposit Verified" || st === "Downpayment Confirmed") {
-      counts.placed++;
-    } else if (st === "In Production" || st === "Quality Checked") {
-      counts.inProduction++;
-    } else if (st === "Shipped") {
-      counts.shipped++;
     }
   });
 
@@ -444,7 +483,23 @@ function renderCustomerTransactionsList(orders) {
   container.innerHTML = "";
 
   pagedOrders.forEach((order) => {
-    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+    const isCompletedOrder =
+      order.status === "completed" ||
+      order.orderStatus === "completed" ||
+      order.orderReceived === true ||
+      Boolean(order.completedAt) ||
+      Boolean(order.orderReceivedAt);
+
+    const balStatusLower = String(order.balanceStatus || "").trim().toLowerCase();
+    const isBalanceSettled =
+      balStatusLower === "settled" ||
+      order.isBalanceSettled === true ||
+      order.balanceSettled === true ||
+      (Number(order.outstandingBalance) === 0 && order.balanceStatus !== undefined) ||
+      (Number(order.remainingBalance) === 0 && order.balanceStatus !== undefined) ||
+      isCompletedOrder;
+
+    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || order.paymentMethod === "walk_in_cash";
     const isPaidDownpayment =
       order.paymentStatus === "downpayment_paid" ||
       order.paymentStatus === "Paid" ||
@@ -453,34 +508,35 @@ function renderCustomerTransactionsList(orders) {
 
     const totalVal = Number(order.totalAmount || order.total || 0);
     const downpaymentDueAmount = Math.round(totalVal * 0.30);
-    const paidVal = isPaidDownpayment
-      ? Number(order.downpaymentAmount || (isDownpayment ? downpaymentDueAmount : totalVal))
-      : 0;
-    const remainingVal = isPaidDownpayment
-      ? Math.max(0, totalVal - paidVal)
-      : totalVal;
+
+    const paidVal = isBalanceSettled
+      ? totalVal
+      : isPaidDownpayment
+        ? Number(order.downpaymentAmount || (isDownpayment ? downpaymentDueAmount : totalVal))
+        : 0;
+    const remainingVal = isBalanceSettled
+      ? 0
+      : isPaidDownpayment
+        ? Math.max(0, totalVal - paidVal)
+        : totalVal;
 
     const isWalkInPending =
       (order.paymentMethod === "walk_in_cash" || order.paymentType === "walk_in_cash") &&
       order.paymentStatus === "awaiting_counter_downpayment";
 
-    const isCompletedOrder =
-      order.status === "completed" ||
-      order.orderStatus === "completed" ||
-      order.orderReceived === true ||
-      Boolean(order.completedAt) ||
-      Boolean(order.orderReceivedAt);
+    const isCash = isCashPaymentMethod(order.paymentMethod || order.paymentType);
+    const methodBadge = isCash ? "Cash / Counter" : "PayMongo";
 
     const payStatus = isCompletedOrder
       ? "Completed · Order Received"
-      : isPaidDownpayment
-        ? (isDownpayment ? "Downpayment Paid (PayMongo)" : "Paid in Full")
-        : isWalkInPending
-          ? "Counter Downpayment Pending"
-          : (isDownpayment ? "Downpayment Pending" : "Payment Pending");
-    const pMethod = order.paymentMethod === "walk_in_cash"
-      ? "Walk-in Workshop Cash"
-      : (order.paymentMethod || "QR Ph (PayMongo)");
+      : isBalanceSettled
+        ? `Balance Settled (${methodBadge})`
+        : isPaidDownpayment
+          ? (isDownpayment ? `Downpayment Paid (${methodBadge})` : `Paid in Full (${methodBadge})`)
+          : isWalkInPending
+            ? "Counter Downpayment Pending"
+            : (isDownpayment ? "Downpayment Pending" : "Payment Pending");
+    const pMethod = formatPaymentMethodLabel(order);
     const refNum = order.orderId || order.id || "N/A";
     const dateStr = formatOrderDate(order.createdAt || order.timestamp);
     const itemsSummary = (order.items || [])
@@ -499,8 +555,8 @@ function renderCustomerTransactionsList(orders) {
           <div style="font-size: 0.82rem; color: #475569; font-weight: 500; margin-top: 4px;">📦 ${escapeHtml(itemsSummary)}</div>
         </div>
         <div style="text-align: right;">
-          <span class="status-badge" style="background: ${isCompletedOrder ? '#ecfdf5' : isPaidDownpayment ? '#eff6ff' : isWalkInPending ? '#fffbeb' : '#fef2f2'}; color: ${isCompletedOrder ? '#059669' : isPaidDownpayment ? '#1d4ed8' : isWalkInPending ? '#b45309' : '#dc2626'}; border: 1px solid ${isCompletedOrder ? '#a7f3d0' : isPaidDownpayment ? '#bfdbfe' : isWalkInPending ? '#fde68a' : '#fecaca'}; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">
-            ${isCompletedOrder ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ''}${escapeHtml(payStatus)}
+          <span class="status-badge" style="background: ${isCompletedOrder || isBalanceSettled ? '#ecfdf5' : isPaidDownpayment ? '#eff6ff' : isWalkInPending ? '#fffbeb' : '#fef2f2'}; color: ${isCompletedOrder || isBalanceSettled ? '#059669' : isPaidDownpayment ? '#1d4ed8' : isWalkInPending ? '#b45309' : '#dc2626'}; border: 1px solid ${isCompletedOrder || isBalanceSettled ? '#a7f3d0' : isPaidDownpayment ? '#bfdbfe' : isWalkInPending ? '#fde68a' : '#fecaca'}; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;">
+            ${isCompletedOrder || isBalanceSettled ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ''}${escapeHtml(payStatus)}
           </span>
         </div>
       </div>
@@ -512,7 +568,7 @@ function renderCustomerTransactionsList(orders) {
         </div>
         <div>
           <span style="font-size: 0.78rem; color: #64748b; display: block;">Payment Terms</span>
-          <strong style="font-size: 0.92rem; color: #0f172a;">${isDownpayment ? '30% Downpayment Deposit' : 'Full Payment'}</strong>
+          <strong style="font-size: 0.92rem; color: #0f172a;">${isDownpayment ? (isBalanceSettled ? '30% Downpayment (Balance Settled)' : '30% Downpayment Deposit') : 'Full Payment'}</strong>
         </div>
         <div>
           <span style="font-size: 0.78rem; color: #64748b; display: block;">Amount Paid</span>
@@ -520,11 +576,15 @@ function renderCustomerTransactionsList(orders) {
         </div>
         <div>
           <span style="font-size: 0.78rem; color: #64748b; display: block;">Outstanding Balance</span>
-          <strong style="font-size: 1rem; color: ${remainingVal > 0 ? '#dc2626' : '#64748b'};">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          <strong style="font-size: 1rem; color: ${remainingVal > 0 ? '#dc2626' : '#059669'};">₱${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
         </div>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9;">
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; flex-wrap: wrap;">
+        <button type="button" class="btn-trans-quotation" data-order-id="${escapeHtml(refNum)}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; background: #ffffff; color: #0284c7; font-weight: 700; font-size: 0.8rem; border: 1.5px solid #0284c7; cursor: pointer; transition: all 0.2s;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M12 2v4"></path><path d="M16 2v4"></path><rect width="16" height="18" x="4" y="4" rx="2"></rect><path d="M8 10h6"></path><path d="M8 14h8"></path><path d="M8 18h5"></path></svg>
+          <span>OFFICIAL QUOTATION</span>
+        </button>
         <button type="button" class="btn-download-receipt btn-trans-receipt" data-order-id="${escapeHtml(refNum)}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; background: #0284c7; color: #ffffff; font-weight: 700; font-size: 0.8rem; border: none; cursor: pointer; transition: all 0.2s;">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
           <span>DOWNLOAD OFFICIAL RECEIPT</span>
@@ -534,13 +594,23 @@ function renderCustomerTransactionsList(orders) {
     container.appendChild(card);
   });
 
-  // Bind transaction receipt buttons
+  // Bind transaction document buttons
   container.querySelectorAll(".btn-trans-receipt").forEach((btn) => {
     btn.addEventListener("click", () => {
       const targetRef = btn.getAttribute("data-order-id");
       const matchedOrder = (historyOrders || []).find((o) => (o.orderId || o.id) === targetRef);
       if (matchedOrder) {
-        openLanicaCustomerReceiptModal(matchedOrder);
+        openLanicaCustomerReceiptModal(matchedOrder, "voucher");
+      }
+    });
+  });
+
+  container.querySelectorAll(".btn-trans-quotation").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetRef = btn.getAttribute("data-order-id");
+      const matchedOrder = (historyOrders || []).find((o) => (o.orderId || o.id) === targetRef);
+      if (matchedOrder) {
+        openLanicaCustomerReceiptModal(matchedOrder, "quotation");
       }
     });
   });
@@ -635,22 +705,40 @@ function setupOrderSearchListener() {
 }
 
 function filterOrdersByTab(orders, tabStatus) {
+  const allList = orders || [];
+  const activeOrders = allList.filter((o) => classifyOrderScope(o) === "active");
+
   if (tabStatus === "all") {
-    return (orders || []).filter((o) => classifyOrderScope(o) === "active");
+    return activeOrders;
   }
 
-  return (orders || []).filter((o) => {
+  if (tabStatus === "completed") {
+    return allList.filter((o) => {
+      const st = getOrderCanonicalStatus(o);
+      const rawSt = String(o.status || "").toLowerCase();
+      const rawOrdSt = String(o.orderStatus || "").toLowerCase();
+      return st === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || o.orderReceived === true;
+    });
+  }
+
+  if (tabStatus === "cancelled") {
+    return allList.filter((o) => {
+      const st = getOrderCanonicalStatus(o);
+      const rawSt = String(o.status || "").toLowerCase();
+      const rawOrdSt = String(o.orderStatus || "").toLowerCase();
+      return st === "Cancelled" || rawSt === "cancelled" || rawSt === "canceled" || rawOrdSt === "cancelled" || rawOrdSt === "canceled";
+    });
+  }
+
+  return activeOrders.filter((o) => {
     const st = getOrderCanonicalStatus(o);
     const rawSt = String(o.status || "").toLowerCase();
     const rawOrdSt = String(o.orderStatus || "").toLowerCase();
-    const isCompleted = st === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || o.orderReceived === true;
 
     if (tabStatus === "placed") return st === "Placed" || st === "Slot Reserved" || st === "Deposit Verified" || st === "Downpayment Confirmed";
     if (tabStatus === "in-production") return st === "In Production" || st === "Quality Checked";
     if (tabStatus === "shipped") return st === "Shipped";
-    if (tabStatus === "delivered") return (st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
-    if (tabStatus === "completed") return isCompleted;
-    if (tabStatus === "cancelled") return st === "Cancelled" || rawSt === "cancelled" || rawSt === "canceled" || rawOrdSt === "cancelled" || rawOrdSt === "canceled";
+    if (tabStatus === "delivered") return st === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered";
     return true;
   });
 }
@@ -1040,14 +1128,33 @@ function createOrderCardElement(order) {
     (order.paymentMethod === "walk_in_cash" || order.paymentType === "walk_in_cash") &&
     order.paymentStatus === "awaiting_counter_downpayment";
 
+  const balStatusLower = String(order.balanceStatus || "").trim().toLowerCase();
+  const rawSt = String(order.status || "").toLowerCase();
+  const rawOrdSt = String(order.orderStatus || "").toLowerCase();
+  const isCompleted = normStatus === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || order.orderReceived === true;
+  const isDelivered = (normStatus === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
+
+  const isBalanceSettled =
+    balStatusLower === "settled" ||
+    order.isBalanceSettled === true ||
+    order.balanceSettled === true ||
+    (Number(order.outstandingBalance) === 0 && order.balanceStatus !== undefined) ||
+    (Number(order.remainingBalance) === 0 && order.balanceStatus !== undefined) ||
+    isCompleted;
+
   const downpaymentDueAmount = Math.round(totalVal * 0.30);
-  const paidVal = isPaidDownpayment
-    ? Number(order.downpaymentAmount || downpaymentDueAmount)
-    : 0;
-  const remainingVal = isPaidDownpayment
-    ? Math.max(0, totalVal - paidVal)
-    : totalVal;
-  const isBalanceSettled = isPaidDownpayment && (order.balanceStatus === "settled" || remainingVal <= 0);
+  const paidVal = isBalanceSettled
+    ? totalVal
+    : isPaidDownpayment
+      ? Number(order.downpaymentAmount || (isDownpayment ? downpaymentDueAmount : totalVal))
+      : 0;
+  const remainingVal = isBalanceSettled
+    ? 0
+    : isPaidDownpayment
+      ? Math.max(0, totalVal - paidVal)
+      : totalVal;
+
+  const hasUnpaidDeliveryBalance = isDelivered && !isBalanceSettled && remainingVal > 0;
 
   let deadlineStr = "48 Hours from reservation";
   if (order.reservationExpiresAt) {
@@ -1057,15 +1164,22 @@ function createOrderCardElement(order) {
     deadlineStr = formatOrderDate(new Date(createdMs + 48 * 60 * 60 * 1000));
   }
 
+  const orderBranchKey = order._selectedBranch || order.selectedBranch || order.branch || "calamba";
+  const branchData = LANICA_BRANCHES[orderBranchKey] || LANICA_BRANCHES.calamba;
+
   let paymentDetailsHTML = "";
   if (isDownpayment) {
+    const isCashMethod = isCashPaymentMethod(order.paymentMethod || order.paymentType);
+    const paidViaText = isCashMethod ? "Workshop Cash / Counter" : (order.paymentMethod || "PayMongo QR Ph");
+    const dpPercent = totalVal > 0 && paidVal > 0 ? Math.round((paidVal / totalVal) * 100) : 30;
+
     paymentDetailsHTML = `
       <div class="payment-terms-box" style="margin-top: 8px; font-size: 0.82rem; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-          <span>30% Downpayment:</span>
+          <span>${dpPercent}% Downpayment:</span>
           ${
             isPaidDownpayment
-              ? `<strong style="color: #059669;">✓ ₱${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid via PayMongo QR Ph)</strong>`
+              ? `<strong style="color: #059669;">✓ ₱${(isBalanceSettled ? Number(order.downpaymentAmount || downpaymentDueAmount) : paidVal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid via ${escapeHtml(paidViaText)})</strong>`
               : isWalkInPending
                 ? `<strong style="color: #b45309;">⏳ ₱${downpaymentDueAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Counter Downpayment Pending)</strong>`
                 : `<strong style="color: #dc2626;">⏳ ₱${downpaymentDueAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Unpaid - Action Required)</strong>`
@@ -1080,7 +1194,11 @@ function createOrderCardElement(order) {
             ? `<div style="font-size: 0.74rem; color: #64748b; margin-top: 4px; font-family: monospace;">
                 PayMongo Ref: ${escapeHtml(order.paymentIntentId)}
                </div>`
-            : ""
+            : order.referenceNumber || order.receiptNumber
+              ? `<div style="font-size: 0.74rem; color: #64748b; margin-top: 4px; font-family: monospace;">
+                  Ref #: ${escapeHtml(order.referenceNumber || order.receiptNumber)}
+                 </div>`
+              : ""
         }
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
           <span style="font-size: 0.78rem; color: #64748b;">Balance Status:</span>
@@ -1111,8 +1229,8 @@ function createOrderCardElement(order) {
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> <span>Custom Crafting Notice: Settle 30% downpayment at workshop to begin crafting.</span>
                 </div>
                 <div style="display: grid; gap: 5px; font-size: 0.79rem; line-height: 1.4;">
-                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><strong>Workshop Address:</strong> Lanica Woodworking & Upholstery Hub, San Jose, Antipolo / Marikina Showroom</div>
-                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg><strong>Contact Hotline:</strong> <a href="tel:09498136985" style="color: #b45309; font-weight: 700; text-decoration: underline;">09498136985</a></div>
+                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><strong>Workshop Address:</strong> ${escapeHtml(branchData.title)} — ${escapeHtml(branchData.address)}</div>
+                  <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg><strong>Contact Hotline:</strong> <a href="tel:${escapeHtml(branchData.contact.replace(/[^\d+]/g, ''))}" style="color: #b45309; font-weight: 700; text-decoration: underline;">${escapeHtml(branchData.contact)}</a></div>
                   <div><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><strong>48-Hour Reservation Deadline:</strong> ${escapeHtml(deadlineStr)}</div>
                 </div>
               </div>`
@@ -1134,9 +1252,7 @@ function createOrderCardElement(order) {
     order.paymentStatus !== "Paid" &&
     order.paymentStatus !== "paid";
 
-  const displayPaymentMethod = order.paymentMethod === "walk_in_cash"
-    ? "Walk-in Workshop Cash (Counter)"
-    : (paymentMethod || "QR Ph (PayMongo)");
+  const displayPaymentMethod = formatPaymentMethodLabel(order);
 
   card.innerHTML = `
     <div class="order-card-header">
@@ -1173,13 +1289,30 @@ function createOrderCardElement(order) {
       </div>
 
       ${(() => {
-        const rawSt = String(order.status || "").toLowerCase();
-        const rawOrdSt = String(order.orderStatus || "").toLowerCase();
-        const isCompleted = normStatus === "Completed" || rawSt === "completed" || rawOrdSt === "completed" || order.orderReceived === true;
-        const isDelivered = (normStatus === "Delivered" || rawSt === "delivered" || rawOrdSt === "delivered") && !isCompleted;
-        const isBalanceSettled = order.balanceStatus === "Settled" || (order.balanceStatus || "").toLowerCase() === "settled" || (order.outstandingBalance === 0 && order.balanceStatus !== undefined) || remainingVal <= 0;
         const hasUnpaidDeliveryBalance = isDelivered && !isBalanceSettled && remainingVal > 0;
         const isVerificationPending = order.balanceStatus === "Pending Admin Verification" || order.balanceStatus === "Verification Pending";
+
+        if (isDelivered && isBalanceSettled) {
+          return `
+            <div class="delivery-balance-settled-card" style="margin: 14px 0; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08); width: 100%; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #d1fae5; color: #047857; font-weight: 800; font-size: 1rem;">✓</span>
+                <div>
+                  <strong style="font-size: 0.95rem; color: #065f46; display: block;">Delivery Balance Fully Settled!</strong>
+                  <span style="font-size: 0.8rem; color: #047857;">Please inspect your handcrafted furniture and click <strong>"ORDER RECEIVED"</strong> below to complete your order.</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="btn-customer-doc-view" data-order-id="${orderId}" data-default-tab="voucher" style="padding: 6px 12px; border-radius: 6px; background: #ffffff; color: #047857; border: 1px solid #a7f3d0; font-weight: 700; font-size: 0.78rem; cursor: pointer;">
+                  View Receipt
+                </button>
+                <button type="button" class="btn-customer-doc-view" data-order-id="${orderId}" data-default-tab="quotation" style="padding: 6px 12px; border-radius: 6px; background: #ffffff; color: #0284c7; border: 1px solid #bae6fd; font-weight: 700; font-size: 0.78rem; cursor: pointer;">
+                  View Quotation
+                </button>
+              </div>
+            </div>
+          `;
+        }
 
         if (!hasUnpaidDeliveryBalance) return "";
 
@@ -1214,7 +1347,7 @@ function createOrderCardElement(order) {
               <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px;">
                 <button type="button" class="btn-pay-balance-qrph" data-order-id="${orderId}" data-balance-amount="${remainingVal}" style="flex: 1; min-width: 220px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 8px; background: #0f172a; color: #FFD700; font-weight: 700; font-size: 0.84rem; border: 1.5px solid #FFD700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                  <span>Pay via PayMongo QR Ph (Auto Complete)</span>
+                  <span>Pay Online via QR Ph</span>
                 </button>
                 <button type="button" class="btn-toggle-cash-rider-form" data-order-id="${orderId}" style="flex: 1; min-width: 200px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 8px; background: #ffffff; color: #15803d; font-weight: 700; font-size: 0.84rem; border: 1.5px solid #16a34a; cursor: pointer; transition: all 0.2s;">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
@@ -1249,6 +1382,10 @@ function createOrderCardElement(order) {
         <button type="button" class="btn-chat-order" data-order-id="${orderId}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: var(--clr-primary-light, #f4eee7); color: var(--clr-primary, #6b4423); font-weight: 600; font-size: 0.82rem; border: 1px solid var(--clr-primary, #6b4423); cursor: pointer; transition: all 0.2s;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
           <span>Chat Workshop</span>
+        </button>
+        <button type="button" class="btn-customer-doc-view" data-order-id="${orderId}" data-default-tab="quotation" style="display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; border-radius: 6px; background: #ffffff; color: #0284c7; font-weight: 600; font-size: 0.82rem; border: 1px solid #bae6fd; cursor: pointer; transition: all 0.2s;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M12 2v4"></path><path d="M16 2v4"></path><rect width="16" height="18" x="4" y="4" rx="2"></rect><path d="M8 10h6"></path><path d="M8 14h8"></path><path d="M8 18h5"></path></svg>
+          <span>Official Quotation</span>
         </button>
         ${needsDownpayment ? `
         <button type="button" class="btn-pay-downpayment-qr" data-order-id="${orderId}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: #121212; color: #FFD700; font-weight: 700; font-size: 0.82rem; border: 1.5px solid #FFD700; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);">
@@ -1410,15 +1547,25 @@ function createOrderCardElement(order) {
   const receivedBtn = card.querySelector(".btn-order-received");
   if (receivedBtn) {
     receivedBtn.addEventListener("click", async () => {
-      if (hasUnpaidDeliveryBalance) {
+            const isSettledNow =
+        String(order.balanceStatus || "").trim().toLowerCase() === "settled" ||
+        order.isBalanceSettled === true ||
+        order.balanceSettled === true ||
+        (Number(order.outstandingBalance) === 0 && order.balanceStatus !== undefined) ||
+        (Number(order.remainingBalance) === 0 && order.balanceStatus !== undefined) ||
+        isBalanceSettled ||
+        remainingVal <= 0;
+
+      if (!isSettledNow && remainingVal > 0) {
         showToast(`Please settle the remaining balance of ₱${remainingVal.toLocaleString()} before confirming order receipt.`, "warning");
         return;
       }
       const confirmed = await showConfirmModal({
         title: "Confirm Order Receipt",
-        message: `Have you received your handcrafted furniture order <strong>#${escapeHtml(orderId)}</strong> in good condition?<br><br>This action will mark the order as <strong>COMPLETED</strong> and generate your Official Receipt &amp; Warranty.`,
+        message: `Have you received your handcrafted furniture order <strong>#${escapeHtml(orderId)}</strong> in good condition?<br><br>This will mark your order as <strong>COMPLETED</strong> and generate your official <strong>Payment Voucher</strong> and <strong>Official Quotation</strong>.`,
         confirmText: "Yes, Order Received",
         cancelText: "Not Yet",
+        isHtml: true,
         icon: "check",
       });
       if (!confirmed) return;
@@ -1484,11 +1631,18 @@ function createOrderCardElement(order) {
     });
   }
 
-  // Customer taps "DOWNLOAD RECEIPT"
+  // Customer taps "DOWNLOAD RECEIPT" or doc view
+  card.querySelectorAll(".btn-customer-doc-view").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const defaultTab = btn.getAttribute("data-default-tab") || "voucher";
+      openLanicaCustomerReceiptModal(order, defaultTab);
+    });
+  });
+
   const downloadReceiptBtn = card.querySelector(".btn-download-receipt");
   if (downloadReceiptBtn) {
     downloadReceiptBtn.addEventListener("click", () => {
-      openLanicaCustomerReceiptModal(order);
+      openLanicaCustomerReceiptModal(order, "voucher");
     });
   }
 
@@ -2210,6 +2364,7 @@ function setupLiveChatWidget() {
 // ==============================================================================
 let activeCustomerReceiptOrder = null;
 let activeCustomerReceiptBranch = "calamba";
+let activeCustomerReceiptTab = "voucher";
 
 const LANICA_BRANCHES = {
   calamba: {
@@ -2230,9 +2385,10 @@ const LANICA_BRANCHES = {
   },
 };
 
-export function openLanicaCustomerReceiptModal(order) {
+export function openLanicaCustomerReceiptModal(order, defaultTab = "voucher") {
   if (!order) return;
   activeCustomerReceiptOrder = order;
+  activeCustomerReceiptTab = defaultTab || "voucher";
   initLanicaReceiptModalListeners();
   renderCustomerReceiptDocument();
 
@@ -2243,17 +2399,50 @@ export function openLanicaCustomerReceiptModal(order) {
   }
 }
 
+function formatFormalDate(val, uppercase = false) {
+  if (!val) return "—";
+  let d = null;
+  if (val.toDate && typeof val.toDate === "function") d = val.toDate();
+  else if (val.seconds) d = new Date(val.seconds * 1000);
+  else d = new Date(val);
+  if (isNaN(d.getTime())) return "—";
+  const str = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  return uppercase ? str.toUpperCase() : str;
+}
+
 function renderCustomerReceiptDocument() {
   const area = document.getElementById("lanica-printable-area");
   const branchCalamba = document.getElementById("btn-branch-calamba");
   const branchPila = document.getElementById("btn-branch-pila");
+  const tabVoucher = document.getElementById("tab-btn-voucher");
+  const tabQuotation = document.getElementById("tab-btn-quotation");
 
   if (!area || !activeCustomerReceiptOrder) return;
   const order = activeCustomerReceiptOrder;
 
+  // Sync Document Tabs Visual State
+  if (tabVoucher && tabQuotation) {
+    if (activeCustomerReceiptTab === "voucher") {
+      tabVoucher.classList.add("active");
+      tabQuotation.classList.remove("active");
+      tabVoucher.style.background = "#2563eb";
+      tabVoucher.style.color = "#ffffff";
+      tabQuotation.style.background = "transparent";
+      tabQuotation.style.color = "#94a3b8";
+    } else {
+      tabQuotation.classList.add("active");
+      tabVoucher.classList.remove("active");
+      tabQuotation.style.background = "#2563eb";
+      tabQuotation.style.color = "#ffffff";
+      tabVoucher.style.background = "transparent";
+      tabVoucher.style.color = "#94a3b8";
+    }
+  }
+
   // Toggle Branch button active states
   const currentBranchKey = order._selectedBranch || activeCustomerReceiptBranch || "calamba";
-  const branch = LANICA_BRANCHES[currentBranchKey] || LANICA_BRANCHES.calamba;
+  const branchConfig = LANICA_BRANCHES[currentBranchKey] || LANICA_BRANCHES.calamba;
+  const branch = order._docBranch || branchConfig;
 
   if (branchCalamba && branchPila) {
     if (currentBranchKey === "pila") {
@@ -2274,73 +2463,281 @@ function renderCustomerReceiptDocument() {
   }
 
   const orderId = order.orderId || order.id || "N/A";
+
+  // Use preserved custom edits saved by admin on the order, or live order attributes
+  const customQuotation = order._docQuotation || {};
   const customerName =
+    customQuotation.customerName ||
     order.shippingAddress?.fullName ||
     order.shippingAddress?.recipientName ||
     order.recipientName ||
     order.customerName ||
     order.userName ||
     currentUser?.displayName ||
-    "Valued Client";
+    "Valued Customer";
 
   const customerAddress =
+    customQuotation.customerAddress ||
     order.shippingAddress?.fullAddress ||
     order.shippingAddress?.address ||
     order.address ||
     order.customerAddress ||
-    "Metro Manila / Laguna Delivery";
+    "—";
 
   const customerPhone =
+    customQuotation.customerPhone ||
     order.shippingAddress?.phoneNumber ||
     order.shippingAddress?.phone ||
     order.phone ||
     order.phoneNumber ||
-    "09498136985";
+    "—";
 
-  const purchaseDate = formatOrderDate(order.createdAt || order.timestamp);
-  const completionDate = formatOrderDate(order.completedAt || order.updatedAt || new Date());
+  const quotationNumber =
+    customQuotation.quotationNumber ||
+    String(orderId).slice(0, 10).toUpperCase();
+
+  const purchaseDate = customQuotation.purchaseDate || formatFormalDate(order.createdAt, false);
+  const purchaseDateUpper = formatFormalDate(order.createdAt, true);
+  const deliveryDate =
+    customQuotation.deliveryDate ||
+    formatFormalDate(
+      order.targetDeliveryDate || order.estimatedDeliveryDate || order.deliveredAt,
+      true
+    );
 
   const totalVal = Number(order.totalAmount || order.total || 0);
   const deliveryCharge = Number(order.deliveryFee ?? order.shippingFee ?? order.shippingAddress?.shippingCost ?? 1000);
+  const discountDf = Number(order.discountedDeliveryFee ?? order.discountDf ?? 0);
   const itemsSubtotal = Math.max(0, totalVal - deliveryCharge);
+  const totalPlusDf = itemsSubtotal + deliveryCharge;
+  const grandTotal = totalVal;
 
-  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || order.paymentMethod === "walk_in_cash";
   const downpaymentAmount = Number(order.downpaymentAmount || Math.round(totalVal * 0.30));
-  const remainingSettled = Math.max(0, totalVal - downpaymentAmount);
-  const methodDisplay = order.paymentMethod === "walk_in_cash"
-    ? "Workshop Cash Counter"
-    : (order.paymentMethod || "QR Ph (PayMongo)");
+
+  const balStatusLower = String(order.balanceStatus || "").trim().toLowerCase();
+  const isCompletedOrder =
+    order.status === "completed" ||
+    order.orderStatus === "completed" ||
+    order.orderReceived === true ||
+    Boolean(order.completedAt) ||
+    Boolean(order.orderReceivedAt);
+
+  const isBalanceSettled =
+    balStatusLower === "settled" ||
+    order.isBalanceSettled === true ||
+    order.balanceSettled === true ||
+    (Number(order.outstandingBalance) === 0 && order.balanceStatus !== undefined) ||
+    (Number(order.remainingBalance) === 0 && order.balanceStatus !== undefined) ||
+    isCompletedOrder;
+
+  const paidVal = isBalanceSettled
+    ? totalVal
+    : isDownpayment
+      ? downpaymentAmount
+      : totalVal;
+
+  const remainingVal = isBalanceSettled
+    ? 0
+    : Math.max(0, totalVal - paidVal);
+
+  const isPartial = isDownpayment && remainingVal > 0;
+
+  const isCash =
+    order.paymentMethod === "walk_in_cash" ||
+    order.paymentMethod === "cash" ||
+    String(order.paymentMethod || "").toLowerCase().includes("counter") ||
+    String(order.paymentType || "").toLowerCase().includes("cash");
+  const methodDisplay = isCash ? "CASH (COUNTER)" : "QR PH / PAYMONGO";
+
+  const proofUrl = order.proofUrl || order.paymentProof || order.paymentProofUrl || order.riderCashProofUrl || "";
+
+  // Common Header Template matching authentic Lanica format
+  const headerHtml = `
+    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 18px; margin-bottom: 8px;">
+      <img src="assets/lanicalogo.jpg" alt="Lanica Logo" style="width: 76px; height: 76px; object-fit: contain; border: 1.5px solid #000; padding: 2px;" onerror="this.onerror=null;this.src='assets/product_sofa.png';" />
+      <div style="text-align: center; flex: 1;">
+        <div style="font-size: 0.95rem; font-weight: 800; letter-spacing: 0.05em; color: #000; text-transform: uppercase; padding: 1px 4px;">
+          ${escapeHtml(branch.title)}
+        </div>
+        <div style="font-size: 0.8rem; font-weight: 600; color: #1f2937; margin-top: 3px; text-transform: uppercase; padding: 1px 4px;">
+          ${escapeHtml(branch.address)}
+        </div>
+        <div style="font-size: 0.8rem; font-weight: 700; color: #000; margin-top: 2px;">
+          CONTACT NO#: <span>${escapeHtml(branch.contact)}</span>
+        </div>
+      </div>
+    </div>
+    <div style="height: 4px; background: #000; width: 100%; margin-bottom: 22px;"></div>
+  `;
 
   const items = (Array.isArray(order.items) && order.items.length > 0)
     ? order.items
     : [{
-        name: "LANICA HANDCRAFTED CUSTOM SOFA SET",
+        name: order.productName || order.itemTitle || "Custom Handcrafted Furniture",
         quantity: 1,
         price: itemsSubtotal,
-        material: "Pure Goodlumber / Uratex 4in",
-        color: "Fabric / Gamusa",
-        customNotes: "Custom handcrafted upholstery specs",
+        material: order.material || "Kiln-Dried Hardwood / High-Density Foam",
+        color: order.fabricColor || order.color || "Standard Color",
+        customNotes: order.customNotes || "Standard Artisan Custom Specs",
       }];
 
+  const isUpholsteryOnly = (val) => {
+    if (!val) return true;
+    const s = String(val).trim().toLowerCase();
+    return s === "fabric" || s === "leather" || s === "standard" || s === "custom";
+  };
+
+  if (activeCustomerReceiptTab === "voucher") {
+    // ==========================================
+    // DOCUMENT 1: PAYMENT REQUEST VOUCHER (Screenshot 1)
+    // ==========================================
+    const firstItem = (order.items && order.items[0]) || null;
+    const firstItemName = firstItem
+      ? firstItem.name || firstItem.title || "Custom Furniture"
+      : (order.productName || "Custom Furniture");
+    const particulars = `PAYMENT FOR ${escapeHtml(firstItemName.toUpperCase())} SOFA SET`;
+    const staffSignatory = order.assignedStaffName || "carlo";
+    const signDate = purchaseDate;
+
+    // Use preserved custom edits saved by admin on the order, or defaults matching Screenshot 1
+    const sigs = order._voucherSignatories || {
+      preparedBy: staffSignatory,
+      preparedDate: signDate,
+      checkedBy: "Staff Lead",
+      checkedDate: signDate,
+      approvedBy: "SUPERVISOR",
+      approvedDate: signDate,
+      receivedBy: "OWNER/REPRESENTATIVE",
+      receivedDate: signDate,
+      signatures: {},
+    };
+    const signatures = sigs.signatures || {};
+
+    const renderSignatoryCol = (roleKey, roleLabel, defaultName, isCursive = false) => {
+      const nameVal = sigs[roleKey] || defaultName;
+      const dateVal = sigs[roleKey + "Date"] || purchaseDate;
+      const signatureImg = signatures[roleKey] || null;
+
+      return `
+        <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+          <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px; display: flex; align-items: center; justify-content: center; line-height: 1.2;">${roleLabel}</div>
+
+          <!-- E-Signature Slot Above Name -->
+          <div style="min-height: 52px; display: flex; align-items: flex-end; justify-content: center; position: relative; margin: 6px auto 2px; width: 90%;">
+            ${
+              signatureImg
+                ? `<img src="${signatureImg}" alt="Signature" style="max-height: 48px; max-width: 130px; object-fit: contain; display: block;" />`
+                : `<div style="height: 1px;"></div>`
+            }
+          </div>
+
+          <div
+            style="margin: 2px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 22px; font-weight: ${isCursive ? "600" : "800"}; ${isCursive ? "font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b;" : "font-size: 0.78rem; color: #000;"} padding: 1px 4px; text-align: center;"
+          >${escapeHtml(nameVal)}</div>
+
+          <div style="font-size: 0.72rem; color: #475569;">
+            DATE: <span>${escapeHtml(dateVal)}</span>
+          </div>
+        </div>
+      `;
+    };
+
+    area.innerHTML = `
+      <div style="max-width: 760px; margin: 0 auto; color: #000;">
+        ${headerHtml}
+
+        <div style="font-size: 1.25rem; font-weight: 800; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 20px;">
+          PAYMENT REQUEST VOUCHER
+        </div>
+
+        <div style="font-size: 0.9rem; font-weight: 700; color: #000; margin-bottom: 8px;">1. Payment Request Form / Voucher</div>
+
+        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 0.86rem; margin-bottom: 28px;">
+          <tbody>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; width: 38%; text-transform: uppercase;">DOCUMENT DATE:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 600; text-transform: uppercase;">${escapeHtml(purchaseDateUpper)}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PAYEE NAME:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 800; text-transform: uppercase;">LANICA'S BED AND SOFA BED TRADING</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PAYMENT METHOD:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${escapeHtml(methodDisplay)}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">LOCATION:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 600; text-transform: uppercase;">${escapeHtml(branch.voucherLocation || branch.address)}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PARTICULARS/DESCRIPTION:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${particulars}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">TOTAL CONTRACT/ BILLING AMOUNT</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700;">₱ ${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">
+                AMOUNT PAID (PARTIAL ${isPartial ? "<strong>[ ☑ ]</strong>" : "[ ☐ ]"} FULL ${!isPartial ? "<strong>[ ☑ ]</strong>" : "[ ☐ ]"})
+              </td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700;">₱ ${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 800; color: #dc2626; text-transform: uppercase;">REMAINING BALANCE:</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 800; color: #dc2626; font-size: 0.95rem;">₱ ${remainingVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="font-size: 0.9rem; font-weight: 700; color: #000; margin-bottom: 8px;">2. APPROVAL &amp; CHECK/PAYMENT RELEASE SIGNATORIES</div>
+        <div style="border-top: 2px solid #000; padding-top: 14px; margin-bottom: 24px;">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; font-size: 0.78rem;">
+            ${renderSignatoryCol("preparedBy", "PREPARED BY", staffSignatory, true)}
+            ${renderSignatoryCol("checkedBy", "CHECKED BY", "Staff Lead", true)}
+            ${renderSignatoryCol("approvedBy", "APPROVED AND CHECK<br/>SIGNATORY", "SUPERVISOR", false)}
+            ${renderSignatoryCol("receivedBy", "CHECK PAYMENT<br/>RECEIVE", "OWNER/REPRESENTATIVE", false)}
+          </div>
+        </div>
+
+        ${
+          proofUrl
+            ? `
+          <div style="margin-top: 18px; border: 1.5px dashed #64748b; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #334155; margin-bottom: 10px;">ATTACHED PAYMENT VERIFICATION SCREENSHOT / ADVICE:</div>
+            <img src="${proofUrl}" alt="Proof of Payment" style="max-height: 260px; max-width: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin: 0 auto; display: block;" onerror="this.onerror=null;this.parentElement.style.display='none';" />
+          </div>
+        `
+            : `
+          <div style="margin-top: 18px; border: 1.5px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
+            <div style="font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: #059669;">PAYMENT RECONCILED &amp; VERIFIED VIA ${escapeHtml(methodDisplay)}</div>
+            <div style="font-size: 0.76rem; color: #64748b; margin-top: 3px;">Lanica Financial Ledger Ref: <strong>TX-${escapeHtml(String(quotationNumber).slice(0, 10))}</strong> &bull; Reconciled on ${escapeHtml(purchaseDate)}</div>
+          </div>
+        `
+        }
+      </div>
+    `;
+    return;
+  }
+
+  // ==========================================
+  // DOCUMENT 2: OFFICIAL QUOTATION (Screenshot 2)
+  // ==========================================
   const itemsRowsHtml = items.map((item, idx) => {
     const itemQty = Number(item.quantity || 1);
     const itemPrice = Number(item.price || 0);
     const itemTotal = itemPrice * itemQty;
-    const itemName = String(item.name || item.title || "CUSTOM SOFA SET").toUpperCase();
-    const itemColor = String(item.color || item.fabricColor || "STANDARD COLOR").toUpperCase();
-    const itemMaterial = String(item.material || (Array.isArray(item.materials) ? item.materials.join(", ") : "") || "PURE GOODLUMBER / URATEX 4IN").toUpperCase();
-    const itemSpecs = item.customNotes || item.specs || "Standard Artisan Custom Specs";
+    const itemName = String(item.name || item.title || order.productName || "Custom Handcrafted Furniture").toUpperCase();
+    const rawColor = item.color || item.fabricColor || order.fabricColor || order.color || "STANDARD COLOR";
+    const itemColor = String(rawColor).toUpperCase();
+    const itemSpecs = item.customNotes || item.specs || order.customNotes || "Standard Artisan Custom Specs";
 
-    const rawFreebies = item.freebies || "5 Throw Pillows, Footstool (Class A Foam), Premium Wood Footings";
+    const rawFreebies = item.freebies || order.freebies || "";
     const freebiesList = (Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies).split(/[\n,]+/))
       .map((f) => String(f).trim())
       .filter(Boolean);
-
-    const isUpholsteryOnly = (val) => {
-      if (!val) return true;
-      const s = String(val).trim().toLowerCase();
-      return s === "fabric" || s === "leather" || s === "standard" || s === "custom";
-    };
 
     let materialsList = [];
     if (Array.isArray(item.materials) && item.materials.length > 0) {
@@ -2351,10 +2748,10 @@ function renderCustomerReceiptDocument() {
     }
     if (materialsList.length === 0) {
       materialsList = [
-        "Pure Goodlumber Wood Frame (Kiln Dried)",
-        "Pure 4 Inches High-Density Uratex Foam",
-        "Anti Anay at Bukbok Treated",
-        "Plush Premium Upholstery Fabric"
+        "4 INCHES PURE ORIGINAL URATEX FOAM",
+        "GOOD LUMBER WOOD FRAME",
+        "BUO PO ANG PANAHIG NYA WALA PONG SPRING",
+        "WITH 2 BY 3 BRACES PO NA PANG SUPPORT AT PAMPATIBAY SA SOFA KAYA DI PO SYA LULUNDO",
       ];
     }
 
@@ -2363,24 +2760,27 @@ function renderCustomerReceiptDocument() {
         <td style="padding: 10px 8px; font-weight: 700; width: 36px;">${idx + 1}</td>
         <td style="padding: 10px 8px;">
           <div style="font-weight: 800; font-size: 0.95rem; text-transform: uppercase; color: #000;">${escapeHtml(itemName)}</div>
-          <div style="font-weight: 700; font-size: 0.82rem; margin-top: 3px; color: #4b5563;">ARTISAN CUSTOM SPECIFICATION</div>
-          <div style="font-size: 0.82rem; margin-top: 2px; color: #374151;">${escapeHtml(itemSpecs)}</div>
-          <div style="font-weight: 700; font-size: 0.82rem; margin-top: 6px; color: #1f2937;">COLOR: ${escapeHtml(itemColor)}</div>
-          <div style="font-size: 0.8rem; margin-top: 2px; color: #4b5563;">MATERIAL &amp; FINISH: ${escapeHtml(itemMaterial)}</div>
-          
-          <div style="margin-top: 8px; font-size: 0.8rem; background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-            <div style="font-weight: 700; text-transform: uppercase; color: #0f172a; margin-bottom: 2px;">STANDARD INCLUSIONS &amp; FREEBIES:</div>
-            <div style="padding-left: 2px; line-height: 1.4; color: #475569;">
-              ${freebiesList.length > 0 ? freebiesList.map(f => `✓ ${escapeHtml(f)}`).join(" &bull; ") : "✓ Standard Inclusions"}
-            </div>
-            <div style="font-weight: 700; margin-top: 4px; color: #0f172a;">FRAMEWORK &amp; MATERIALS:</div>
-            <div style="padding-left: 2px; line-height: 1.4; color: #475569;">
-              ${materialsList.map(m => `✓ ${escapeHtml(m)}`).join(" &bull; ")}
+          <div style="font-weight: 700; font-size: 0.82rem; margin-top: 3px;">STANDARD SIZE</div>
+          <div style="font-size: 0.82rem; margin-top: 2px;">${escapeHtml(itemSpecs)}</div>
+          <div style="font-weight: 700; font-size: 0.82rem; margin-top: 6px;">COLOR: ${escapeHtml(itemColor)}</div>
+          ${item.material ? `<div style="font-weight: 700; font-size: 0.8rem; margin-top: 2px; color: #4b5563;">FINISH / UPHOLSTERY: ${escapeHtml(String(item.material).toUpperCase())}</div>` : ""}
+
+          <div style="margin-top: 8px; font-size: 0.8rem;">
+            <div style="font-weight: 700; text-transform: uppercase;">FREEBIES:</div>
+            <div style="padding-left: 4px; line-height: 1.4;">
+              ${freebiesList.length > 0 ? freebiesList.map((f) => `✓ ${escapeHtml(f.toUpperCase())}`).join("<br/>") : "✓ STANDARD INCLUSIONS"}
             </div>
           </div>
 
-          <div style="margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 0.78rem; text-transform: uppercase; color: #047857;">
-            <span>🛡️</span> <span>6 MONTHS OFFICIAL WARRANTY ON FOAM SEAT ONLY</span>
+          <div style="margin-top: 8px; font-size: 0.8rem;">
+            <div style="font-weight: 700; text-transform: uppercase;">MATERIALS:</div>
+            <div style="padding-left: 4px; line-height: 1.4;">
+              ${materialsList.map((m) => `✓ ${escapeHtml(m.toUpperCase())}`).join("<br/>")}
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; color: #000;">
+            6 MONTHS WARRANTY FOAM SEAT ONLY
           </div>
         </td>
         <td style="padding: 10px 8px; text-align: center; font-weight: 700; width: 60px;">${itemQty}</td>
@@ -2392,36 +2792,19 @@ function renderCustomerReceiptDocument() {
 
   area.innerHTML = `
     <div style="max-width: 760px; margin: 0 auto; color: #000;">
-      <!-- Document Header -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 14px; margin-bottom: 18px; flex-wrap: wrap; gap: 14px;">
-        <div style="flex: 1; min-width: 280px;">
-          <h2 style="margin: 0; font-size: 1.25rem; font-weight: 900; letter-spacing: -0.02em; text-transform: uppercase;">${escapeHtml(branch.title)}</h2>
-          <p style="margin: 4px 0 0; font-size: 0.8rem; line-height: 1.4; text-transform: uppercase;">
-            ${escapeHtml(branch.address)}<br/>
-            CONTACT HOTLINE: ${escapeHtml(branch.contact)}
-          </p>
-        </div>
-        <div style="text-align: right; min-width: 200px;">
-          <div style="display: inline-block; border: 2px solid #059669; background: #ecfdf5; color: #047857; padding: 6px 14px; border-radius: 6px; font-weight: 900; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.05em;">
-            OFFICIAL RECEIPT
-          </div>
-          <div style="font-size: 0.78rem; font-weight: 600; color: #4b5563; margin-top: 4px;">
-            RECEIPT #: <strong>OR-${escapeHtml(String(orderId).slice(0, 10).toUpperCase())}</strong>
-          </div>
-        </div>
-      </div>
+      ${headerHtml}
 
-      <!-- Customer & Meta Grid -->
-      <div style="display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; font-size: 0.86rem; line-height: 1.5; flex-wrap: wrap; background: #fafafa; padding: 12px 14px; border-radius: 8px; border: 1px solid #e5e7eb;">
+      <!-- Customer & Quotation Meta Grid -->
+      <div style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 22px; font-size: 0.86rem; line-height: 1.5; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 260px;">
-          <div><strong>CUSTOMER NAME:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerName)}</span></div>
-          <div><strong>DELIVERY ADDRESS:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerAddress)}</span></div>
-          <div><strong>CONTACT NUMBER:</strong> <span>${escapeHtml(customerPhone)}</span></div>
+          <div><strong>NAME:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerName)}</span></div>
+          <div><strong>ADDRESS:</strong> <span style="text-transform: uppercase;">${escapeHtml(customerAddress)}</span></div>
+          <div><strong>CONTACT#:</strong> <span>${escapeHtml(customerPhone)}</span></div>
         </div>
-        <div style="min-width: 240px; text-align: right;">
-          <div><strong>ORDER REFERENCE:</strong> <span>#${escapeHtml(orderId)}</span></div>
+        <div style="min-width: 260px; text-align: right;">
+          <div><strong>QUOTATION#</strong> <span>${escapeHtml(quotationNumber)}</span></div>
           <div><strong>DATE OF PURCHASE:</strong> <span>${escapeHtml(purchaseDate)}</span></div>
-          <div><strong>DATE RECEIVED:</strong> <span style="font-weight: 700; color: #059669;">${escapeHtml(completionDate)}</span></div>
+          <div><strong>DATE OF DELIVERY:</strong> <span style="text-transform: uppercase;">${escapeHtml(deliveryDate)}</span></div>
         </div>
       </div>
 
@@ -2430,7 +2813,7 @@ function renderCustomerReceiptDocument() {
         <thead>
           <tr style="border-top: 2px solid #000; border-bottom: 2px solid #000; text-align: left; font-size: 0.85rem;">
             <th style="padding: 8px 8px; width: 36px;">#</th>
-            <th style="padding: 8px 8px;">Description &amp; Handcrafting Specifications</th>
+            <th style="padding: 8px 8px;">Description</th>
             <th style="padding: 8px 8px; text-align: center; width: 60px;">QTY</th>
             <th style="padding: 8px 8px; text-align: right; width: 110px;">PRICE</th>
             <th style="padding: 8px 8px; text-align: right; width: 110px;">TOTAL</th>
@@ -2438,110 +2821,53 @@ function renderCustomerReceiptDocument() {
         </thead>
         <tbody>
           ${itemsRowsHtml}
-          <tr style="border-top: 1.5px solid #000;">
+          <tr style="border-top: 2px solid #000;">
             <td style="padding: 8px 8px;"></td>
-            <td style="padding: 8px 8px; font-weight: 800; color: #0284c7; text-transform: uppercase;">SPECIALIZED FURNITURE HANDLING &amp; DELIVERY</td>
+            <td style="padding: 8px 8px; font-weight: 800; color: #dc2626; text-transform: uppercase;">DELIVERY CHARGE</td>
             <td style="padding: 8px 8px; text-align: center; font-weight: 700;">1</td>
-            <td style="padding: 8px 8px; text-align: right; font-weight: 700;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            <td style="padding: 8px 8px; text-align: right; font-weight: 700;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="padding: 8px 8px; text-align: right; font-weight: 700; color: #dc2626;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="padding: 8px 8px; text-align: right; font-weight: 700; color: #dc2626;">₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         </tbody>
       </table>
 
-      <!-- Totals & Payment Reconciled Summary Grid -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-top: 2px solid #000; padding-top: 14px; margin-bottom: 22px; flex-wrap: wrap;">
-        <!-- Left: Payment Reconciliation Ledger -->
-        <div style="flex: 1; min-width: 280px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 12px 14px; font-size: 0.82rem;">
-          <div style="font-weight: 800; color: #166534; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-            <span>✓</span> <span>FINALIZED REVENUE &amp; FULL SETTLEMENT RECONCILED</span>
+      <!-- Right Aligned Financial Totals -->
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 28px;">
+        <div style="width: 320px; font-size: 0.88rem; line-height: 1.6;">
+          <div style="display: flex; justify-content: space-between; font-weight: 800; color: #0891b2;">
+            <span>TOTAL PURCHASED</span>
+            <span>₱ ${itemsSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #1e293b;">
-            <span>Initial 30% Downpayment:</span>
-            <strong>✓ ₱ ${downpaymentAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid)</strong>
+          <div style="display: flex; justify-content: space-between; font-weight: 800; color: #dc2626;">
+            <span>DELIVERY CHARGE</span>
+            <span>₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #1e293b;">
-            <span>Remaining 70% Balance Settled:</span>
-            <strong>✓ ₱ ${remainingSettled.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paid)</strong>
+          <div style="display: flex; justify-content: space-between; font-weight: 800; border-top: 1.5px solid #000; padding-top: 4px; margin-top: 4px;">
+            <span>TOTAL:</span>
+            <span>₱ ${totalPlusDf.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #86efac; color: #15803d; font-weight: 700;">
-            <span>Outstanding Balance:</span>
-            <span>₱ 0.00 (Fully Settled)</span>
-          </div>
-          <div style="font-size: 0.74rem; color: #64748b; margin-top: 4px;">
-            Payment Gateway / Channel: <strong>${escapeHtml(methodDisplay)}</strong>
-          </div>
-        </div>
-
-        <!-- Right: Contract Total Display -->
-        <div style="min-width: 260px; font-size: 0.9rem;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-            <span>Furniture Subtotal:</span>
-            <strong>₱ ${itemsSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-            <span>Delivery Fee:</span>
-            <strong>₱ ${deliveryCharge.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; border-top: 2px solid #000; margin-top: 6px; padding-top: 6px; font-size: 1.15rem; font-weight: 900;">
-            <span>TOTAL CONTRACT PRICE:</span>
-            <span style="color: #059669;">₱ ${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          ${
+            discountDf > 0
+              ? `
+            <div style="display: flex; justify-content: space-between; font-weight: 700; border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1; padding: 3px 0; margin: 4px 0;">
+              <span>Discounted DF:</span>
+              <span style="color: #dc2626; font-weight: 800;">LESS ₱ ${discountDf.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          `
+              : ""
+          }
+          <div style="border: 2px solid #dc2626; padding: 7px 12px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 1.05rem; font-weight: 900; color: #dc2626;">
+            <span>GRAND TOTAL:</span>
+            <span>₱ ${grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
 
-      <!-- Signatures & Official Certificate Box -->
-      ${(() => {
-        const approvedSig =
-          order.signatureUrl ||
-          order.adminSignature ||
-          order._voucherSignatories?.signatures?.approvedBy ||
-          order._voucherSignatories?.signatures?.checkedBy ||
-          order.signatures?.approvedBy ||
-          order.signatures?.checkedBy ||
-          null;
-
-        const preparedSig =
-          order._voucherSignatories?.signatures?.preparedBy ||
-          order.signatures?.preparedBy ||
-          null;
-
-        return `
-          <div style="display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #e5e7eb; padding-top: 18px; margin-top: 10px; font-size: 0.8rem; text-align: center; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 180px;">
-              <div style="min-height: 48px; display: flex; align-items: flex-end; justify-content: center;">
-                ${
-                  preparedSig
-                    ? `<img src="${preparedSig}" alt="Artisan Signature" style="max-height: 46px; max-width: 130px; object-fit: contain; display: block;" />`
-                    : `<span style="font-family: monospace; font-weight: 700; color: #0284c7;">LANICA WORKSHOP ARTISAN</span>`
-                }
-              </div>
-              <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">PREPARED &amp; CRAFTED BY</div>
-              <div style="font-size: 0.74rem; color: #64748b;">Lanica Master Carpenters</div>
-            </div>
-            <div style="flex: 1; min-width: 180px;">
-              <div style="min-height: 48px; display: flex; align-items: flex-end; justify-content: center;">
-                ${
-                  approvedSig
-                    ? `<img src="${approvedSig}" alt="Admin Signature" style="max-height: 46px; max-width: 130px; object-fit: contain; display: block;" />`
-                    : `<span style="font-family: monospace; font-weight: 700; color: #059669;">VERIFIED &amp; RECONCILED</span>`
-                }
-              </div>
-              <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">FINANCE &amp; AUDIT SEAL</div>
-              <div style="font-size: 0.74rem; color: #64748b;">Lanica Management</div>
-            </div>
-            <div style="flex: 1; min-width: 180px;">
-              <div style="min-height: 48px; display: flex; align-items: flex-end; justify-content: center; font-weight: 700; color: #111827;">
-                ${escapeHtml(customerName)}
-              </div>
-              <div style="border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; font-weight: 700;">RECEIVED IN GOOD CONDITION</div>
-              <div style="font-size: 0.74rem; color: #64748b;">Customer / Recipient</div>
-            </div>
-          </div>
-        `;
-      })()}
-
-      <div style="margin-top: 20px; padding: 10px 14px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; font-size: 0.75rem; color: #64748b;">
-        Thank you for trusting Lanica Furniture! For custom care guides, wood re-polishing, or warranty inquiries, contact our hotline at ${escapeHtml(branch.contact)} or visit our showroom.
+      <!-- Quotation Footer Terms -->
+      <div style="font-size: 0.82rem; color: #1e293b; margin-top: 36px;">
+        <p style="margin: 0 0 14px;">We hope you find our offer to be in line with your requirement.</p>
+        <div><strong>TERMS &amp; CONDITIONS:</strong></div>
+        <div style="margin-top: 4px;">❖ Attached to the next page</div>
       </div>
     </div>
   `;
@@ -2553,6 +2879,8 @@ function initLanicaReceiptModalListeners() {
   const printBtn = document.getElementById("btn-print-lanica-doc");
   const branchCalamba = document.getElementById("btn-branch-calamba");
   const branchPila = document.getElementById("btn-branch-pila");
+  const tabVoucher = document.getElementById("tab-btn-voucher");
+  const tabQuotation = document.getElementById("tab-btn-quotation");
 
   const closeModal = () => {
     if (modal) {
@@ -2568,7 +2896,22 @@ function initLanicaReceiptModalListeners() {
 
   if (modal && !modal.dataset.bound) {
     modal.dataset.bound = "true";
-    // Deliberately no background-click dismiss to prevent accidental close on mobile phones
+  }
+
+  if (tabVoucher && !tabVoucher.dataset.bound) {
+    tabVoucher.dataset.bound = "true";
+    tabVoucher.addEventListener("click", () => {
+      activeCustomerReceiptTab = "voucher";
+      renderCustomerReceiptDocument();
+    });
+  }
+
+  if (tabQuotation && !tabQuotation.dataset.bound) {
+    tabQuotation.dataset.bound = "true";
+    tabQuotation.addEventListener("click", () => {
+      activeCustomerReceiptTab = "quotation";
+      renderCustomerReceiptDocument();
+    });
   }
 
   if (printBtn && !printBtn.dataset.bound) {

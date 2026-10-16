@@ -41,20 +41,12 @@ import {
   deleteConversation,
 } from "./chatService.js";
 
-import {
-  renderPagination,
-  showTableSkeleton,
-  renderTableEmptyState,
-} from "./paginationService.js";
+import { renderPagination, showTableSkeleton, renderTableEmptyState } from "./paginationService.js";
 
 import { compressAndResizeImage } from "./imageOptimizationService.js";
 import { loadCachedModel, attachModelToViewer } from "./modelCacheService.js";
 
-import {
-  recordAuditLog,
-  logActivity,
-  fetchAuditLogs,
-} from "./auditService.js";
+import { recordAuditLog, logActivity, fetchAuditLogs } from "./auditService.js";
 import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
 
 // Your web app's Firebase configuration
@@ -203,7 +195,7 @@ const DEFAULT_QUICK_ADD_MATERIALS = [
   "Italian Leather",
   "Mahogany",
   "Bouclé",
-  "Stainless Steel"
+  "Stainless Steel",
 ];
 
 function loadQuickAddMaterials() {
@@ -394,7 +386,7 @@ const DEFAULT_QUICK_ADD_COLORS = [
   "Navy Blue",
   "Warm Cognac",
   "Dusty Rose",
-  "Olive Green"
+  "Olive Green",
 ];
 
 function loadQuickAddColors() {
@@ -583,7 +575,7 @@ const DEFAULT_QUICK_ADD_FREEBIES = [
   "Fabric Cleaner Spray",
   "Matching Ottoman",
   "Headrest Cushion",
-  "Wood Care Polish"
+  "Wood Care Polish",
 ];
 
 function loadQuickAddFreebies() {
@@ -787,7 +779,10 @@ function parseDimensionsToWidthLength(dimsStr) {
       length: parseFloat(matches[2]) || "",
     };
   }
-  const parts = dimsStr.split(/[×xX*]/).map((p) => parseFloat(p.trim())).filter((n) => !isNaN(n));
+  const parts = dimsStr
+    .split(/[×xX*]/)
+    .map((p) => parseFloat(p.trim()))
+    .filter((n) => !isNaN(n));
   if (parts.length >= 2) {
     return { width: parts[0], length: parts[1] };
   }
@@ -830,7 +825,12 @@ const unitSelect = document.getElementById("product-unit");
 let currentDimensionUnit = unitSelect ? unitSelect.value : "in";
 
 function getCanonicalCm(input, unit) {
-  if (input && input.dataset && input.dataset.canonicalCm && !isNaN(parseFloat(input.dataset.canonicalCm))) {
+  if (
+    input &&
+    input.dataset &&
+    input.dataset.canonicalCm &&
+    !isNaN(parseFloat(input.dataset.canonicalCm))
+  ) {
     return parseFloat(input.dataset.canonicalCm);
   }
   if (!input) return null;
@@ -879,7 +879,10 @@ function toggleLTypeFields(isLType) {
 
 if (isLTypeSelect) {
   isLTypeSelect.addEventListener("change", () => {
-    const isL = isLTypeSelect.value === "true" || isLTypeSelect.value === "right" || isLTypeSelect.value === "left";
+    const isL =
+      isLTypeSelect.value === "true" ||
+      isLTypeSelect.value === "right" ||
+      isLTypeSelect.value === "left";
     toggleLTypeFields(isL);
     if (typeof triggerDraftAutosave === "function") {
       triggerDraftAutosave();
@@ -1324,7 +1327,8 @@ function renderCategoryDropdowns(selectedCategory = null) {
   // 2. Sync Custom Dropdown Trigger (showing Category Name + Pill Badge)
   if (customTriggerName && currentVal) {
     const count = Array.isArray(allProducts)
-      ? allProducts.filter((p) => (p.category || "").toLowerCase() === currentVal.toLowerCase()).length
+      ? allProducts.filter((p) => (p.category || "").toLowerCase() === currentVal.toLowerCase())
+          .length
       : 0;
     customTriggerName.textContent = currentVal;
     if (customTriggerBadge) {
@@ -1371,7 +1375,10 @@ function renderCategoryDropdowns(selectedCategory = null) {
           return `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${count})</option>`;
         })
         .join("");
-    if (currentFilter && (currentFilter === "All" || cats.some((c) => c.toLowerCase() === currentFilter.toLowerCase()))) {
+    if (
+      currentFilter &&
+      (currentFilter === "All" || cats.some((c) => c.toLowerCase() === currentFilter.toLowerCase()))
+    ) {
       filterCatSelect.value = currentFilter;
     }
   }
@@ -1588,12 +1595,14 @@ if (categoryManagerList) {
     if (!catToDelete) return;
 
     const count = Array.isArray(allProducts)
-      ? allProducts.filter((p) => (p.category || "").toLowerCase() === catToDelete.toLowerCase()).length
+      ? allProducts.filter((p) => (p.category || "").toLowerCase() === catToDelete.toLowerCase())
+          .length
       : 0;
 
-    const msg = count > 0
-      ? `Category "${catToDelete}" currently has ${count} product(s) assigned to it.\n\nAre you sure you want to remove this category option? (Existing products will keep their category value until edited.)`
-      : `Are you sure you want to remove category "${catToDelete}"?`;
+    const msg =
+      count > 0
+        ? `Category "${catToDelete}" currently has ${count} product(s) assigned to it.\n\nAre you sure you want to remove this category option? (Existing products will keep their category value until edited.)`
+        : `Are you sure you want to remove category "${catToDelete}"?`;
 
     const confirmDelete = await showConfirmModal({
       title: "Remove Category",
@@ -1741,7 +1750,8 @@ function restoreFormDraft() {
       if (catSelect) catSelect.value = draft.category;
       renderCategoryDropdowns(draft.category);
     }
-    if (draft.price !== undefined) document.getElementById("product-price").value = formatPriceWithCommas(draft.price);
+    if (draft.price !== undefined)
+      document.getElementById("product-price").value = formatPriceWithCommas(draft.price);
     if (draft.stock !== undefined) document.getElementById("product-stock").value = draft.stock;
     if (draft.isLType !== undefined && isLTypeSelect) {
       if (draft.defaultOrientation === "left") {
@@ -1807,7 +1817,8 @@ function restoreFormDraft() {
     }
 
     if (Array.isArray(draft.bedSizes) && draft.bedSizes.length > 0) {
-      const currentU = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+      const currentU =
+        document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
       currentBedSizesList = draft.bedSizes.map((s) => {
         let w = s.width;
         let l = s.length;
@@ -1922,7 +1933,9 @@ function triggerModalShake() {
 
 function hasUnsavedFormChanges() {
   if (isEditing) {
-    const orig = productForm.dataset.origFormData ? JSON.parse(productForm.dataset.origFormData) : null;
+    const orig = productForm.dataset.origFormData
+      ? JSON.parse(productForm.dataset.origFormData)
+      : null;
     if (!orig) return false;
     const currentName = document.getElementById("product-name")?.value || "";
     const currentDesc = document.getElementById("product-description")?.value || "";
@@ -1992,7 +2005,8 @@ async function handleModalCloseAttempt() {
   if (hasUnsavedFormChanges()) {
     const confirmDiscard = await showConfirmModal({
       title: "Unsaved Changes",
-      message: "You have unsaved changes in this form. Are you sure you want to discard them and exit?",
+      message:
+        "You have unsaved changes in this form. Are you sure you want to discard them and exit?",
       confirmText: "Discard & Exit",
       cancelText: "Keep Editing",
       isDestructive: true,
@@ -2036,16 +2050,29 @@ window.closeModal = () => {
   clearAddonsRepeater();
   clearBedSizesRepeater();
   updateBedSizesVisibility("");
-  if (heightInput) { heightInput.value = "72"; setCanonicalCm(heightInput, 72, "in"); }
-  if (widthInput) { widthInput.value = "72"; setCanonicalCm(widthInput, 72, "in"); }
-  if (lengthInput) { lengthInput.value = "72"; setCanonicalCm(lengthInput, 72, "in"); }
-  if (length2Input) { length2Input.value = "72"; setCanonicalCm(length2Input, 72, "in"); }
+  if (heightInput) {
+    heightInput.value = "72";
+    setCanonicalCm(heightInput, 72, "in");
+  }
+  if (widthInput) {
+    widthInput.value = "72";
+    setCanonicalCm(widthInput, 72, "in");
+  }
+  if (lengthInput) {
+    lengthInput.value = "72";
+    setCanonicalCm(lengthInput, 72, "in");
+  }
+  if (length2Input) {
+    length2Input.value = "72";
+    setCanonicalCm(length2Input, 72, "in");
+  }
   if (isLTypeSelect) isLTypeSelect.value = "false";
   toggleLTypeFields(false);
   if (unitSelect) unitSelect.value = "in";
   currentDimensionUnit = "in";
   if (document.getElementById("product-color")) document.getElementById("product-color").value = "";
-  if (document.getElementById("product-freebies")) document.getElementById("product-freebies").value = "";
+  if (document.getElementById("product-freebies"))
+    document.getElementById("product-freebies").value = "";
 
   // Reset required states
   document.getElementById("img-bg").required = true;
@@ -2173,7 +2200,14 @@ async function uploadImage(file, folderPath) {
 
   try {
     const compressedFile = await compressAndResizeImage(file, 500, 500, 80 * 1024);
-    console.log("Starting upload for compressed file:", compressedFile.name, "Size:", compressedFile.size, "Type:", compressedFile.type);
+    console.log(
+      "Starting upload for compressed file:",
+      compressedFile.name,
+      "Size:",
+      compressedFile.size,
+      "Type:",
+      compressedFile.type
+    );
 
     const safeName = compressedFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const uniqueName = `${Date.now()}_${safeName}`;
@@ -2268,7 +2302,11 @@ async function createMeshyTask(imagesPayload, prompt = null) {
 }
 
 // Helper to fetch GLB from Meshy URL and upload it to Firebase Storage in "products/productsmodel" folder
-async function uploadGlbFromUrl(url, folderPath = "products/productsmodel", filenameHint = "model.glb") {
+async function uploadGlbFromUrl(
+  url,
+  folderPath = "products/productsmodel",
+  filenameHint = "model.glb"
+) {
   if (!url) return null;
   if (url.includes("firebasestorage.googleapis.com")) {
     return url;
@@ -2276,15 +2314,21 @@ async function uploadGlbFromUrl(url, folderPath = "products/productsmodel", file
 
   try {
     console.log("Fetching GLB file from Meshy URL:", url);
-    const fetchUrl = url.includes("meshy.ai") ? `/api/meshy-glb?url=${encodeURIComponent(url)}` : url;
+    const fetchUrl = url.includes("meshy.ai")
+      ? `/api/meshy-glb?url=${encodeURIComponent(url)}`
+      : url;
     const response = await fetch(fetchUrl);
     if (!response.ok) {
       throw new Error(`Failed to download GLB file from Meshy: ${response.statusText}`);
     }
     const blob = await response.blob();
-    const file = new File([blob], filenameHint.endsWith(".glb") ? filenameHint : `${filenameHint}.glb`, {
-      type: "model/gltf-binary",
-    });
+    const file = new File(
+      [blob],
+      filenameHint.endsWith(".glb") ? filenameHint : `${filenameHint}.glb`,
+      {
+        type: "model/gltf-binary",
+      }
+    );
     console.log("Uploading GLB to Firebase Storage path:", folderPath);
     const storageUrl = await uploadImage(file, folderPath);
     console.log("GLB successfully saved to Firebase Storage:", storageUrl);
@@ -2336,7 +2380,7 @@ productForm.addEventListener("submit", async (e) => {
     if (freebieInput && freebieInput.value.trim()) {
       addFreebieTag(freebieInput.value);
     }
-    const freebies = currentFreebiesList.length > 0 ? [...currentFreebiesList] : ["5 Pillows", "Footstool (Class A Foam)", "Footings"];
+    const freebies = [...currentFreebiesList];
     const freebiesText = freebies.join(", ");
 
     const transparentFrontFile = document.getElementById("img-bg").files[0];
@@ -2360,7 +2404,10 @@ productForm.addEventListener("submit", async (e) => {
     const reportMediaProgress = () => {
       completedMediaFiles += 1;
       const targetPct = Math.round(10 + (completedMediaFiles / Math.max(1, totalMediaFiles)) * 60);
-      updateSaveProgress(targetPct, `Uploading media (${completedMediaFiles}/${totalMediaFiles})...`);
+      updateSaveProgress(
+        targetPct,
+        `Uploading media (${completedMediaFiles}/${totalMediaFiles})...`
+      );
     };
 
     if (totalMediaFiles === 0) {
@@ -2378,7 +2425,9 @@ productForm.addEventListener("submit", async (e) => {
           return url;
         } else if (item.url && item.url.startsWith("data:")) {
           const blob = await (await fetch(item.url)).blob();
-          const fileFromBlob = new File([blob], `thumb_${Date.now()}_${idx}.png`, { type: blob.type || "image/png" });
+          const fileFromBlob = new File([blob], `thumb_${Date.now()}_${idx}.png`, {
+            type: blob.type || "image/png",
+          });
           const url = await uploadImage(fileFromBlob, "products/thumbnails");
           reportMediaProgress();
           return url;
@@ -2420,7 +2469,12 @@ productForm.addEventListener("submit", async (e) => {
     let meshyTaskId = isEditing ? productForm.dataset.meshyTaskId || null : null;
     let modelUrl = isEditing ? productForm.dataset.modelUrl || null : null;
     let meshyStatus = isEditing ? productForm.dataset.meshyStatus || null : null;
-    const shouldRegenerateMeshy = !!(transparentFrontFile || leftBgFile || rightBgFile || backBgFile);
+    const shouldRegenerateMeshy = !!(
+      transparentFrontFile ||
+      leftBgFile ||
+      rightBgFile ||
+      backBgFile
+    );
 
     if (shouldRegenerateMeshy) {
       meshyTaskId = null;
@@ -2440,7 +2494,10 @@ productForm.addEventListener("submit", async (e) => {
       if (!meshyPayload.frontUrl) {
         throw new Error("Front transparent background image is required for Meshy generation.");
       }
-      updateSaveProgress(68, isEditing ? "Regenerating 3D Model..." : "Generating 3D model with Meshy AI...");
+      updateSaveProgress(
+        68,
+        isEditing ? "Regenerating 3D Model..." : "Generating 3D model with Meshy AI..."
+      );
       try {
         const originalTask = await createMeshyTask(meshyPayload);
         meshyTaskId = originalTask.result;
@@ -2455,7 +2512,11 @@ productForm.addEventListener("submit", async (e) => {
           updateSaveProgress(72, "Saving 3D model to storage...");
           const productName = document.getElementById("product-name").value || "product";
           const safeName = productName.toLowerCase().replace(/[^a-z0-9]/g, "_");
-          modelUrl = await uploadGlbFromUrl(rawModelUrl, "products/productsmodel", `${safeName}.glb`);
+          modelUrl = await uploadGlbFromUrl(
+            rawModelUrl,
+            "products/productsmodel",
+            `${safeName}.glb`
+          );
         } else {
           modelUrl = null;
         }
@@ -2510,7 +2571,7 @@ productForm.addEventListener("submit", async (e) => {
     const height = parseFloat(document.getElementById("product-height").value) || 0;
     const width = parseFloat(document.getElementById("product-width").value) || 0;
     const length = parseFloat(document.getElementById("product-length").value) || 0;
-    const length2 = isLType && length2Input ? (parseFloat(length2Input.value) || 0) : null;
+    const length2 = isLType && length2Input ? parseFloat(length2Input.value) || 0 : null;
     const unit = document.getElementById("product-unit").value || "in";
     const dimensions = {
       isLType,
@@ -2523,7 +2584,10 @@ productForm.addEventListener("submit", async (e) => {
       heightCm: getCanonicalCm(heightInput, unit) || convertDimension(height, unit, "cm"),
       widthCm: getCanonicalCm(widthInput, unit) || convertDimension(width, unit, "cm"),
       lengthCm: getCanonicalCm(lengthInput, unit) || convertDimension(length, unit, "cm"),
-      length2Cm: isLType && length2 ? (getCanonicalCm(length2Input, unit) || convertDimension(length2, unit, "cm")) : null,
+      length2Cm:
+        isLType && length2
+          ? getCanonicalCm(length2Input, unit) || convertDimension(length2, unit, "cm")
+          : null,
     };
     let size = "";
     if (isLType && length2) {
@@ -2537,13 +2601,17 @@ productForm.addEventListener("submit", async (e) => {
     const allowPreorder = document.getElementById("product-allow-preorder")
       ? document.getElementById("product-allow-preorder").checked
       : true;
-    const leadTime = document.getElementById("product-lead-time")?.value?.trim() || "14-21 Business Days";
+    const leadTime =
+      document.getElementById("product-lead-time")?.value?.trim() || "14-21 Business Days";
 
     const productData = {
       name: document.getElementById("product-name").value,
       description: document.getElementById("product-description").value,
       category: document.getElementById("product-category").value,
-      price: parseFloat(String(document.getElementById("product-price").value).replace(/,/g, "").trim()) || 0,
+      price:
+        parseFloat(
+          String(document.getElementById("product-price").value).replace(/,/g, "").trim()
+        ) || 0,
       stock,
       color,
       colors,
@@ -2580,14 +2648,25 @@ productForm.addEventListener("submit", async (e) => {
         .map((s) => {
           const w = s.width != null && s.width !== "" ? parseFloat(s.width) || s.width : null;
           const l = s.length != null && s.length !== "" ? parseFloat(s.length) || s.length : null;
-          const currentU = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
-          const dims = (w && l) ? `${w} × ${l} ${currentU}` : (s.dimensions || "").trim();
+          const currentU =
+            document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+          const dims = w && l ? `${w} × ${l} ${currentU}` : (s.dimensions || "").trim();
           return {
             name: (s.name || "").trim(),
             width: w,
             length: l,
-            widthCm: s.widthCm != null ? s.widthCm : (w && UNIT_TO_CM[currentU] ? w * UNIT_TO_CM[currentU] : null),
-            lengthCm: s.lengthCm != null ? s.lengthCm : (l && UNIT_TO_CM[currentU] ? l * UNIT_TO_CM[currentU] : null),
+            widthCm:
+              s.widthCm != null
+                ? s.widthCm
+                : w && UNIT_TO_CM[currentU]
+                  ? w * UNIT_TO_CM[currentU]
+                  : null,
+            lengthCm:
+              s.lengthCm != null
+                ? s.lengthCm
+                : l && UNIT_TO_CM[currentU]
+                  ? l * UNIT_TO_CM[currentU]
+                  : null,
             dimensions: dims,
             priceDelta: parseFloat(s.priceDelta) || 0,
           };
@@ -2661,7 +2740,11 @@ productForm.addEventListener("submit", async (e) => {
         if (finalMeshy.modelUrl) {
           const productName = document.getElementById("product-name").value || "product";
           const safeName = productName.toLowerCase().replace(/[^a-z0-9]/g, "_");
-          updates.modelUrl = await uploadGlbFromUrl(finalMeshy.modelUrl, "products/productsmodel", `${safeName}.glb`);
+          updates.modelUrl = await uploadGlbFromUrl(
+            finalMeshy.modelUrl,
+            "products/productsmodel",
+            `${safeName}.glb`
+          );
         } else {
           updates.modelUrl = null;
         }
@@ -2837,9 +2920,10 @@ async function pollMeshyAndLoad(taskId, attempt = 0) {
       onProgress: (pct) => {
         if (viewerStatus) {
           viewerStatus.style.visibility = "visible";
-          viewerStatus.textContent = pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
+          viewerStatus.textContent =
+            pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
         }
-      }
+      },
     });
     setTimeout(() => {
       if (modelViewer.loaded) hideViewerLoading();
@@ -2906,9 +2990,10 @@ window.view3DModel = async (productId) => {
         onProgress: (pct) => {
           if (viewerStatus) {
             viewerStatus.style.visibility = "visible";
-            viewerStatus.textContent = pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
+            viewerStatus.textContent =
+              pct >= 100 ? "Rendering 3D Model..." : `Downloading 3D Model... ${pct}%`;
           }
-        }
+        },
       });
 
       setTimeout(() => {
@@ -2961,7 +3046,8 @@ function updateBedSizesVisibility(category) {
   const isBed = (category || "").toLowerCase().includes("bed");
   if (isBed) {
     container.style.display = "block";
-    const currentUnit = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+    const currentUnit =
+      document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
     document.querySelectorAll(".bed-size-unit-indicator").forEach((el) => {
       el.textContent = currentUnit;
     });
@@ -2979,7 +3065,8 @@ function renderBedSizesRepeater() {
     return;
   }
 
-  const currentUnit = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+  const currentUnit =
+    document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
 
   container.innerHTML = currentBedSizesList
     .map((size, index) => {
@@ -3124,11 +3211,13 @@ function setupBedSizesRepeaterUI() {
       if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
     }
 
-    const resetBtn = e.target && e.target.closest ? e.target.closest("#btn-reset-default-bed-sizes") : null;
+    const resetBtn =
+      e.target && e.target.closest ? e.target.closest("#btn-reset-default-bed-sizes") : null;
     if (resetBtn) {
       e.preventDefault();
       e.stopPropagation();
-      const currentUnit = document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
+      const currentUnit =
+        document.getElementById("product-unit")?.value || currentDimensionUnit || "in";
       currentBedSizesList = getDefaultBedSizes(currentUnit);
       renderBedSizesRepeater();
       if (typeof triggerDraftAutosave === "function") triggerDraftAutosave();
@@ -3166,7 +3255,7 @@ function renderAddonsRepeater() {
       return `
     <div class="addon-repeater-row" data-index="${index}" style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px 10px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
       <input type="text" class="addon-input-name" placeholder="Upgrade Name (e.g. Throw Pillows)" value="${escapeHtml(addon.name || "")}" style="flex: 2; height: 38px; padding: 0 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" />
-      
+
       <div style="display: flex; align-items: center; gap: 6px; flex: 1.2; height: 38px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; box-sizing: border-box;">
         <span style="font-size: 0.85rem; font-weight: 700; color: #64748b; line-height: 1;">₱</span>
         <input type="number" class="addon-input-price" placeholder="Price" min="0" step="any" value="${addon.price != null ? addon.price : ""}" style="width: 100%; height: 100%; font-size: 0.85rem; font-weight: 600; border: none; background: transparent; outline: none; margin: 0; padding: 0;" />
@@ -3267,7 +3356,8 @@ window.editProduct = (id, productJsonBase64) => {
     }
     if (!product) {
       console.error("Product not found for editing id:", id);
-      if (typeof showToast === "function") showToast("Unable to find product details to edit.", "error");
+      if (typeof showToast === "function")
+        showToast("Unable to find product details to edit.", "error");
       return;
     }
     document.getElementById("product-name").value = product.name || "";
@@ -3279,10 +3369,12 @@ window.editProduct = (id, productJsonBase64) => {
     document.getElementById("product-stock").value = product.stock || 0;
 
     if (document.getElementById("product-allow-preorder")) {
-      document.getElementById("product-allow-preorder").checked = product.allowPreorder !== false && product.isMadeToOrder !== false;
+      document.getElementById("product-allow-preorder").checked =
+        product.allowPreorder !== false && product.isMadeToOrder !== false;
     }
     if (document.getElementById("product-lead-time")) {
-      document.getElementById("product-lead-time").value = product.leadTime || product.estimated_lead_time || "14-21 Business Days";
+      document.getElementById("product-lead-time").value =
+        product.leadTime || product.estimated_lead_time || "14-21 Business Days";
     }
 
     // Colors tags
@@ -3314,7 +3406,8 @@ window.editProduct = (id, productJsonBase64) => {
     }
 
     // Dimensions
-    const isLType = (product.dimensions && product.dimensions.isLType === true) || product.isLType === true;
+    const isLType =
+      (product.dimensions && product.dimensions.isLType === true) || product.isLType === true;
     const defaultOrient = product.dimensions?.defaultOrientation || (isLType ? "right" : "false");
     if (isLTypeSelect) {
       if (isLType) {
@@ -3334,7 +3427,8 @@ window.editProduct = (id, productJsonBase64) => {
       height = product.dimensions.height;
       width = product.dimensions.width;
       length = typeof product.dimensions.length === "number" ? product.dimensions.length : 72;
-      length2 = typeof product.dimensions.length2 === "number" ? product.dimensions.length2 : (length || 72);
+      length2 =
+        typeof product.dimensions.length2 === "number" ? product.dimensions.length2 : length || 72;
       unit = product.dimensions.unit || "in";
     } else if (product.size) {
       const sizeParts = (product.size || "").split(" × ");
@@ -3357,20 +3451,36 @@ window.editProduct = (id, productJsonBase64) => {
       else if (product.size.includes("m")) unit = "m";
       else unit = "in";
     }
-    if (heightInput) { heightInput.value = height; setCanonicalCm(heightInput, height, unit); }
-    if (widthInput) { widthInput.value = width; setCanonicalCm(widthInput, width, unit); }
-    if (lengthInput) { lengthInput.value = length; setCanonicalCm(lengthInput, length, unit); }
-    if (length2Input) { length2Input.value = length2; setCanonicalCm(length2Input, length2, unit); }
+    if (heightInput) {
+      heightInput.value = height;
+      setCanonicalCm(heightInput, height, unit);
+    }
+    if (widthInput) {
+      widthInput.value = width;
+      setCanonicalCm(widthInput, width, unit);
+    }
+    if (lengthInput) {
+      lengthInput.value = length;
+      setCanonicalCm(lengthInput, length, unit);
+    }
+    if (length2Input) {
+      length2Input.value = length2;
+      setCanonicalCm(length2Input, length2, unit);
+    }
     if (unitSelect) unitSelect.value = unit;
     currentDimensionUnit = unit;
 
     // Multi-Thumbnails
     clearThumbnailItems();
-    const existingThumbs = Array.isArray(product.thumbnails) && product.thumbnails.length > 0
-      ? product.thumbnails
-      : (Array.isArray(product.images?.thumbnails) && product.images.thumbnails.length > 0)
-        ? product.images.thumbnails
-        : [product.thumbnail || (product.images && (product.images.isoImage || product.images.frontBg))].filter(Boolean);
+    const existingThumbs =
+      Array.isArray(product.thumbnails) && product.thumbnails.length > 0
+        ? product.thumbnails
+        : Array.isArray(product.images?.thumbnails) && product.images.thumbnails.length > 0
+          ? product.images.thumbnails
+          : [
+              product.thumbnail ||
+                (product.images && (product.images.isoImage || product.images.frontBg)),
+            ].filter(Boolean);
 
     existingThumbs.forEach((url, i) => {
       thumbnailItems.push({
@@ -3401,8 +3511,18 @@ window.editProduct = (id, productJsonBase64) => {
         }
         const wNum = parseFloat(w);
         const lNum = parseFloat(l);
-        const wCm = s.widthCm != null ? s.widthCm : (!isNaN(wNum) && wNum > 0 && UNIT_TO_CM[unit] ? wNum * UNIT_TO_CM[unit] : null);
-        const lCm = s.lengthCm != null ? s.lengthCm : (!isNaN(lNum) && lNum > 0 && UNIT_TO_CM[unit] ? lNum * UNIT_TO_CM[unit] : null);
+        const wCm =
+          s.widthCm != null
+            ? s.widthCm
+            : !isNaN(wNum) && wNum > 0 && UNIT_TO_CM[unit]
+              ? wNum * UNIT_TO_CM[unit]
+              : null;
+        const lCm =
+          s.lengthCm != null
+            ? s.lengthCm
+            : !isNaN(lNum) && lNum > 0 && UNIT_TO_CM[unit]
+              ? lNum * UNIT_TO_CM[unit]
+              : null;
         return {
           name: s.name || "",
           width: w != null ? w : "",
@@ -3478,34 +3598,37 @@ const renderInventory = (products) => {
   const startIndex = (adminInvCurrentPage - 1) * adminInvPerPage;
   const pagedProducts = products.slice(startIndex, startIndex + adminInvPerPage);
 
-function formatProductDate(createdAt) {
-  if (!createdAt) return "—";
-  let d = createdAt;
-  if (typeof createdAt === "object" && createdAt.seconds) {
-    d = new Date(createdAt.seconds * 1000);
-  } else if (typeof createdAt === "string" || typeof createdAt === "number") {
-    d = new Date(createdAt);
+  function formatProductDate(createdAt) {
+    if (!createdAt) return "—";
+    let d = createdAt;
+    if (typeof createdAt === "object" && createdAt.seconds) {
+      d = new Date(createdAt.seconds * 1000);
+    } else if (typeof createdAt === "string" || typeof createdAt === "number") {
+      d = new Date(createdAt);
+    }
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
   }
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
-}
 
-function formatMaterialsListHtml(materialRaw) {
-  if (!materialRaw) return '<span style="color:#9ca3af; font-size: 0.82rem;">—</span>';
-  let items = [];
-  if (Array.isArray(materialRaw)) {
-    items = materialRaw.map((s) => String(s).trim()).filter(Boolean);
-  } else if (typeof materialRaw === "string") {
-    items = materialRaw.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
-  }
-  if (items.length === 0) return '<span style="color:#9ca3af; font-size: 0.82rem;">—</span>';
+  function formatMaterialsListHtml(materialRaw) {
+    if (!materialRaw) return '<span style="color:#9ca3af; font-size: 0.82rem;">—</span>';
+    let items = [];
+    if (Array.isArray(materialRaw)) {
+      items = materialRaw.map((s) => String(s).trim()).filter(Boolean);
+    } else if (typeof materialRaw === "string") {
+      items = materialRaw
+        .split(/[,;\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    if (items.length === 0) return '<span style="color:#9ca3af; font-size: 0.82rem;">—</span>';
 
-  const firstItem = items[0];
-  const remainingCount = items.length - 1;
-  const jsonEncoded = escapeHtml(JSON.stringify(items));
+    const firstItem = items[0];
+    const remainingCount = items.length - 1;
+    const jsonEncoded = escapeHtml(JSON.stringify(items));
 
-  if (items.length === 1) {
-    return `
+    if (items.length === 1) {
+      return `
       <div class="materials-cell-compact">
         <span class="material-pill-single" title="${escapeHtml(firstItem)}">
           <svg viewBox="0 0 24 24" class="material-pill-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -3515,9 +3638,9 @@ function formatMaterialsListHtml(materialRaw) {
         </span>
       </div>
     `;
-  }
+    }
 
-  return `
+    return `
     <div class="materials-cell-compact">
       <span class="material-pill-single" title="${escapeHtml(firstItem)}">
         <svg viewBox="0 0 24 24" class="material-pill-icon" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -3530,18 +3653,18 @@ function formatMaterialsListHtml(materialRaw) {
       </button>
     </div>
   `;
-}
+  }
 
-// Enterprise Materials Floating Popover Manager
-let activeMaterialsPopover = null;
-let popoverHideTimeout = null;
+  // Enterprise Materials Floating Popover Manager
+  let activeMaterialsPopover = null;
+  let popoverHideTimeout = null;
 
-function createMaterialsPopover(triggerEl, items) {
-  closeMaterialsPopover();
+  function createMaterialsPopover(triggerEl, items) {
+    closeMaterialsPopover();
 
-  const popover = document.createElement("div");
-  popover.className = "materials-floating-popover";
-  popover.innerHTML = `
+    const popover = document.createElement("div");
+    popover.className = "materials-floating-popover";
+    popover.innerHTML = `
     <div class="popover-header">
       <div class="popover-title-row">
         <span class="popover-title">Materials &amp; Specs</span>
@@ -3564,110 +3687,113 @@ function createMaterialsPopover(triggerEl, items) {
     </div>
   `;
 
-  document.body.appendChild(popover);
-  activeMaterialsPopover = popover;
+    document.body.appendChild(popover);
+    activeMaterialsPopover = popover;
 
-  const rect = triggerEl.getBoundingClientRect();
-  const popoverRect = popover.getBoundingClientRect();
+    const rect = triggerEl.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
 
-  let top = rect.bottom + 6;
-  if (top + popoverRect.height > window.innerHeight - 10) {
-    top = Math.max(10, rect.top - popoverRect.height - 6);
+    let top = rect.bottom + 6;
+    if (top + popoverRect.height > window.innerHeight - 10) {
+      top = Math.max(10, rect.top - popoverRect.height - 6);
+    }
+
+    let left = rect.left;
+    if (left + popoverRect.width > window.innerWidth - 16) {
+      left = window.innerWidth - popoverRect.width - 16;
+    }
+    if (left < 16) left = 16;
+
+    popover.style.top = `${top}px`;
+    popover.style.left = `${left}px`;
+
+    requestAnimationFrame(() => {
+      popover.classList.add("visible");
+    });
+
+    popover.addEventListener("mouseenter", () => {
+      if (popoverHideTimeout) {
+        clearTimeout(popoverHideTimeout);
+        popoverHideTimeout = null;
+      }
+    });
+
+    popover.addEventListener("mouseleave", () => {
+      closeMaterialsPopover();
+    });
   }
 
-  let left = rect.left;
-  if (left + popoverRect.width > window.innerWidth - 16) {
-    left = window.innerWidth - popoverRect.width - 16;
-  }
-  if (left < 16) left = 16;
-
-  popover.style.top = `${top}px`;
-  popover.style.left = `${left}px`;
-
-  requestAnimationFrame(() => {
-    popover.classList.add("visible");
-  });
-
-  popover.addEventListener("mouseenter", () => {
+  function closeMaterialsPopover() {
     if (popoverHideTimeout) {
       clearTimeout(popoverHideTimeout);
       popoverHideTimeout = null;
     }
-  });
-
-  popover.addEventListener("mouseleave", () => {
-    closeMaterialsPopover();
-  });
-}
-
-function closeMaterialsPopover() {
-  if (popoverHideTimeout) {
-    clearTimeout(popoverHideTimeout);
-    popoverHideTimeout = null;
+    if (activeMaterialsPopover) {
+      activeMaterialsPopover.remove();
+      activeMaterialsPopover = null;
+    }
   }
-  if (activeMaterialsPopover) {
-    activeMaterialsPopover.remove();
-    activeMaterialsPopover = null;
-  }
-}
 
-if (typeof window !== "undefined" && !window.__materialsPopoverInitialized) {
-  window.__materialsPopoverInitialized = true;
+  if (typeof window !== "undefined" && !window.__materialsPopoverInitialized) {
+    window.__materialsPopoverInitialized = true;
 
-  document.addEventListener(
-    "mouseenter",
-    (e) => {
-      const trigger = e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
+    document.addEventListener(
+      "mouseenter",
+      (e) => {
+        const trigger =
+          e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
+        if (trigger) {
+          if (popoverHideTimeout) clearTimeout(popoverHideTimeout);
+          try {
+            const items = JSON.parse(trigger.getAttribute("data-materials") || "[]");
+            if (Array.isArray(items) && items.length > 0) {
+              createMaterialsPopover(trigger, items);
+            }
+          } catch (err) {}
+        }
+      },
+      true
+    );
+
+    document.addEventListener(
+      "mouseleave",
+      (e) => {
+        const trigger =
+          e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
+        if (trigger) {
+          popoverHideTimeout = setTimeout(() => {
+            closeMaterialsPopover();
+          }, 220);
+        }
+      },
+      true
+    );
+
+    document.addEventListener("click", (e) => {
+      const trigger =
+        e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
       if (trigger) {
-        if (popoverHideTimeout) clearTimeout(popoverHideTimeout);
-        try {
-          const items = JSON.parse(trigger.getAttribute("data-materials") || "[]");
-          if (Array.isArray(items) && items.length > 0) {
-            createMaterialsPopover(trigger, items);
-          }
-        } catch (err) {}
-      }
-    },
-    true
-  );
-
-  document.addEventListener(
-    "mouseleave",
-    (e) => {
-      const trigger = e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
-      if (trigger) {
-        popoverHideTimeout = setTimeout(() => {
+        e.stopPropagation();
+        if (activeMaterialsPopover) {
           closeMaterialsPopover();
-        }, 220);
+        } else {
+          try {
+            const items = JSON.parse(trigger.getAttribute("data-materials") || "[]");
+            if (Array.isArray(items) && items.length > 0) {
+              createMaterialsPopover(trigger, items);
+            }
+          } catch (err) {}
+        }
+        return;
       }
-    },
-    true
-  );
 
-  document.addEventListener("click", (e) => {
-    const trigger = e.target && e.target.closest ? e.target.closest(".material-more-badge") : null;
-    if (trigger) {
-      e.stopPropagation();
-      if (activeMaterialsPopover) {
+      if (activeMaterialsPopover && !e.target.closest(".materials-floating-popover")) {
         closeMaterialsPopover();
-      } else {
-        try {
-          const items = JSON.parse(trigger.getAttribute("data-materials") || "[]");
-          if (Array.isArray(items) && items.length > 0) {
-            createMaterialsPopover(trigger, items);
-          }
-        } catch (err) {}
       }
-      return;
-    }
+    });
 
-    if (activeMaterialsPopover && !e.target.closest(".materials-floating-popover")) {
-      closeMaterialsPopover();
-    }
-  });
-
-  window.addEventListener("scroll", () => closeMaterialsPopover(), { passive: true });
-}
+    window.addEventListener("scroll", () => closeMaterialsPopover(), { passive: true });
+  }
 
   if (pagedProducts.length === 0) {
     inventoryList.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px;">No products found. Add some!</td></tr>`;
@@ -3863,7 +3989,12 @@ function renderMtoProductionWatchlist(orders) {
   const mtoOrders = activeOrders
     .filter((o) => {
       const st = normalizeOrderStatus(o.status);
-      return st === "placed" || st === "downpayment confirmed" || st === "in production" || st === "quality checked";
+      return (
+        st === "placed" ||
+        st === "downpayment confirmed" ||
+        st === "in production" ||
+        st === "quality checked"
+      );
     })
     .sort((a, b) => {
       const tA = orderTimestampMs(a);
@@ -3916,9 +4047,14 @@ function renderMtoProductionWatchlist(orders) {
 
       let dateStr = "Recently";
       if (o.createdAt && typeof o.createdAt.toDate === "function") {
-        dateStr = o.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        dateStr = o.createdAt
+          .toDate()
+          .toLocaleDateString("en-US", { month: "short", day: "numeric" });
       } else if (o.createdAt && o.createdAt.seconds) {
-        dateStr = new Date(o.createdAt.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        dateStr = new Date(o.createdAt.seconds * 1000).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
       }
 
       const leadTime = o.estimatedLeadTime || "14–21 Business Days (Crafted Upon Order)";
@@ -3955,7 +4091,12 @@ const updateStats = (products) => {
 
   const inProductionOrders = activeOrders.filter((o) => {
     const st = normalizeOrderStatus(o.status);
-    return st === "placed" || st === "downpayment confirmed" || st === "in production" || st === "quality checked";
+    return (
+      st === "placed" ||
+      st === "downpayment confirmed" ||
+      st === "in production" ||
+      st === "quality checked"
+    );
   });
   const inProductionCount = inProductionOrders.length;
 
@@ -3971,7 +4112,11 @@ const updateStats = (products) => {
 
   const totalCashCollected = activeOrders.reduce((sum, o) => {
     const total = Number(o.total != null ? o.total : o.totalAmount) || 0;
-    if (o.balanceStatus === "settled" || o.paymentOption === "full" || o.balanceSettlementMethod === "full_paid") {
+    if (
+      o.balanceStatus === "settled" ||
+      o.paymentOption === "full" ||
+      o.balanceSettlementMethod === "full_paid"
+    ) {
       return sum + total;
     }
     const dp = Number(o.downpaymentAmount);
@@ -3985,7 +4130,9 @@ const updateStats = (products) => {
   if (totalProductsStat) totalProductsStat.textContent = totalCatalogListings;
   if (lowStockStat) lowStockStat.textContent = inProductionCount;
   if (analyticsMtoSubEl) {
-    const pct = activeOrders.length ? ((inProductionCount / activeOrders.length) * 100).toFixed(0) : 0;
+    const pct = activeOrders.length
+      ? ((inProductionCount / activeOrders.length) * 100).toFixed(0)
+      : 0;
     analyticsMtoSubEl.textContent = `${pct}% of total bookings in queue`;
   }
   if (totalValueStat) {
@@ -4019,7 +4166,11 @@ const updateStats = (products) => {
   });
   if (products) {
     products.forEach((p) => {
-      const mats = Array.isArray(p.materials) ? p.materials : (p.material ? p.material.split(",") : []);
+      const mats = Array.isArray(p.materials)
+        ? p.materials
+        : p.material
+          ? p.material.split(",")
+          : [];
       mats.forEach((m) => {
         const clean = m.trim();
         if (clean && !materialCounts[clean]) materialCounts[clean] = 0;
@@ -4179,7 +4330,9 @@ async function getUserRole(user) {
     const q = query(collection(db, "users"), where("email", "==", user.email || ""));
     const snap = await Promise.race([
       getDocs(q),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Email role fetch timeout")), 3500)),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Email role fetch timeout")), 3500)
+      ),
     ]);
     if (!snap.empty) {
       const role = ((snap.docs[0].data() || {}).role || "").toLowerCase();
@@ -4252,20 +4405,18 @@ function formatOrderDeliveryAddress(order) {
         typeof src.streetAddress === "string"
           ? src.streetAddress.trim()
           : typeof src.street === "string"
-          ? src.street.trim()
-          : "";
+            ? src.street.trim()
+            : "";
       const city = typeof src.city === "string" ? src.city.trim() : "";
       const province = typeof src.province === "string" ? src.province.trim() : "";
       const postal =
         typeof src.postalCode === "string"
           ? src.postalCode.trim()
           : typeof src.postal === "string"
-          ? src.postal.trim()
-          : "";
+            ? src.postal.trim()
+            : "";
 
-      const parts = [street, city, province, postal].filter(
-        (p) => p && p !== "[object Object]"
-      );
+      const parts = [street, city, province, postal].filter((p) => p && p !== "[object Object]");
       if (parts.length > 0) {
         return parts.join(", ");
       }
@@ -4285,11 +4436,7 @@ function formatOrderDeliveryAddress(order) {
 
 function formatOrderLandmark(order) {
   if (!order) return "";
-  const sources = [
-    order.shippingAddress,
-    order.deliveryAddress,
-    order.address,
-  ];
+  const sources = [order.shippingAddress, order.deliveryAddress, order.address];
   for (const src of sources) {
     if (src && typeof src === "object") {
       const lm = src.nearestLandmark || src.landmark;
@@ -4317,11 +4464,7 @@ function formatOrderLandmark(order) {
 
 function formatOrderRecipientPhone(order) {
   if (!order) return "—";
-  const sources = [
-    order.shippingAddress,
-    order.deliveryAddress,
-    order.address,
-  ];
+  const sources = [order.shippingAddress, order.deliveryAddress, order.address];
   for (const src of sources) {
     if (src && typeof src === "object") {
       const p = src.phoneNumber || src.phone;
@@ -4513,10 +4656,32 @@ function normalizeOrderStatus(raw) {
   const s = String(raw).toLowerCase().trim();
   if (s === "slot reserved" || s === "slot_reserved") return "slot reserved";
   if (s === "pending" || s === "order placed" || s === "placed") return "placed";
-  if (s === "accepted" || s === "confirmed" || s === "deposit confirmed" || s === "deposit verified" || s === "downpayment confirmed") return "downpayment confirmed";
-  if (s === "processing" || s === "packed" || s === "crafting" || s === "fabrication" || s === "in production") return "in production";
-  if (s === "inspected" || s === "qc passed" || s === "quality check" || s === "quality checked") return "quality checked";
-  if (s === "dispatched" || s === "out for delivery" || s === "shipped" || s === "shipping" || s === "in transit") return "shipped";
+  if (
+    s === "accepted" ||
+    s === "confirmed" ||
+    s === "deposit confirmed" ||
+    s === "deposit verified" ||
+    s === "downpayment confirmed"
+  )
+    return "downpayment confirmed";
+  if (
+    s === "processing" ||
+    s === "packed" ||
+    s === "crafting" ||
+    s === "fabrication" ||
+    s === "in production"
+  )
+    return "in production";
+  if (s === "inspected" || s === "qc passed" || s === "quality check" || s === "quality checked")
+    return "quality checked";
+  if (
+    s === "dispatched" ||
+    s === "out for delivery" ||
+    s === "shipped" ||
+    s === "shipping" ||
+    s === "in transit"
+  )
+    return "shipped";
   if (s === "completed" || s === "order completed") return "completed";
   if (s === "received" || s === "arrived" || s === "delivered") return "delivered";
   if (s === "declined") return "declined";
@@ -4619,7 +4784,12 @@ function getAdminConfirmIconSvg(icon, confirmType) {
     return icon;
   }
   const cleanKey = typeof icon === "string" ? icon.trim().toLowerCase() : "";
-  if (cleanKey === "delete" || cleanKey === "trash" || cleanKey === "trash-2" || cleanKey === "🗑️") {
+  if (
+    cleanKey === "delete" ||
+    cleanKey === "trash" ||
+    cleanKey === "trash-2" ||
+    cleanKey === "🗑️"
+  ) {
     return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
   }
   if (cleanKey === "✓" || cleanKey === "check" || cleanKey === "success") {
@@ -4710,8 +4880,12 @@ function isOrderCompleted(order) {
   if (!order) return false;
   const status = normalizeOrderStatus(order.status);
   const orderStatus = normalizeOrderStatus(order.orderStatus);
-  const rawStatus = String(order.status || "").toLowerCase().trim();
-  const rawOrderStatus = String(order.orderStatus || "").toLowerCase().trim();
+  const rawStatus = String(order.status || "")
+    .toLowerCase()
+    .trim();
+  const rawOrderStatus = String(order.orderStatus || "")
+    .toLowerCase()
+    .trim();
   return (
     status === "completed" ||
     orderStatus === "completed" ||
@@ -4899,7 +5073,11 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
 
     const revenue = getOrderRevenue(order);
     let collected = 0;
-    if (order.balanceStatus === "settled" || order.paymentOption === "full" || order.balanceSettlementMethod === "full_paid") {
+    if (
+      order.balanceStatus === "settled" ||
+      order.paymentOption === "full" ||
+      order.balanceSettlementMethod === "full_paid"
+    ) {
       collected = revenue;
     } else {
       const dp = Number(order.downpaymentAmount);
@@ -4989,7 +5167,15 @@ function exportInventoryCsv() {
     return;
   }
 
-  const headers = ["Product ID", "Name", "Category", "Price (PHP)", "Stock", "Materials", "Dimensions"];
+  const headers = [
+    "Product ID",
+    "Name",
+    "Category",
+    "Price (PHP)",
+    "Stock",
+    "Materials",
+    "Dimensions",
+  ];
   const csvRows = [headers.join(",")];
 
   allProducts.forEach((p) => {
@@ -5011,7 +5197,7 @@ function exportInventoryCsv() {
       Number(p.price || 0).toFixed(2),
       Number(p.stock || 0),
       `"${matStr.replace(/"/g, '""')}"`,
-      `"${dimsStr.replace(/"/g, '""')}"`
+      `"${dimsStr.replace(/"/g, '""')}"`,
     ];
     csvRows.push(row.join(","));
   });
@@ -5032,12 +5218,19 @@ function updateDashboardKpis(products, orders) {
     const now = new Date();
     const hour = now.getHours();
     const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-    const dateFormatted = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    const dateFormatted = now.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
     greetingEl.textContent = `${timeGreeting}, Administrator • ${dateFormatted} • Real-time Made-to-Order fulfillment & operational metrics.`;
   }
 
   const totalProducts = products ? products.length : 0;
-  const activeOrders = orders ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete") : [];
+  const activeOrders = orders
+    ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete")
+    : [];
   const lowStockProducts = products ? products.filter((p) => Number(p.stock) <= 3) : [];
 
   let placedCount = 0;
@@ -5071,7 +5264,9 @@ function updateDashboardKpis(products, orders) {
       const paidVal = isAwaitingCounter
         ? Number(o.downpaymentPaid || 0)
         : Number(o.downpaymentAmount ?? (isDown ? Math.round(totalVal * 0.3) : totalVal));
-      const balanceDue = Number(o.remainingBalance ?? o.balanceDue ?? (isDown ? Math.max(0, totalVal - paidVal) : 0));
+      const balanceDue = Number(
+        o.remainingBalance ?? o.balanceDue ?? (isDown ? Math.max(0, totalVal - paidVal) : 0)
+      );
       const isSettled = isCompleted || o.balanceStatus === "settled" || balanceDue <= 0;
       totalCollected += isSettled ? totalVal : paidVal;
     }
@@ -5084,7 +5279,8 @@ function updateDashboardKpis(products, orders) {
 
   if (dashTotalRevenueEl) {
     dashTotalRevenueEl.textContent =
-      "₱" + totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      "₱" +
+      totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   const revCollectedEl = document.getElementById("dash-revenue-collected");
@@ -5123,7 +5319,6 @@ function updateDashboardKpis(products, orders) {
   if (pipeQc) pipeQc.textContent = String(qcCount);
   if (pipeShip) pipeShip.textContent = String(shippedCount);
   if (pipeDeliv) pipeDeliv.textContent = String(deliveredCount);
-
 
   // Ensure interactive listeners are wired
   initDashboardInteractiveListeners();
@@ -5193,7 +5388,7 @@ function renderDashboardRecentOrders(orders) {
       <td class="td-customer">
         <span class="dash-card-label">Customer</span>
         <div class="dash-card-customer-name">${escapeHtml(String(customer))}</div>
-        ${order.email || order.userEmail ? `<div class="dash-card-customer-email">${escapeHtml(order.email || order.userEmail)}</div>` : ''}
+        ${order.email || order.userEmail ? `<div class="dash-card-customer-email">${escapeHtml(order.email || order.userEmail)}</div>` : ""}
       </td>
       <td class="order-items-cell td-items">
         <span class="dash-card-label">Item(s)</span>
@@ -5203,13 +5398,13 @@ function renderDashboardRecentOrders(orders) {
         <span class="dash-card-label">Financial</span>
         <div class="dash-card-financial-val">
           <strong class="dash-card-amount">${totalStr}</strong>
-          ${isDown ? `<span class="dash-card-partial">Partial (₱${paidVal.toLocaleString()})</span>` : ''}
+          ${isDown ? `<span class="dash-card-partial">Partial (₱${paidVal.toLocaleString()})</span>` : ""}
         </div>
       </td>
       <td class="td-status">
         <span class="dash-card-label">Status</span>
         <div class="dash-card-status-val">
-          <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml((st === "downpayment confirmed" || st === "accepted") ? "Deposit Verified" : (st === "slot reserved" ? "Slot Reserved" : (st.charAt(0).toUpperCase() + st.slice(1))))}</span>
+          <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, "-"))}">${escapeHtml(st === "downpayment confirmed" || st === "accepted" ? "Deposit Verified" : st === "slot reserved" ? "Slot Reserved" : st.charAt(0).toUpperCase() + st.slice(1))}</span>
         </div>
       </td>
       <td class="td-date" style="font-size:0.82rem; color:#64748b;">${escapeHtml(dateStr)}</td>
@@ -5259,7 +5454,9 @@ function renderDashboardRecentOrders(orders) {
 }
 
 function renderDashRecentOrdersPagination(totalItems, totalPages) {
-  const container = dashRecentOrdersListEl ? dashRecentOrdersListEl.closest(".table-container") : null;
+  const container = dashRecentOrdersListEl
+    ? dashRecentOrdersListEl.closest(".table-container")
+    : null;
   if (!container) return;
 
   renderPagination({
@@ -5461,15 +5658,18 @@ function formatFormalDate(val, uppercase = false) {
 
 function buildTransactionsLedger(orders) {
   const ledger = [];
-  const list = Array.isArray(orders) ? orders : (allOrders || []);
+  const list = Array.isArray(orders) ? orders : allOrders || [];
 
   list.forEach((order) => {
     if (!order || order.isDeleted === true) return;
 
     const totalVal = Number(order.totalAmount || order.total || 0);
     const isAwaitingCounter = order.paymentStatus === "awaiting_counter_downpayment";
-    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounter;
-    
+    const isDownpayment =
+      order.paymentOption === "downpayment" ||
+      Number(order.downpaymentAmount) > 0 ||
+      isAwaitingCounter;
+
     // Initial Payment (30% Downpayment or Full Payment)
     const initialPaid = isAwaitingCounter
       ? Number(order.downpaymentPaid || 0)
@@ -5478,7 +5678,11 @@ function buildTransactionsLedger(orders) {
     let initialStatus = order.paymentStatus;
     if (!initialStatus || initialStatus === "pending") {
       initialStatus = isDownpayment
-        ? (Number(order.downpaymentPaid) > 0 || order.paymentStatus === "Downpayment Confirmed" || order.paymentStatus === "downpayment_paid" ? "Deposit Verified" : "Awaiting Verification")
+        ? Number(order.downpaymentPaid) > 0 ||
+          order.paymentStatus === "Downpayment Confirmed" ||
+          order.paymentStatus === "downpayment_paid"
+          ? "Deposit Verified"
+          : "Awaiting Verification"
         : "Paid Verified";
     }
 
@@ -5488,7 +5692,10 @@ function buildTransactionsLedger(orders) {
     const initialDate = order.createdAt;
 
     ledger.push({
-      id: order.paymentRef || order.paymentIntentId || ("TX-DP-" + String(order.id).slice(0, 8).toUpperCase()),
+      id:
+        order.paymentRef ||
+        order.paymentIntentId ||
+        "TX-DP-" + String(order.id).slice(0, 8).toUpperCase(),
       orderId: order.id,
       orderRef,
       rawDate: initialDate,
@@ -5501,20 +5708,28 @@ function buildTransactionsLedger(orders) {
       status: initialStatus,
       rawOrder: order,
       badgeColor: isDownpayment ? "#eff6ff" : "#ecfdf5",
-      badgeTextColor: isDownpayment ? "#1d4ed8" : "#047857"
+      badgeTextColor: isDownpayment ? "#1d4ed8" : "#047857",
     });
 
     // Balance Settlement Payment (70% Completion)
-    const remainingBalance = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - initialPaid) : 0));
-    const isBalanceSettled = order.balanceStatus === "settled" || order.isBalanceSettled === true || (order.status === "Delivered" && remainingBalance <= 0 && isDownpayment);
+    const remainingBalance = Number(
+      order.remainingBalance ??
+        order.balanceDue ??
+        (isDownpayment ? Math.max(0, totalVal - initialPaid) : 0)
+    );
+    const isBalanceSettled =
+      order.balanceStatus === "settled" ||
+      order.isBalanceSettled === true ||
+      (order.status === "Delivered" && remainingBalance <= 0 && isDownpayment);
 
     if (isBalanceSettled && isDownpayment && totalVal > initialPaid) {
-      const balanceAmount = Number(order.remainingBalanceSettled || (totalVal - initialPaid));
-      const balanceDate = order.balanceSettledAt || order.deliveredAt || order.updatedAt || initialDate;
+      const balanceAmount = Number(order.remainingBalanceSettled || totalVal - initialPaid);
+      const balanceDate =
+        order.balanceSettledAt || order.deliveredAt || order.updatedAt || initialDate;
       const balanceMethod = order.balancePaymentMethod || order.paymentMethod || "walk_in_cash";
 
       ledger.push({
-        id: order.balancePaymentRef || ("TX-BAL-" + String(order.id).slice(0, 8).toUpperCase()),
+        id: order.balancePaymentRef || "TX-BAL-" + String(order.id).slice(0, 8).toUpperCase(),
         orderId: order.id,
         orderRef,
         rawDate: balanceDate,
@@ -5527,18 +5742,21 @@ function buildTransactionsLedger(orders) {
         status: "Balance Settled",
         rawOrder: order,
         badgeColor: "#f5f3ff",
-        badgeTextColor: "#6d28d9"
+        badgeTextColor: "#6d28d9",
       });
     }
 
     // Refund Reversal Record (if refunded)
-    const isRefunded = order.refundStatus === "completed" || order.status === "Refund Complete" || order.status === "Refunded";
+    const isRefunded =
+      order.refundStatus === "completed" ||
+      order.status === "Refund Complete" ||
+      order.status === "Refunded";
     if (isRefunded) {
       const refundAmount = Number(order.refundAmount || initialPaid);
       const refundDate = order.refundCompletedAt || order.updatedAt || initialDate;
 
       ledger.push({
-        id: ("TX-REF-" + String(order.id).slice(0, 8).toUpperCase()),
+        id: "TX-REF-" + String(order.id).slice(0, 8).toUpperCase(),
         orderId: order.id,
         orderRef,
         rawDate: refundDate,
@@ -5551,15 +5769,19 @@ function buildTransactionsLedger(orders) {
         status: "Refund Processed",
         rawOrder: order,
         badgeColor: "#fef2f2",
-        badgeTextColor: "#dc2626"
+        badgeTextColor: "#dc2626",
       });
     }
   });
 
   // Sort descending by date (newest first)
   ledger.sort((a, b) => {
-    const tA = a.rawDate?.toDate?.()?.getTime?.() || (a.rawDate?.seconds ? a.rawDate.seconds * 1000 : new Date(a.rawDate || 0).getTime());
-    const tB = b.rawDate?.toDate?.()?.getTime?.() || (b.rawDate?.seconds ? b.rawDate.seconds * 1000 : new Date(b.rawDate || 0).getTime());
+    const tA =
+      a.rawDate?.toDate?.()?.getTime?.() ||
+      (a.rawDate?.seconds ? a.rawDate.seconds * 1000 : new Date(a.rawDate || 0).getTime());
+    const tB =
+      b.rawDate?.toDate?.()?.getTime?.() ||
+      (b.rawDate?.seconds ? b.rawDate.seconds * 1000 : new Date(b.rawDate || 0).getTime());
     return tB - tA;
   });
 
@@ -5590,9 +5812,12 @@ function updateTransactionKpis(ledger) {
   const balEl = document.getElementById("trans-stat-balances");
   const countEl = document.getElementById("trans-stat-count");
 
-  if (totalCollEl) totalCollEl.textContent = `₱${Math.max(0, totalCollected).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (dpEl) dpEl.textContent = `₱${downpaymentsTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (balEl) balEl.textContent = `₱${balancesTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (totalCollEl)
+    totalCollEl.textContent = `₱${Math.max(0, totalCollected).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (dpEl)
+    dpEl.textContent = `₱${downpaymentsTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (balEl)
+    balEl.textContent = `₱${balancesTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (countEl) countEl.textContent = ledger.length.toLocaleString();
 }
 
@@ -5654,10 +5879,18 @@ function renderAdminTransactionsList(orders) {
   const filteredLedger = allLedger.filter((tx) => {
     if (adminTransSearchQuery) {
       const q = adminTransSearchQuery;
-      const matchId = String(tx.id || "").toLowerCase().includes(q);
-      const matchRef = String(tx.orderRef || "").toLowerCase().includes(q);
-      const matchCust = String(tx.customer || "").toLowerCase().includes(q);
-      const matchEmail = String(tx.rawOrder?.userEmail || "").toLowerCase().includes(q);
+      const matchId = String(tx.id || "")
+        .toLowerCase()
+        .includes(q);
+      const matchRef = String(tx.orderRef || "")
+        .toLowerCase()
+        .includes(q);
+      const matchCust = String(tx.customer || "")
+        .toLowerCase()
+        .includes(q);
+      const matchEmail = String(tx.rawOrder?.userEmail || "")
+        .toLowerCase()
+        .includes(q);
       const matchPhone = String(formatOrderRecipientPhone(tx.rawOrder)).toLowerCase().includes(q);
       if (!matchId && !matchRef && !matchCust && !matchEmail && !matchPhone) return false;
     }
@@ -5696,7 +5929,9 @@ function renderAdminTransactionsList(orders) {
   pagedLedger.forEach((tx) => {
     const isNegative = tx.amount < 0;
     const absAmount = Math.abs(Number(tx.amount || 0));
-    const amountFormatted = (isNegative ? "-₱" : "₱") + absAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const amountFormatted =
+      (isNegative ? "-₱" : "₱") +
+      absAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const tr = document.createElement("tr");
     tr.style.borderBottom = "1px solid #f1f5f9";
@@ -5706,7 +5941,7 @@ function renderAdminTransactionsList(orders) {
       <td style="padding: 14px 18px; font-weight: 600; color: #0f172a;">${escapeHtml(tx.orderRef)}</td>
       <td style="padding: 14px 18px; font-weight: 500;">${escapeHtml(tx.customer)}</td>
       <td style="padding: 14px 18px;"><span style="font-size: 0.8rem; background: #f1f5f9; padding: 4px 8px; border-radius: 6px; font-weight: 500;">${escapeHtml(tx.typeLabel)}</span></td>
-      <td style="padding: 14px 18px; font-weight: 700; color: ${isNegative ? '#dc2626' : '#059669'};">${amountFormatted}</td>
+      <td style="padding: 14px 18px; font-weight: 700; color: ${isNegative ? "#dc2626" : "#059669"};">${amountFormatted}</td>
       <td style="padding: 14px 18px; font-weight: 500; color: #334155;">${escapeHtml(formatTransactionMethod(tx.method))}</td>
       <td style="padding: 14px 18px;"><span class="status-badge" style="background: ${tx.badgeColor}; color: ${tx.badgeTextColor}; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;">${escapeHtml(tx.status)}</span></td>
       <td style="padding: 14px 18px; text-align: center;">
@@ -6104,7 +6339,10 @@ async function generateAndUploadOfficialReceiptPdf(orderId) {
       activeReceiptOrder.receiptPdfUrl = receiptPdfUrl;
     }
 
-    console.log(`Receipt PDF successfully generated and uploaded for order ${targetOrderId}:`, receiptPdfUrl);
+    console.log(
+      `Receipt PDF successfully generated and uploaded for order ${targetOrderId}:`,
+      receiptPdfUrl
+    );
     return receiptPdfUrl;
   } catch (err) {
     console.error("Failed to generate and upload receipt PDF:", err);
@@ -6184,7 +6422,7 @@ function initLanicaReceiptModalListeners() {
     tabQuotation.addEventListener("touchend", onQuotation);
   }
 
-  const setBranch = (branchKey) => {
+  const setBranch = async (branchKey) => {
     if (!activeReceiptOrder) return;
     activeReceiptOrder._selectedBranch = branchKey;
     const cfg = LANICA_BRANCHES[branchKey] || LANICA_BRANCHES.calamba;
@@ -6196,6 +6434,17 @@ function initLanicaReceiptModalListeners() {
     };
     renderLanicaDocumentContent();
     showToast(`Switched document to ${cfg.name}.`, "info");
+    if (activeReceiptOrder.id) {
+      try {
+        await updateDoc(doc(db, "orders", activeReceiptOrder.id), {
+          _selectedBranch: branchKey,
+          _docBranch: activeReceiptOrder._docBranch,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn("Error updating branch in Firestore:", err);
+      }
+    }
   };
 
   if (branchCalamba && !branchCalamba.dataset.bound) {
@@ -6222,6 +6471,38 @@ function initLanicaReceiptModalListeners() {
   if (area && !area.dataset.bound) {
     area.dataset.bound = "true";
 
+    let docSaveTimer = null;
+    const persistDocEdits = async () => {
+      clearTimeout(docSaveTimer);
+      if (!activeReceiptOrder?.id) return;
+      try {
+        const payload = {
+          updatedAt: serverTimestamp(),
+        };
+        if (activeReceiptOrder._voucherSignatories) {
+          payload._voucherSignatories = activeReceiptOrder._voucherSignatories;
+          payload.signatures = activeReceiptOrder._voucherSignatories.signatures || {};
+        }
+        if (activeReceiptOrder._docBranch) {
+          payload._docBranch = activeReceiptOrder._docBranch;
+        }
+        if (activeReceiptOrder._selectedBranch) {
+          payload._selectedBranch = activeReceiptOrder._selectedBranch;
+        }
+        if (activeReceiptOrder._docQuotation) {
+          payload._docQuotation = activeReceiptOrder._docQuotation;
+        }
+        await updateDoc(doc(db, "orders", activeReceiptOrder.id), payload);
+      } catch (err) {
+        console.warn("Auto-saving document edits to Firestore notice:", err);
+      }
+    };
+
+    const debounceDocEdits = () => {
+      clearTimeout(docSaveTimer);
+      docSaveTimer = setTimeout(persistDocEdits, 600);
+    };
+
     // Track real-time edits to signatories, branch details, and quotation fields
     area.addEventListener("input", (e) => {
       if (!activeReceiptOrder) return;
@@ -6235,6 +6516,7 @@ function initLanicaReceiptModalListeners() {
             activeReceiptOrder._voucherSignatories = {};
           }
           activeReceiptOrder._voucherSignatories[field] = sigEl.innerText.trim();
+          debounceDocEdits();
         }
         return;
       }
@@ -6248,6 +6530,7 @@ function initLanicaReceiptModalListeners() {
             activeReceiptOrder._docBranch = {};
           }
           activeReceiptOrder._docBranch[field] = branchEl.innerText.trim();
+          debounceDocEdits();
         }
         return;
       }
@@ -6261,8 +6544,15 @@ function initLanicaReceiptModalListeners() {
             activeReceiptOrder._docQuotation = {};
           }
           activeReceiptOrder._docQuotation[field] = docEl.innerText.trim();
+          debounceDocEdits();
         }
         return;
+      }
+    });
+
+    area.addEventListener("focusout", (e) => {
+      if (e.target.closest("[contenteditable='true']")) {
+        persistDocEdits();
       }
     });
 
@@ -6288,7 +6578,11 @@ function initLanicaReceiptModalListeners() {
       const removeSigBtn = e.target.closest(".btn-remove-esign");
       if (removeSigBtn && activeReceiptOrder) {
         const role = removeSigBtn.getAttribute("data-sig-role");
-        if (role && activeReceiptOrder._voucherSignatories && activeReceiptOrder._voucherSignatories.signatures) {
+        if (
+          role &&
+          activeReceiptOrder._voucherSignatories &&
+          activeReceiptOrder._voucherSignatories.signatures
+        ) {
           delete activeReceiptOrder._voucherSignatories.signatures[role];
           if (role === "approvedBy" || role === "checkedBy") {
             delete activeReceiptOrder.signatureUrl;
@@ -6342,6 +6636,12 @@ function initLanicaReceiptModalListeners() {
         };
         renderLanicaDocumentContent();
         showToast(`Branch header reset to ${cfg.name} defaults.`, "info");
+        if (activeReceiptOrder.id) {
+          updateDoc(doc(db, "orders", activeReceiptOrder.id), {
+            _docBranch: activeReceiptOrder._docBranch,
+            updatedAt: serverTimestamp(),
+          }).catch((err) => console.warn("Error updating reset branch in Firestore:", err));
+        }
         return;
       }
     });
@@ -6356,7 +6656,9 @@ function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
 
   const order =
     (allOrders || []).find((o) => o.id === orderId) ||
-    (typeof currentSelectedOrder !== "undefined" && currentSelectedOrder && currentSelectedOrder.id === orderId
+    (typeof currentSelectedOrder !== "undefined" &&
+    currentSelectedOrder &&
+    currentSelectedOrder.id === orderId
       ? currentSelectedOrder
       : null);
   if (!order) {
@@ -6463,14 +6765,21 @@ function renderLanicaDocumentContent() {
   // Financial calculations
   const totalVal = Number(order.totalAmount || order.total || 0);
   const isAwaitingCounter = order.paymentStatus === "awaiting_counter_downpayment";
-  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounter;
+  const isDownpayment =
+    order.paymentOption === "downpayment" ||
+    Number(order.downpaymentAmount) > 0 ||
+    isAwaitingCounter;
   const paidVal = isAwaitingCounter
     ? Number(order.downpaymentPaid || 0)
-    : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
-  const remainingVal = Number(order.remainingBalance ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+    : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
+  const remainingVal = Number(
+    order.remainingBalance ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0)
+  );
   const isPartial = isDownpayment && remainingVal > 0;
 
-  const deliveryCharge = Number(order.deliveryFee ?? order.shippingFee ?? order.shippingAddress?.shippingCost ?? 1000);
+  const deliveryCharge = Number(
+    order.deliveryFee ?? order.shippingFee ?? order.shippingAddress?.shippingCost ?? 1000
+  );
   const discountDf = Number(order.discountedDeliveryFee ?? order.discountDf ?? 0);
   const itemsSubtotal = Math.max(0, totalVal - deliveryCharge);
   const totalPlusDf = itemsSubtotal + deliveryCharge;
@@ -6481,11 +6790,20 @@ function renderLanicaDocumentContent() {
   const customerName = customQuotation.customerName || resolveCustomerDisplay(order);
   const customerAddress = customQuotation.customerAddress || formatOrderDeliveryAddress(order);
   const customerPhone = customQuotation.customerPhone || formatOrderRecipientPhone(order);
-  const quotationNumber = customQuotation.quotationNumber || String(order.orderId || order.id || "0122").slice(0, 10).toUpperCase();
+  const quotationNumber =
+    customQuotation.quotationNumber ||
+    String(order.orderId || order.id || "0122")
+      .slice(0, 10)
+      .toUpperCase();
 
   const purchaseDate = customQuotation.purchaseDate || formatFormalDate(order.createdAt, false);
   const purchaseDateUpper = formatFormalDate(order.createdAt, true);
-  const deliveryDate = customQuotation.deliveryDate || formatFormalDate(order.targetDeliveryDate || order.estimatedDeliveryDate || order.deliveredAt, true);
+  const deliveryDate =
+    customQuotation.deliveryDate ||
+    formatFormalDate(
+      order.targetDeliveryDate || order.estimatedDeliveryDate || order.deliveredAt,
+      true
+    );
 
   const proofUrl = pickFirstNonEmpty(order.proofUrl, order.paymentProof, order.paymentProofUrl, "");
   const methodDisplay = formatTransactionMethod(order.paymentMethod || order.paymentType);
@@ -6543,9 +6861,11 @@ function renderLanicaDocumentContent() {
     // DOCUMENT 2: PAYMENT REQUEST VOUCHER (Image 2)
     // ==========================================
     const firstItem = (order.items && order.items[0]) || null;
-    const firstItemName = firstItem ? (firstItem.name || firstItem.title || "SEMI ELEGANT") : "SEMI ELEGANT";
+    const firstItemName = firstItem
+      ? firstItem.name || firstItem.title || "Custom Furniture"
+      : (order.productName || "Custom Furniture");
     const particulars = `PAYMENT FOR ${escapeHtml(firstItemName.toUpperCase())} SOFA SET`;
-    const staffSignatory = order.assignedStaffName || "Joanna (Staff)";
+    const staffSignatory = order.assignedStaffName || (currentUser?.displayName || "Lanica Workshop Staff");
     const signDate = purchaseDate;
 
     // Use preserved custom edits on the order if any exist, or defaults
@@ -6575,7 +6895,7 @@ function renderLanicaDocumentContent() {
       return `
         <div style="display: flex; flex-direction: column; justify-content: flex-end;">
           <div style="font-weight: 700; text-transform: uppercase; color: #000; min-height: 28px; display: flex; align-items: center; justify-content: center; line-height: 1.2;">${roleLabel}</div>
-          
+
           <!-- E-Signature Slot Above Name -->
           <div class="voucher-signature-slot" style="min-height: 52px; display: flex; align-items: flex-end; justify-content: center; position: relative; margin: 6px auto 2px; width: 90%;">
             ${
@@ -6590,7 +6910,7 @@ function renderLanicaDocumentContent() {
                 `
                 : `
                   <div class="modal-no-print" style="width: 100%;">
-                    <button type="button" class="btn-attach-esign" data-sig-role="${roleKey}" data-sig-title="${escapeHtml(roleLabel.replace(/<br\s*\/?>/gi, ' '))}" title="Attach or draw electronic signature" style="width: 100%; border: 1.5px dashed #93c5fd; background: #eff6ff; color: #1d4ed8; border-radius: 6px; padding: 4px 2px; font-size: 0.68rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.15s ease; touch-action: manipulation;">
+                    <button type="button" class="btn-attach-esign" data-sig-role="${roleKey}" data-sig-title="${escapeHtml(roleLabel.replace(/<br\s*\/?>/gi, " "))}" title="Attach or draw electronic signature" style="width: 100%; border: 1.5px dashed #93c5fd; background: #eff6ff; color: #1d4ed8; border-radius: 6px; padding: 4px 2px; font-size: 0.68rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 3px; transition: all 0.15s ease; touch-action: manipulation;">
                       ✍️ + Attach / Draw
                     </button>
                   </div>
@@ -6604,7 +6924,7 @@ function renderLanicaDocumentContent() {
             class="voucher-editable-signatory"
             data-sig-field="${roleKey}"
             title="Click to edit name"
-            style="margin: 2px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 22px; font-weight: ${isCursive ? '600' : '800'}; ${isCursive ? "font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b;" : "font-size: 0.78rem; color: #000;"} padding: 1px 4px; text-align: center; cursor: text;"
+            style="margin: 2px auto 4px; border-bottom: 1.5px solid #000; width: 90%; min-height: 22px; font-weight: ${isCursive ? "600" : "800"}; ${isCursive ? "font-family: cursive, 'Brush Script MT', sans-serif; font-size: 0.95rem; color: #1e293b;" : "font-size: 0.78rem; color: #000;"} padding: 1px 4px; text-align: center; cursor: text;"
           >${escapeHtml(nameVal)}</div>
 
           <div style="font-size: 0.72rem; color: #475569;">
@@ -6623,7 +6943,7 @@ function renderLanicaDocumentContent() {
         </div>
 
         <div style="font-size: 0.9rem; font-weight: 700; color: #000; margin-bottom: 8px;">1. Payment Request Form / Voucher</div>
-        
+
         <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 0.86rem; margin-bottom: 28px;">
           <tbody>
             <tr>
@@ -6636,7 +6956,15 @@ function renderLanicaDocumentContent() {
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">PAYMENT METHOD:</td>
-              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${escapeHtml(order.paymentMethod === "walk_in_cash" || order.paymentMethod === "cash" || String(order.paymentMethod || "").toLowerCase().includes("counter") ? "CASH (COUNTER)" : "QR PH / PAYMONGO")}</td>
+              <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">${escapeHtml(
+                order.paymentMethod === "walk_in_cash" ||
+                  order.paymentMethod === "cash" ||
+                  String(order.paymentMethod || "")
+                    .toLowerCase()
+                    .includes("counter")
+                  ? "CASH (COUNTER)"
+                  : "QR PH / PAYMONGO"
+              )}</td>
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">LOCATION:</td>
@@ -6659,7 +6987,7 @@ function renderLanicaDocumentContent() {
             </tr>
             <tr>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700; text-transform: uppercase;">
-                AMOUNT PAID (Partial ${isPartial ? '<strong>[ ☑ ]</strong>' : '[ ☐ ]'} Full ${!isPartial ? '<strong>[ ☑ ]</strong>' : '[ ☐ ]'})
+                AMOUNT PAID (Partial ${isPartial ? "<strong>[ ☑ ]</strong>" : "[ ☐ ]"} Full ${!isPartial ? "<strong>[ ☑ ]</strong>" : "[ ☐ ]"})
               </td>
               <td style="border: 1px solid #000; padding: 7px 12px; font-weight: 700;">₱ ${paidVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr>
@@ -6690,95 +7018,143 @@ function renderLanicaDocumentContent() {
           </div>
         </div>
 
-        ${proofUrl ? `
+        ${
+          proofUrl
+            ? `
           <div style="margin-top: 18px; border: 1.5px dashed #64748b; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
             <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #334155; margin-bottom: 10px;">ATTACHED PAYMENT VERIFICATION SCREENSHOT / ADVICE:</div>
             <img src="${proofUrl}" alt="Proof of Payment" style="max-height: 260px; max-width: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin: 0 auto; display: block;" onerror="this.onerror=null;this.parentElement.style.display='none';" />
           </div>
-        ` : `
+        `
+            : `
           <div style="margin-top: 18px; border: 1.5px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; background: #f8fafc;">
             <div style="font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: #059669;">PAYMENT RECONCILED &amp; VERIFIED VIA ${escapeHtml(methodDisplay)}</div>
             <div style="font-size: 0.76rem; color: #64748b; margin-top: 3px;">Lanica Financial Ledger Ref: <strong>TX-${escapeHtml(String(quotationNumber).slice(0, 10))}</strong> &bull; Reconciled on ${escapeHtml(purchaseDate)}</div>
           </div>
-        `}
+        `
+        }
       </div>
     `;
   } else {
     // ==========================================
     // DOCUMENT 1: OFFICIAL QUOTATION (Image 1)
     // ==========================================
-    const items = (order.items && order.items.length > 0) ? order.items : [{
-      name: "SEMI ELEGANT LTYPE FULLBACKREST",
-      quantity: 1,
-      price: itemsSubtotal,
-      material: "Pure Goodlumber / Uratex 4in",
-      color: "Standard Color",
-      customNotes: "With 1 arm sa kanan, with flesh lining"
-    }];
+    const items =
+      order.items && order.items.length > 0
+        ? order.items
+        : [
+            {
+              name: order.productName || order.itemTitle || "Custom Handcrafted Furniture",
+              quantity: 1,
+              price: itemsSubtotal,
+              material: order.material || "Kiln-Dried Hardwood / High-Density Foam",
+              color: order.fabricColor || order.color || "Standard Color",
+              customNotes: order.customNotes || "Standard Artisan Custom Specs",
+            },
+          ];
 
-    const itemsRowsHtml = items.map((item, idx) => {
-      const itemQty = Number(item.quantity || 1);
-      const itemPrice = parseItemPrice(item.price);
-      const itemTotal = itemPrice * itemQty;
-      const itemName = String(item.name || item.title || "SEMI ELEGANT LTYPE FULLBACKREST").toUpperCase();
+    const itemsRowsHtml = items
+      .map((item, idx) => {
+        const itemQty = Number(item.quantity || 1);
+        const itemPrice = parseItemPrice(item.price);
+        const itemTotal = itemPrice * itemQty;
+        const itemName = String(
+          item.name || item.title || order.productName || "Custom Handcrafted Furniture"
+        ).toUpperCase();
 
-      // Match catalog product for fallback/lookup
-      const matchedProduct = Array.isArray(allProducts)
-        ? allProducts.find((p) => p.id === item.productId || (p.name && item.name && p.name.toLowerCase() === item.name.toLowerCase()))
-        : null;
+        // Match catalog product for fallback/lookup
+        const matchedProduct = Array.isArray(allProducts)
+          ? allProducts.find(
+              (p) =>
+                p.id === item.productId ||
+                (p.name && item.name && p.name.toLowerCase() === item.name.toLowerCase())
+            )
+          : null;
 
-      // Dynamic Color
-      const rawColor = item.color || item.fabricColor || (matchedProduct && (matchedProduct.color || matchedProduct.fabricColor || (Array.isArray(matchedProduct.colors) && matchedProduct.colors[0]))) || "STANDARD COLOR";
-      const itemColor = String(rawColor).toUpperCase();
+        // Dynamic Color
+        const rawColor =
+          item.color ||
+          item.fabricColor ||
+          (matchedProduct &&
+            (matchedProduct.color ||
+              matchedProduct.fabricColor ||
+              (Array.isArray(matchedProduct.colors) && matchedProduct.colors[0]))) ||
+          "STANDARD COLOR";
+        const itemColor = String(rawColor).toUpperCase();
 
-      const itemSpecs = item.customNotes || item.specs || "With 1 arm sa kanan, with flesh lining";
+        const itemSpecs =
+          item.customNotes || item.specs || order.customNotes || "Standard Artisan Custom Specs";
 
-      // Dynamic Freebies
-      const rawFreebies = item.freebies || (matchedProduct && matchedProduct.freebies) || "5 PILLOWS, FOOTSTOOL (CLASS A FOAM), FOOTINGS";
-      const freebiesList = (Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies).split(/[\n,]+/))
-        .map((f) => String(f).trim())
-        .filter(Boolean);
+        // Dynamic Freebies
+        const rawFreebies =
+          item.freebies ||
+          (matchedProduct && matchedProduct.freebies) ||
+          order.freebies ||
+          "";
+        const freebiesList = (
+          Array.isArray(rawFreebies) ? rawFreebies : String(rawFreebies).split(/[\n,]+/)
+        )
+          .map((f) => String(f).trim())
+          .filter(Boolean);
 
-      // Resolve Product Materials from Admin Configured Product Data
-      const isUpholsteryOnly = (val) => {
-        if (!val) return true;
-        const s = String(val).trim().toLowerCase();
-        return s === "fabric" || s === "leather" || s === "standard" || s === "custom";
-      };
+        // Resolve Product Materials from Admin Configured Product Data
+        const isUpholsteryOnly = (val) => {
+          if (!val) return true;
+          const s = String(val).trim().toLowerCase();
+          return s === "fabric" || s === "leather" || s === "standard" || s === "custom";
+        };
 
-      let materialsList = [];
-      if (matchedProduct && Array.isArray(matchedProduct.materials) && matchedProduct.materials.length > 0) {
-        materialsList = matchedProduct.materials
-          .map((m) => String(m).trim())
-          .filter((m) => m && !isUpholsteryOnly(m));
-      }
-      if (materialsList.length === 0 && Array.isArray(item.materials) && item.materials.length > 0) {
-        materialsList = item.materials
-          .map((m) => String(m).trim())
-          .filter((m) => m && !isUpholsteryOnly(m));
-      }
-      if (materialsList.length === 0 && matchedProduct && matchedProduct.material && !isUpholsteryOnly(matchedProduct.material)) {
-        materialsList = String(matchedProduct.material)
-          .split(/[\n,]+/)
-          .map((m) => m.trim())
-          .filter((m) => m && !isUpholsteryOnly(m));
-      }
-      if (materialsList.length === 0 && item.materials && typeof item.materials === "string" && !isUpholsteryOnly(item.materials)) {
-        materialsList = String(item.materials)
-          .split(/[\n,]+/)
-          .map((m) => m.trim())
-          .filter((m) => m && !isUpholsteryOnly(m));
-      }
-      if (materialsList.length === 0) {
-        materialsList = [
-          "PURE GOODLUMBER WOOD FRAME (KILN DRIED)",
-          "PURE 4 INCHES URATEX FOAM",
-          "ANTI ANAY AT BUKBOK TREATED",
-          "PLUSH PREMIUM UPHOLSTERY FABRIC"
-        ];
-      }
+        let materialsList = [];
+        if (
+          matchedProduct &&
+          Array.isArray(matchedProduct.materials) &&
+          matchedProduct.materials.length > 0
+        ) {
+          materialsList = matchedProduct.materials
+            .map((m) => String(m).trim())
+            .filter((m) => m && !isUpholsteryOnly(m));
+        }
+        if (
+          materialsList.length === 0 &&
+          Array.isArray(item.materials) &&
+          item.materials.length > 0
+        ) {
+          materialsList = item.materials
+            .map((m) => String(m).trim())
+            .filter((m) => m && !isUpholsteryOnly(m));
+        }
+        if (
+          materialsList.length === 0 &&
+          matchedProduct &&
+          matchedProduct.material &&
+          !isUpholsteryOnly(matchedProduct.material)
+        ) {
+          materialsList = String(matchedProduct.material)
+            .split(/[\n,]+/)
+            .map((m) => m.trim())
+            .filter((m) => m && !isUpholsteryOnly(m));
+        }
+        if (
+          materialsList.length === 0 &&
+          item.materials &&
+          typeof item.materials === "string" &&
+          !isUpholsteryOnly(item.materials)
+        ) {
+          materialsList = String(item.materials)
+            .split(/[\n,]+/)
+            .map((m) => m.trim())
+            .filter((m) => m && !isUpholsteryOnly(m));
+        }
+        if (materialsList.length === 0) {
+          materialsList = [
+            "PURE GOODLUMBER WOOD FRAME (KILN DRIED)",
+            "PURE 4 INCHES URATEX FOAM",
+            "ANTI ANAY AT BUKBOK TREATED",
+            "PLUSH PREMIUM UPHOLSTERY FABRIC",
+          ];
+        }
 
-      return `
+        return `
         <tr style="vertical-align: top; border-bottom: 1px solid #e5e7eb;">
           <td style="padding: 10px 8px; font-weight: 700; width: 36px;">${idx + 1}</td>
           <td style="padding: 10px 8px;">
@@ -6787,20 +7163,22 @@ function renderLanicaDocumentContent() {
             <div style="font-size: 0.82rem; margin-top: 2px;">${escapeHtml(itemSpecs)}</div>
             <div style="font-weight: 700; font-size: 0.82rem; margin-top: 6px;">COLOR: ${escapeHtml(itemColor)}</div>
             ${item.material ? `<div style="font-weight: 700; font-size: 0.8rem; margin-top: 2px; color: #4b5563;">FINISH / UPHOLSTERY: ${escapeHtml(String(item.material).toUpperCase())}</div>` : ""}
-            
+
             <div style="margin-top: 8px; font-size: 0.8rem;">
               <div style="font-weight: 700; text-transform: uppercase;">FREEBIES:</div>
               <div style="padding-left: 4px; line-height: 1.4;">
-                ${freebiesList.length > 0 
-                  ? freebiesList.map(f => `✓ ${escapeHtml(f.toUpperCase())}`).join("<br/>") 
-                  : "✓ STANDARD INCLUSIONS"}
+                ${
+                  freebiesList.length > 0
+                    ? freebiesList.map((f) => `✓ ${escapeHtml(f.toUpperCase())}`).join("<br/>")
+                    : "✓ STANDARD INCLUSIONS"
+                }
               </div>
             </div>
 
             <div style="margin-top: 8px; font-size: 0.8rem;">
               <div style="font-weight: 700; text-transform: uppercase;">MATERIALS:</div>
               <div style="padding-left: 4px; line-height: 1.4;">
-                ${materialsList.map(m => `✓ ${escapeHtml(m.toUpperCase())}`).join("<br/>")}
+                ${materialsList.map((m) => `✓ ${escapeHtml(m.toUpperCase())}`).join("<br/>")}
               </div>
             </div>
 
@@ -6813,7 +7191,8 @@ function renderLanicaDocumentContent() {
           <td style="padding: 10px 8px; text-align: right; font-weight: 700; width: 110px;">₱ ${itemTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
       `;
-    }).join("");
+      })
+      .join("");
 
     area.innerHTML = `
       <div style="max-width: 760px; margin: 0 auto; color: #000;">
@@ -6871,12 +7250,16 @@ function renderLanicaDocumentContent() {
               <span>TOTAL:</span>
               <span>₱ ${totalPlusDf.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
-            ${discountDf > 0 ? `
+            ${
+              discountDf > 0
+                ? `
               <div style="display: flex; justify-content: space-between; font-weight: 700; border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1; padding: 3px 0; margin: 4px 0;">
                 <span>Discounted DF:</span>
                 <span style="color: #dc2626; font-weight: 800;">LESS ₱ ${discountDf.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-            ` : ''}
+            `
+                : ""
+            }
             <div style="border: 2px solid #dc2626; padding: 7px 12px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 1.05rem; font-weight: 900; color: #dc2626;">
               <span>GRAND TOTAL:</span>
               <span>₱ ${grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -6895,24 +7278,27 @@ function renderLanicaDocumentContent() {
   }
 }
 
-
 // Global Kebab Menu Click & Outside Dismiss Handler
 document.addEventListener("click", (e) => {
   const kebabBtn = e.target.closest(".kebab-trigger-btn, .kebab-menu-btn");
   if (kebabBtn) {
     e.stopPropagation();
-    const container = kebabBtn.closest(".kebab-menu-container, .kebab-container") || kebabBtn.parentElement;
-    const dropdown = container ? container.querySelector(".kebab-dropdown-menu, .kebab-menu-dropdown") : kebabBtn.nextElementSibling;
-    
+    const container =
+      kebabBtn.closest(".kebab-menu-container, .kebab-container") || kebabBtn.parentElement;
+    const dropdown = container
+      ? container.querySelector(".kebab-dropdown-menu, .kebab-menu-dropdown")
+      : kebabBtn.nextElementSibling;
+
     if (dropdown) {
-      const isCurrentlyOpen = dropdown.style.display === "block" || dropdown.classList.contains("active");
-      
+      const isCurrentlyOpen =
+        dropdown.style.display === "block" || dropdown.classList.contains("active");
+
       // Close all open dropdowns
       document.querySelectorAll(".kebab-dropdown-menu, .kebab-menu-dropdown").forEach((el) => {
         el.style.display = "none";
         el.classList.remove("active");
       });
-      
+
       if (!isCurrentlyOpen) {
         dropdown.style.display = "block";
         dropdown.classList.add("active");
@@ -6920,18 +7306,18 @@ document.addEventListener("click", (e) => {
         // Use fixed positioning to prevent overflow clipping by table containers
         dropdown.style.position = "fixed";
         dropdown.style.zIndex = "999999";
-        
+
         const rect = kebabBtn.getBoundingClientRect();
         const dropdownHeight = dropdown.offsetHeight || 180;
         const spaceBelow = window.innerHeight - rect.bottom;
-        
+
         // Vertical positioning (flip upward if near viewport bottom)
         if (spaceBelow < dropdownHeight && rect.top > dropdownHeight) {
           dropdown.style.top = `${rect.top - dropdownHeight - 6}px`;
         } else {
           dropdown.style.top = `${rect.bottom + 6}px`;
         }
-        
+
         // Horizontal positioning (align right edge with button right edge)
         const rightEdge = window.innerWidth - rect.right;
         dropdown.style.right = `${Math.max(10, rightEdge)}px`;
@@ -6948,12 +7334,16 @@ document.addEventListener("click", (e) => {
 });
 
 // Dismiss fixed dropdowns on window scroll or resize to prevent floating misalignments
-window.addEventListener("scroll", () => {
-  document.querySelectorAll(".kebab-dropdown-menu, .kebab-menu-dropdown").forEach((el) => {
-    el.style.display = "none";
-    el.classList.remove("active");
-  });
-}, { passive: true });
+window.addEventListener(
+  "scroll",
+  () => {
+    document.querySelectorAll(".kebab-dropdown-menu, .kebab-menu-dropdown").forEach((el) => {
+      el.style.display = "none";
+      el.classList.remove("active");
+    });
+  },
+  { passive: true }
+);
 
 if (navDashboard) {
   navDashboard.addEventListener("click", (e) => {
@@ -7104,7 +7494,7 @@ function applyAuditLogsFilters() {
   const pagContainer = document.getElementById("audit-logs-pagination-container");
   const searchVal = (document.getElementById("audit-log-search")?.value || "").toLowerCase().trim();
   const roleVal = (document.getElementById("audit-log-role-filter")?.value || "all").toLowerCase();
-  const actionVal = (document.getElementById("audit-log-action-filter")?.value || "all");
+  const actionVal = document.getElementById("audit-log-action-filter")?.value || "all";
 
   let filtered = allAuditLogsData.filter((log) => {
     const logRole = (log.performedBy?.role || log.userRole || "").toLowerCase();
@@ -7188,7 +7578,11 @@ function applyAuditLogsFilters() {
     let actColor = "#374151";
     let actBorder = "#e5e7eb";
 
-    if (actType === "ORDER_DELETED" || actType === "PRODUCT_DELETED" || actType.includes("DELETE")) {
+    if (
+      actType === "ORDER_DELETED" ||
+      actType === "PRODUCT_DELETED" ||
+      actType.includes("DELETE")
+    ) {
       actBg = "#fef2f2";
       actColor = "#dc2626";
       actBorder = "#fecaca";
@@ -7332,7 +7726,9 @@ async function loadStaffMembers() {
     staffMembers = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((u) => {
-        const r = String(u.role || "").toLowerCase().trim();
+        const r = String(u.role || "")
+          .toLowerCase()
+          .trim();
         return r === "staff" || r === "admin";
       })
       .map((u) => ({
@@ -7403,53 +7799,6 @@ function generateSmartPageNumbers(currentPage, totalPages) {
   return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
 }
 
-function getUserVerificationStatus(u) {
-  if (!u) return "unverified";
-
-  const isCurrentUser = !!currentUser && (u.id === currentUser.uid || u.uid === currentUser.uid);
-
-  // 1. Check if user is verified with 2FA / MFA
-  const is2FA =
-    u.is2faVerified === true ||
-    u.twoFactorEnabled === true ||
-    u.twoFactorVerified === true ||
-    u.isMfaVerified === true ||
-    u.mfaEnabled === true ||
-    u.twoFactor?.enabled === true ||
-    u.mfa?.enabled === true ||
-    u.verificationStatus === "2fa_verified" ||
-    u.verificationStatus === "2fa" ||
-    (isCurrentUser && Boolean(currentUser.multiFactor?.enrolledFactors?.length > 0));
-
-  if (is2FA) return "2fa_verified";
-
-  // 2. Check if user is verified via Email
-  const isEmail =
-    u.isEmailVerified === true ||
-    u.emailVerified === true ||
-    u.verified === true ||
-    u.verificationStatus === "email_verified" ||
-    (isCurrentUser && currentUser.emailVerified === true);
-
-  if (isEmail) return "email_verified";
-
-  return "unverified";
-}
-
-function renderVerificationBadge(u) {
-  const status = getUserVerificationStatus(u);
-
-  if (status === "2fa_verified") {
-    return `<span class="verification-badge verified-2fa" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:0.75rem;font-weight:600;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;" title="Verified with Two-Factor Authentication"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> Verified (2FA)</span>`;
-  }
-
-  if (status === "email_verified") {
-    return `<span class="verification-badge verified-email" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:0.75rem;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" title="Verified via Email"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Verified (Email)</span>`;
-  }
-
-  return `<span class="verification-badge unverified" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:0.75rem;font-weight:600;background:#fffbeb;color:#b45309;border:1px solid #fde68a;" title="Unverified Account"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Unverified</span>`;
-}
-
 function renderUsersList(users) {
   if (!usersListEl) return;
   usersListEl.innerHTML = "";
@@ -7463,7 +7812,6 @@ function renderUsersList(users) {
           <th>Email Address</th>
           <th>Total Orders</th>
           <th>Lifetime Value (LTV)</th>
-          <th>2FA / Verification</th>
           <th>Account Status</th>
           <th style="text-align: right;">Action</th>
         </tr>
@@ -7474,7 +7822,6 @@ function renderUsersList(users) {
           <th>Staff Member</th>
           <th>Email Address</th>
           <th>Role</th>
-          <th>2FA / Verification</th>
           <th>Account Status</th>
           <th style="text-align: right;">Actions</th>
         </tr>
@@ -7494,7 +7841,7 @@ function renderUsersList(users) {
   const pagedUsers = users.slice(startIndex, startIndex + usersPerPage);
 
   if (!pagedUsers.length) {
-    usersListEl.innerHTML = `<tr><td colspan="${activeUserTab === "customers" ? 7 : 6}" style="text-align:center;padding:32px;color:#64748b;">No ${activeUserTab === "customers" ? "customer" : "staff"} accounts found matching your query.</td></tr>`;
+    usersListEl.innerHTML = `<tr><td colspan="${activeUserTab === "customers" ? 6 : 5}" style="text-align:center;padding:32px;color:#64748b;">No ${activeUserTab === "customers" ? "customer" : "staff"} accounts found matching your query.</td></tr>`;
   } else {
     pagedUsers.forEach((u) => {
       const name = pickFirstNonEmpty(u.displayName, u.name, u.fullName, "—");
@@ -7509,7 +7856,9 @@ function renderUsersList(users) {
       if (activeUserTab === "customers") {
         // Calculate Customer Metrics
         const custOrders = (Array.isArray(allOrders) ? allOrders : []).filter((o) => {
-          const matchesUid = (o.userId && (o.userId === u.id || o.userId === u.uid)) || (o.customerId && (o.customerId === u.id || o.customerId === u.uid));
+          const matchesUid =
+            (o.userId && (o.userId === u.id || o.userId === u.uid)) ||
+            (o.customerId && (o.customerId === u.id || o.customerId === u.uid));
           const orderEmail = (o.customerEmail || o.email || o.userEmail || "").toLowerCase();
           const matchesEmail = email !== "—" && orderEmail && orderEmail === email.toLowerCase();
           const isNotCancelled = o.status !== "cancelled" && o.status !== "declined";
@@ -7531,7 +7880,6 @@ function renderUsersList(users) {
           <td><span style="color:#334155;">${escapeHtml(email)}</span></td>
           <td><span style="font-weight:600;color:#0f172a;">${totalOrdersCount} ${totalOrdersCount === 1 ? "order" : "orders"}</span></td>
           <td><span style="font-weight:700;color:#059669;">₱${lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
-          <td>${renderVerificationBadge(u)}</td>
           <td><span class="status-badge ${status === "active" ? "active" : "inactive"}">${status === "active" ? "● Active" : "● Inactive"}</span></td>
           <td style="text-align: right;">
             <button type="button" class="btn-secondary toggle-status-btn" data-user-doc-id="${escapeHtml(u.id)}" data-current-status="${status}" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">
@@ -7562,7 +7910,6 @@ function renderUsersList(users) {
           </td>
           <td><span style="color:#334155;">${escapeHtml(email)}</span></td>
           <td><span class="role-badge ${roleBadgeClass}">${escapeHtml(roleLabel)}</span></td>
-          <td>${renderVerificationBadge(u)}</td>
           <td>${accountStatusHtml}</td>
           <td style="text-align: right;">
             ${
@@ -7665,12 +8012,8 @@ function bindUserTableActions() {
         const statusSelect = document.getElementById("role-modal-status-select");
         if (statusSelect) {
           const uStatus = targetUser?.status ? String(targetUser.status).toLowerCase() : "";
-          statusSelect.value = uStatus === "inactive" || uStatus === "suspended" ? "inactive" : "active";
-        }
-
-        const twoFactorSelect = document.getElementById("role-modal-2fa-select");
-        if (twoFactorSelect) {
-          twoFactorSelect.value = getUserVerificationStatus(targetUser);
+          statusSelect.value =
+            uStatus === "inactive" || uStatus === "suspended" ? "inactive" : "active";
         }
 
         const userPerms = targetUser?.permissions || {};
@@ -7752,31 +8095,10 @@ function setupUserManagementControls() {
 
       const targetUser = allUsers.find((x) => String(x.id) === String(docId));
       const roleSelectEl = document.getElementById("role-modal-select");
-      const newRole = roleSelectEl ? roleSelectEl.value : (targetUser?.role || "staff");
+      const newRole = roleSelectEl ? roleSelectEl.value : targetUser?.role || "staff";
 
       const statusSelectEl = document.getElementById("role-modal-status-select");
-      const newStatus = statusSelectEl ? statusSelectEl.value : (targetUser?.status || "active");
-
-      const twoFactorSelectEl = document.getElementById("role-modal-2fa-select");
-      const selected2FA = twoFactorSelectEl ? twoFactorSelectEl.value : getUserVerificationStatus(targetUser);
-
-      let is2faVerified = false;
-      let twoFactorEnabled = false;
-      let isEmailVerified = false;
-
-      if (selected2FA === "2fa_verified") {
-        is2faVerified = true;
-        twoFactorEnabled = true;
-        isEmailVerified = true;
-      } else if (selected2FA === "email_verified") {
-        is2faVerified = false;
-        twoFactorEnabled = false;
-        isEmailVerified = true;
-      } else {
-        is2faVerified = false;
-        twoFactorEnabled = false;
-        isEmailVerified = false;
-      }
+      const newStatus = statusSelectEl ? statusSelectEl.value : targetUser?.status || "active";
 
       const permissionsPayload = {
         manageOrders: document.getElementById("perm-orders")?.checked ?? true,
@@ -7789,17 +8111,11 @@ function setupUserManagementControls() {
         const prevRole = targetUser?.role || "unknown";
         const prevStatus = targetUser?.status || "active";
         const prevPermissions = targetUser?.permissions || {};
-        const prev2FA = getUserVerificationStatus(targetUser);
 
         await updateDoc(doc(db, "users", docId), {
           role: newRole,
           status: newStatus,
           permissions: permissionsPayload,
-          is2faVerified,
-          twoFactorEnabled,
-          isEmailVerified,
-          emailVerified: isEmailVerified,
-          verificationStatus: selected2FA,
           updatedAt: new Date().toISOString(),
         });
 
@@ -7807,10 +8123,10 @@ function setupUserManagementControls() {
           action: "SETTINGS_CHANGED",
           targetType: "user",
           targetId: docId,
-          description: `Updated permissions, status (${newStatus}), and verification (${selected2FA}) for ${targetUser?.name || targetUser?.email || docId}`,
+          description: `Updated permissions and status (${newStatus}) for ${targetUser?.name || targetUser?.email || docId}`,
           diff: {
-            before: { role: prevRole, status: prevStatus, permissions: prevPermissions, verificationStatus: prev2FA },
-            after: { role: newRole, status: newStatus, permissions: permissionsPayload, verificationStatus: selected2FA },
+            before: { role: prevRole, status: prevStatus, permissions: prevPermissions },
+            after: { role: newRole, status: newStatus, permissions: permissionsPayload },
           },
           performedBy: currentUser,
         });
@@ -7819,11 +8135,6 @@ function setupUserManagementControls() {
           targetUser.role = newRole;
           targetUser.status = newStatus;
           targetUser.permissions = permissionsPayload;
-          targetUser.is2faVerified = is2faVerified;
-          targetUser.twoFactorEnabled = twoFactorEnabled;
-          targetUser.isEmailVerified = isEmailVerified;
-          targetUser.emailVerified = isEmailVerified;
-          targetUser.verificationStatus = selected2FA;
         }
 
         showToast("Staff permission scopes and account status updated successfully!", "success");
@@ -7876,7 +8187,11 @@ function applyUsersFilter() {
       const name = pickFirstNonEmpty(u.displayName, u.name, u.fullName, "").toLowerCase();
       const email = String(u.email || "").toLowerCase();
       const uid = String(u.uid || u.id || "").toLowerCase();
-      return name.includes(usersSearchQuery) || email.includes(usersSearchQuery) || uid.includes(usersSearchQuery);
+      return (
+        name.includes(usersSearchQuery) ||
+        email.includes(usersSearchQuery) ||
+        uid.includes(usersSearchQuery)
+      );
     });
   }
 
@@ -7946,7 +8261,16 @@ if (usersListEl) {
 }
 
 function updateOrderStats(orders) {
-  const counts = { placed: 0, "slot reserved": 0, "downpayment confirmed": 0, "in production": 0, "quality checked": 0, shipped: 0, delivered: 0, refund_requested: 0 };
+  const counts = {
+    placed: 0,
+    "slot reserved": 0,
+    "downpayment confirmed": 0,
+    "in production": 0,
+    "quality checked": 0,
+    shipped: 0,
+    delivered: 0,
+    refund_requested: 0,
+  };
   orders.forEach((o) => {
     if (o.refundStatus === "refund_requested" || o.status === "cancellation_pending_review") {
       counts.refund_requested++;
@@ -8407,7 +8731,10 @@ function startAdminRealtimeListeners(user) {
                 hydrateCustomerNamesForOrders(allOrders);
               },
               (fallbackErr) => {
-                console.warn("Orders listener fallback encountered error (will retry):", fallbackErr);
+                console.warn(
+                  "Orders listener fallback encountered error (will retry):",
+                  fallbackErr
+                );
                 ordersRetryTimeout = setTimeout(() => {
                   if (currentUser) setupOrdersListener();
                 }, 2500);
@@ -8451,7 +8778,9 @@ function startAdminRealtimeListeners(user) {
             });
           staffMembers = allUsers
             .filter((u) => {
-              const r = String(u.role || "").toLowerCase().trim();
+              const r = String(u.role || "")
+                .toLowerCase()
+                .trim();
               return r === "staff" || r === "admin";
             })
             .map((u) => ({
@@ -8781,24 +9110,42 @@ function renderOrdersList(orders) {
       ? `<div style="font-size:0.73rem; color:#d97706; font-weight:500; margin-top:2px; max-width:170px; line-height:1.2; white-space:normal; display:flex; align-items:flex-start; gap:3px;" title="Landmark / Instructions: ${escapeHtml(nearestLandmark)}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><span>${escapeHtml(nearestLandmark)}</span></div>`
       : "";
 
-    const addressDisplayHtml = !isPickup && fullAddr && fullAddr !== "No delivery address recorded"
-      ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + '…' : fullAddr)}</div>${landmarkBadgeHtml}`
-      : isPickup
-        ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px;">Lanica Workshop</div>`
-        : ``;
+    const addressDisplayHtml =
+      !isPickup && fullAddr && fullAddr !== "No delivery address recorded"
+        ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:3px; max-width:170px; line-height:1.2; white-space:normal;" title="${escapeHtml(fullAddr)}">${escapeHtml(fullAddr.length > 45 ? fullAddr.slice(0, 45) + "…" : fullAddr)}</div>${landmarkBadgeHtml}`
+        : isPickup
+          ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px;">Lanica Workshop</div>`
+          : ``;
 
     // Financial Breakdown calculation
     const isAwaitingCounterDownpayment = order.paymentStatus === "awaiting_counter_downpayment";
     const totalVal = Number(order.totalAmount ?? order.total ?? 0);
-    const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounterDownpayment;
+    const isDownpayment =
+      order.paymentOption === "downpayment" ||
+      Number(order.downpaymentAmount) > 0 ||
+      isAwaitingCounterDownpayment;
     const paidVal = isAwaitingCounterDownpayment
       ? Number(order.downpaymentPaid || 0)
-      : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
-    const remainingVal = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
-    const isBalanceSettled = order.balanceStatus === "settled" || order.balanceStatus === "Settled" || remainingVal <= 0;
-    const paidPct = totalVal > 0 ? Math.round((paidVal / totalVal) * 100) : (isDownpayment ? (isAwaitingCounterDownpayment ? 0 : 30) : 100);
+      : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
+    const remainingVal = Number(
+      order.remainingBalance ??
+        order.balanceDue ??
+        (isDownpayment ? Math.max(0, totalVal - paidVal) : 0)
+    );
+    const isBalanceSettled =
+      order.balanceStatus === "settled" || order.balanceStatus === "Settled" || remainingVal <= 0;
+    const paidPct =
+      totalVal > 0
+        ? Math.round((paidVal / totalVal) * 100)
+        : isDownpayment
+          ? isAwaitingCounterDownpayment
+            ? 0
+            : 30
+          : 100;
 
-    const hasRiderProof = Boolean(order.riderCashProofUrl || order.balanceStatus === "Pending Admin Verification");
+    const hasRiderProof = Boolean(
+      order.riderCashProofUrl || order.balanceStatus === "Pending Admin Verification"
+    );
     let riderRemittanceBadgeHtml = "";
     if (hasRiderProof && !isBalanceSettled) {
       riderRemittanceBadgeHtml = `<div><span class="balance-badge" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; display:inline-flex; align-items:center; gap:3px; font-weight:700; margin-top:3px; font-size:0.72rem;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>Rider Remittance Proof</span></div>`;
@@ -8819,8 +9166,10 @@ function renderOrdersList(orders) {
     `;
 
     // Refund Status & Badges
-    const isRefundRequested = order.refundStatus === "refund_requested" || order.status === "cancellation_pending_review";
-    const isRefundCompleted = order.refundStatus === "refund_completed" || order.status === "refunded";
+    const isRefundRequested =
+      order.refundStatus === "refund_requested" || order.status === "cancellation_pending_review";
+    const isRefundCompleted =
+      order.refundStatus === "refund_completed" || order.status === "refunded";
     const isRefundRejected = order.refundStatus === "refund_rejected";
 
     let refundBadgeHtml = "";
@@ -8832,13 +9181,16 @@ function renderOrdersList(orders) {
       refundBadgeHtml = `<div><span class="refund-status-badge rejected" style="display:inline-flex; align-items:center; gap:3px;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Refund Rejected</span></div>`;
     }
 
-    const displayStatusText = (st === "downpayment confirmed" || st === "accepted")
-      ? "Deposit Verified"
-      : (st === "slot reserved" ? "Slot Reserved" : (st.charAt(0).toUpperCase() + st.slice(1)));
+    const displayStatusText =
+      st === "downpayment confirmed" || st === "accepted"
+        ? "Deposit Verified"
+        : st === "slot reserved"
+          ? "Slot Reserved"
+          : st.charAt(0).toUpperCase() + st.slice(1);
 
     const statusColumnHtml = `
       <div>
-        <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, '-'))}">${escapeHtml(
+        <span class="order-status-badge order-status-${escapeHtml(st.replace(/\s+/g, "-"))}">${escapeHtml(
           displayStatusText
         )}</span>
         ${refundBadgeHtml}
@@ -8852,9 +9204,10 @@ function renderOrdersList(orders) {
         ? `<span style="color: #dc2626; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>Manual</span>`
         : `<span style="color: #d97706; font-size: 0.72rem;">(${deliveryEstimate.daysRange})</span>`;
 
-    const deliveryDisplayHtml = st === "delivered"
-      ? '<span style="color: #059669; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>Delivered</span>'
-      : `
+    const deliveryDisplayHtml =
+      st === "delivered"
+        ? '<span style="color: #059669; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>Delivered</span>'
+        : `
         <div style="font-size: 0.82rem; line-height: 1.3;">
           <div style="color: #1f2937; font-weight: 500;">${deliveryEstimate.minDate}</div>
           <div style="color: #6b7280; font-size: 0.75rem;">to ${deliveryEstimate.maxDate}</div>
@@ -8867,7 +9220,14 @@ function renderOrdersList(orders) {
         </div>
       `;
 
-    const isMarkSettledVisible = (!isBalanceSettled && remainingVal > 0 && st !== "placed" && st !== "pending" && st !== "cancelled" && st !== "declined") || (hasRiderProof && !isBalanceSettled);
+    const isMarkSettledVisible =
+      (!isBalanceSettled &&
+        remainingVal > 0 &&
+        st !== "placed" &&
+        st !== "pending" &&
+        st !== "cancelled" &&
+        st !== "declined") ||
+      (hasRiderProof && !isBalanceSettled);
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -8898,7 +9258,7 @@ function renderOrdersList(orders) {
       <td>${statusColumnHtml}</td>
       <td>${deliveryDisplayHtml}</td>
       <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; border: 1.5px solid ${!order.assignedToUid ? '#f59e0b' : '#cbd5e1'}; background: ${!order.assignedToUid ? '#fffbeb' : '#ffffff'}; color: ${!order.assignedToUid ? '#b45309' : '#1e293b'}; font-weight: ${!order.assignedToUid ? '600' : '400'}; cursor: pointer;">
+        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; border: 1.5px solid ${!order.assignedToUid ? "#f59e0b" : "#cbd5e1"}; background: ${!order.assignedToUid ? "#fffbeb" : "#ffffff"}; color: ${!order.assignedToUid ? "#b45309" : "#1e293b"}; font-weight: ${!order.assignedToUid ? "600" : "400"}; cursor: pointer;">
           <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>Unassigned (Assign Staff)</option>
           ${staffMembers
             .map((s) => {
@@ -8955,9 +9315,9 @@ function renderOrdersList(orders) {
               isMarkSettledVisible
                 ? `<button type="button" class="kebab-menu-item btn-settle-balance" data-order-id="${escapeHtml(
                     order.id
-                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: ${hasRiderProof ? '#ecfdf5' : 'none'}; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                  )}" style="width: 100%; text-align: left; padding: 8px 12px; background: ${hasRiderProof ? "#ecfdf5" : "none"}; border: none; font-size: 0.82rem; font-weight: 600; color: #059669; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
-                    Mark Balance Settled ${hasRiderProof ? '(Verify Proof)' : ''}
+                    Mark Balance Settled ${hasRiderProof ? "(Verify Proof)" : ""}
                   </button>`
                 : ""
             }
@@ -9180,13 +9540,20 @@ async function handleOrderStatusChange(orderId, newStatus) {
   if (prev === next) return;
 
   // Enterprise Workflow Rule: Order cannot proceed into production or fulfillment without an assigned staff member
-  const requiresStaffAssignment = ["in production", "quality checked", "shipped", "delivered"].includes(next);
+  const requiresStaffAssignment = [
+    "in production",
+    "quality checked",
+    "shipped",
+    "delivered",
+  ].includes(next);
   if (requiresStaffAssignment && !current.assignedToUid) {
     showAdminToast(
       `Assignment Required: Please assign a staff member to Order #${orderId.slice(0, 8)} before advancing to "${next.charAt(0).toUpperCase() + next.slice(1)}".`,
       "warning"
     );
-    const assignSelect = ordersListEl?.querySelector(`.order-assign-select[data-order-id="${orderId}"]`);
+    const assignSelect = ordersListEl?.querySelector(
+      `.order-assign-select[data-order-id="${orderId}"]`
+    );
     if (assignSelect) {
       assignSelect.focus();
       assignSelect.style.outline = "2px solid #f59e0b";
@@ -9227,7 +9594,9 @@ async function handleOrderStatusChange(orderId, newStatus) {
           updatedAt: Timestamp.now(),
         });
       });
-      broadcastOrderStatusUpdate(orderId, next).catch((err) => console.warn("Broadcast update err:", err));
+      broadcastOrderStatusUpdate(orderId, next).catch((err) =>
+        console.warn("Broadcast update err:", err)
+      );
       showAdminToast(`Order status updated to In Production (Crafting Started).`, "success");
     } catch (e) {
       console.error(e);
@@ -9238,7 +9607,9 @@ async function handleOrderStatusChange(orderId, newStatus) {
         stockDeducted: true,
         updatedAt: serverTimestamp(),
       });
-      broadcastOrderStatusUpdate(orderId, next).catch((err) => console.warn("Broadcast update err:", err));
+      broadcastOrderStatusUpdate(orderId, next).catch((err) =>
+        console.warn("Broadcast update err:", err)
+      );
       showAdminToast(`Order advanced to In Production.`, "success");
     }
     return;
@@ -9250,7 +9621,9 @@ async function handleOrderStatusChange(orderId, newStatus) {
       orderStatus: next,
       updatedAt: serverTimestamp(),
     });
-    broadcastOrderStatusUpdate(orderId, next).catch((err) => console.warn("Broadcast update err:", err));
+    broadcastOrderStatusUpdate(orderId, next).catch((err) =>
+      console.warn("Broadcast update err:", err)
+    );
     await recordAuditLog({
       action: "ORDER_STATUS_CHANGED",
       targetType: "order",
@@ -9262,7 +9635,10 @@ async function handleOrderStatusChange(orderId, newStatus) {
       },
       performedBy: currentUser,
     });
-    showAdminToast(`Order status updated to ${next.charAt(0).toUpperCase() + next.slice(1)}.`, "success");
+    showAdminToast(
+      `Order status updated to ${next.charAt(0).toUpperCase() + next.slice(1)}.`,
+      "success"
+    );
   } catch (e) {
     console.error(e);
     showAdminToast("Failed to update order status.", "error");
@@ -9452,7 +9828,8 @@ async function handleOrderAssign(orderId, staffUid) {
   }
 
   const staffName = staff.displayName || staff.name || "Staff Member";
-  const prevAssignedName = current?.assignedToName || (current?.assignedToUid ? "Previous Staff" : "Unassigned");
+  const prevAssignedName =
+    current?.assignedToName || (current?.assignedToUid ? "Previous Staff" : "Unassigned");
 
   try {
     await updateDoc(orderRef, {
@@ -9567,8 +9944,10 @@ const closeAdminDeliveryModalBtn = document.getElementById("btn-close-admin-deli
 const cancelAdminDeliveryModalBtn = document.getElementById("btn-cancel-admin-delivery-modal");
 const applyAdminDeliveryModalBtn = document.getElementById("btn-apply-admin-delivery-modal");
 
-if (closeAdminDeliveryModalBtn) closeAdminDeliveryModalBtn.addEventListener("click", closeAdminDeliveryModal);
-if (cancelAdminDeliveryModalBtn) cancelAdminDeliveryModalBtn.addEventListener("click", closeAdminDeliveryModal);
+if (closeAdminDeliveryModalBtn)
+  closeAdminDeliveryModalBtn.addEventListener("click", closeAdminDeliveryModal);
+if (cancelAdminDeliveryModalBtn)
+  cancelAdminDeliveryModalBtn.addEventListener("click", closeAdminDeliveryModal);
 if (adminDeliveryModal) {
   adminDeliveryModal.addEventListener("click", (e) => {
     if (e.target === adminDeliveryModal) closeAdminDeliveryModal();
@@ -9607,32 +9986,58 @@ function resolveOrderItemImage(item, productsList = []) {
   if (!item) return "assets/product_sofa.png";
 
   const direct = item.imageUrl || item.image || item.photo || item.thumbnail || item.productImage;
-  if (typeof direct === "string" && direct.trim() && !direct.includes("product_sofa.png") && !direct.includes("placeholder.com")) {
+  if (
+    typeof direct === "string" &&
+    direct.trim() &&
+    !direct.includes("product_sofa.png") &&
+    !direct.includes("placeholder.com")
+  ) {
     return direct.trim();
   }
 
-  if (typeof item.url === "string" && item.url.trim() && !item.url.includes("product_sofa.png") && !item.url.includes("placeholder.com")) {
+  if (
+    typeof item.url === "string" &&
+    item.url.trim() &&
+    !item.url.includes("product_sofa.png") &&
+    !item.url.includes("placeholder.com")
+  ) {
     return item.url.trim();
   }
 
   const itemId = String(item.productId || item.id || "").trim();
-  const itemName = String(item.name || item.title || "").trim().toLowerCase();
+  const itemName = String(item.name || item.title || "")
+    .trim()
+    .toLowerCase();
 
   const match = (productsList || []).find((p) => {
     if (!p) return false;
     if (itemId && String(p.id) === itemId) return true;
-    const pName = String(p.name || p.title || "").trim().toLowerCase();
-    return itemName && pName && (itemName === pName || pName.includes(itemName) || itemName.includes(pName));
+    const pName = String(p.name || p.title || "")
+      .trim()
+      .toLowerCase();
+    return (
+      itemName &&
+      pName &&
+      (itemName === pName || pName.includes(itemName) || itemName.includes(pName))
+    );
   });
 
   if (match) {
     const candidate =
       match.thumbnail ||
       (Array.isArray(match.thumbnails) && match.thumbnails[0]) ||
-      (match.images && (match.images.isoImage || match.images.frontBg || (Array.isArray(match.images) ? match.images[0] : null))) ||
+      (match.images &&
+        (match.images.isoImage ||
+          match.images.frontBg ||
+          (Array.isArray(match.images) ? match.images[0] : null))) ||
       match.imageUrl ||
       match.image;
-    if (candidate && typeof candidate === "string" && candidate.trim() && !candidate.includes("product_sofa.png")) {
+    if (
+      candidate &&
+      typeof candidate === "string" &&
+      candidate.trim() &&
+      !candidate.includes("product_sofa.png")
+    ) {
       return candidate.trim();
     }
   }
@@ -9646,9 +10051,7 @@ async function showOrderSummaryModal(orderId) {
   let order = Array.isArray(allOrders)
     ? allOrders.find(
         (o) =>
-          o.id === orderId ||
-          o.orderId === orderId ||
-          String(o.orderNumber) === String(orderId)
+          o.id === orderId || o.orderId === orderId || String(o.orderNumber) === String(orderId)
       )
     : null;
 
@@ -9686,7 +10089,9 @@ async function showOrderSummaryModal(orderId) {
               allProducts.push({ id: snap.id, ...snap.data() });
             }
           } else if (it.name) {
-            const qSnap = await getDocs(query(collection(db, "products"), where("name", "==", it.name)));
+            const qSnap = await getDocs(
+              query(collection(db, "products"), where("name", "==", it.name))
+            );
             qSnap.forEach((ds) => allProducts.push({ id: ds.id, ...ds.data() }));
           }
         } catch (e) {
@@ -9698,7 +10103,8 @@ async function showOrderSummaryModal(orderId) {
 
   const modal = document.createElement("div");
   modal.className = "modal active";
-  modal.style.cssText = "position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;";
+  modal.style.cssText =
+    "position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;";
 
   const isPickup =
     order.fulfillmentType === "pickup" ||
@@ -9715,13 +10121,13 @@ async function showOrderSummaryModal(orderId) {
     .map(
       (item) => `
       <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
-        <img src="${resolveOrderItemImage(item, allProducts)}" alt="${escapeHtml(item.name || 'Item')}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc;" onerror="this.onerror=null;this.src='assets/product_sofa.png';">
+        <img src="${resolveOrderItemImage(item, allProducts)}" alt="${escapeHtml(item.name || "Item")}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc;" onerror="this.onerror=null;this.src='assets/product_sofa.png';">
         <div style="flex: 1;">
           <strong style="color: #0f172a; font-size: 0.9rem;">${escapeHtml(item.name || item.title || "Item")}</strong>
           <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">Variant / Material: <strong>${escapeHtml(item.material || "Standard")}</strong> &bull; Qty: <strong>${item.quantity || 1}</strong></div>
           ${item.customNotes ? `<div style="font-size: 0.76rem; color: #b45309; background: #fffbeb; border: 1px solid #fef3c7; padding: 4px 8px; border-radius: 6px; margin-top: 4px; line-height: 1.3;"><strong>Custom Specs:</strong> ${escapeHtml(item.customNotes)}</div>` : ""}
         </div>
-        <strong style="color: #0f172a; font-size: 0.92rem;">₱${((parseItemPrice(item.price)) * Number(item.quantity || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+        <strong style="color: #0f172a; font-size: 0.92rem;">₱${(parseItemPrice(item.price) * Number(item.quantity || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
       </div>
     `
     )
@@ -9729,11 +10135,16 @@ async function showOrderSummaryModal(orderId) {
 
   const totalVal = Number(order.totalAmount || order.total || 0);
   const isAwaitingCounterDownpayment = order.paymentStatus === "awaiting_counter_downpayment";
-  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0 || isAwaitingCounterDownpayment;
+  const isDownpayment =
+    order.paymentOption === "downpayment" ||
+    Number(order.downpaymentAmount) > 0 ||
+    isAwaitingCounterDownpayment;
   const paidVal = isAwaitingCounterDownpayment
     ? Number(order.downpaymentPaid || 0)
-    : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
-  const remainingVal = Number(order.remainingBalance ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+    : Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal));
+  const remainingVal = Number(
+    order.remainingBalance ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0)
+  );
   const canonicalStatus = getOrderCanonicalStatus(order);
 
   modal.innerHTML = `
@@ -9752,20 +10163,34 @@ async function showOrderSummaryModal(orderId) {
         <div><strong>Delivery Address:</strong> ${escapeHtml(fullAddress)}</div>
         ${landmark ? `<div style="color: #b45309; background: #fffbeb; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><strong>Landmark:</strong> ${escapeHtml(landmark)}</div>` : ""}
         <div><strong>Current Status:</strong> <span style="font-weight: 600; color: #1e293b; background: #e2e8f0; padding: 2px 8px; border-radius: 4px;">${escapeHtml(canonicalStatus)}</span></div>
-        <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod === "walk_in_cash" || order.paymentMethod === "cash" || String(order.paymentMethod || "").toLowerCase().includes("counter") ? "Cash (Counter)" : "Online / QR Ph (PayMongo)")}</div>
+        <div><strong>Payment Method:</strong> ${escapeHtml(
+          order.paymentMethod === "walk_in_cash" ||
+            order.paymentMethod === "cash" ||
+            String(order.paymentMethod || "")
+              .toLowerCase()
+              .includes("counter")
+            ? "Cash (Counter)"
+            : "Online / QR Ph (PayMongo)"
+        )}</div>
         <div><strong>Assigned Staff:</strong> <span style="font-weight: 600; color: #0284c7;">${escapeHtml(order.assignedToName || (order.assignedToUid === currentUser?.uid ? "You" : "Unassigned"))}</span></div>
       </div>
 
-      ${proofUrl ? `
+      ${
+        proofUrl
+          ? `
         <div style="margin-bottom: 16px; padding: 12px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px;">
           <div style="font-size: 0.82rem; font-weight: 600; color: #6b21a8; margin-bottom: 6px;">Payment Verification Screenshot</div>
           <a href="${proofUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block;">
             <img src="${proofUrl}" alt="Proof of Payment" style="max-height: 140px; border-radius: 8px; border: 1px solid #d8b4fe; object-fit: contain;">
           </a>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
 
-      ${order.riderCashProofUrl ? `
+      ${
+        order.riderCashProofUrl
+          ? `
         <div style="margin-bottom: 16px; padding: 14px; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 10px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="font-size: 0.85rem; font-weight: 700; color: #065f46; display: flex; align-items: center; gap: 6px;">
@@ -9779,7 +10204,9 @@ async function showOrderSummaryModal(orderId) {
             <img src="${escapeHtml(order.riderCashProofUrl)}" alt="Rider Cash Proof" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid #6ee7b7; object-fit: contain; background: #fff;" />
           </a>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
 
       <h4 style="margin: 0 0 8px; font-size: 0.95rem; color: #334155;">Ordered Items Breakdown</h4>
       <div style="margin-bottom: 16px;">${itemsListHtml || "<p style='color:#94a3b8;'>No items listed.</p>"}</div>
@@ -9804,7 +10231,11 @@ async function showOrderSummaryModal(orderId) {
           Official Quotation
         </button>
         ${
-          (order.riderCashProofUrl || order.balanceStatus === "Pending Admin Verification" || (remainingVal > 0 && canonicalStatus.toLowerCase().includes("deliver"))) && order.balanceStatus !== "Settled" && order.balanceStatus !== "settled"
+          (order.riderCashProofUrl ||
+            order.balanceStatus === "Pending Admin Verification" ||
+            (remainingVal > 0 && canonicalStatus.toLowerCase().includes("deliver"))) &&
+          order.balanceStatus !== "Settled" &&
+          order.balanceStatus !== "settled"
             ? `<button type="button" class="btn-summary-mark-balance-settled" data-order-id="${escapeHtml(
                 order.id
               )}" style="padding: 10px 18px; cursor: pointer; border-radius: 8px; background: #10b981; color: white; border: none; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; touch-action: manipulation;">
@@ -9878,7 +10309,7 @@ async function handleReceiveCounterDownpayment(orderId) {
   if (!current) return;
 
   const totalAmount = Number(current.totalAmount || current.total || 0);
-  const downpaymentRequired = Number(current.downpaymentRequired ?? Math.round(totalAmount * 0.30));
+  const downpaymentRequired = Number(current.downpaymentRequired ?? Math.round(totalAmount * 0.3));
 
   const confirmed = await showAdminConfirmModal({
     title: "Receive Counter Downpayment",
@@ -9921,8 +10352,13 @@ async function handleReceiveCounterDownpayment(orderId) {
       performedBy: currentUser,
     });
 
-    console.log(`Received counter downpayment for order ${orderId} -> downpayment confirmed (Deposit Verified)`);
-    showAdminToast(`Counter downpayment of ₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} recorded! Order status is now Deposit Verified.`, "success");
+    console.log(
+      `Received counter downpayment for order ${orderId} -> downpayment confirmed (Deposit Verified)`
+    );
+    showAdminToast(
+      `Counter downpayment of ₱${downpaymentRequired.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} recorded! Order status is now Deposit Verified.`,
+      "success"
+    );
   } catch (e) {
     console.error("Counter downpayment confirmation error:", e);
     showAdminToast(e.message || "Could not record counter downpayment.", "error");
@@ -9944,8 +10380,11 @@ function openRefundModal(orderId) {
   const customerName = resolveCustomerDisplay(order);
   const customerEmail = pickFirstNonEmpty(order.customerEmail, order.email, order.userEmail, "—");
   const totalVal = Number(order.totalAmount ?? order.total ?? 0);
-  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
-  const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
+  const isDownpayment =
+    order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const paidVal = Number(
+    order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal)
+  );
 
   const elName = document.getElementById("refund-customer-name");
   const elEmail = document.getElementById("refund-customer-email");
@@ -9961,7 +10400,9 @@ function openRefundModal(orderId) {
   if (elEmail) elEmail.textContent = customerEmail;
   if (elOrderId) elOrderId.textContent = `#${orderId}`;
   if (elAmount) elAmount.textContent = formatPeso(paidVal);
-  if (elReason) elReason.textContent = order.refundReason || order.cancellationReason || "Customer requested refund / cancellation";
+  if (elReason)
+    elReason.textContent =
+      order.refundReason || order.cancellationReason || "Customer requested refund / cancellation";
   if (elDetails) elDetails.textContent = order.refundDetails || "No additional details provided.";
 
   if (inputAmt) inputAmt.value = paidVal.toFixed(2);
@@ -9999,7 +10440,10 @@ if (refundFormEl) {
     const adminNote = inputNote ? inputNote.value.trim() : "";
 
     if (!txId) {
-      showAdminToast("Transaction Reference ID is required for audit & refund approval.", "warning");
+      showAdminToast(
+        "Transaction Reference ID is required for audit & refund approval.",
+        "warning"
+      );
       return;
     }
 
@@ -10021,7 +10465,10 @@ if (refundFormEl) {
         updatedAt: now,
       });
 
-      showAdminToast(`Refund for Order #${currentRefundOrderId} approved and marked completed!`, "success");
+      showAdminToast(
+        `Refund for Order #${currentRefundOrderId} approved and marked completed!`,
+        "success"
+      );
       closeRefundModal();
     } catch (err) {
       console.error("Failed to approve refund:", err);
@@ -10065,7 +10512,10 @@ if (rejectRefundBtnEl) {
         updatedAt: now,
       });
 
-      showAdminToast(`Refund request for Order #${currentRefundOrderId} has been rejected.`, "info");
+      showAdminToast(
+        `Refund request for Order #${currentRefundOrderId} has been rejected.`,
+        "info"
+      );
       closeRefundModal();
     } catch (err) {
       console.error("Failed to reject refund:", err);
@@ -10082,9 +10532,16 @@ async function handleMarkBalanceSettled(orderId) {
   if (!order) return;
 
   const totalVal = Number(order.totalAmount ?? order.total ?? 0);
-  const isDownpayment = order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
-  const paidVal = Number(order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.30) : totalVal));
-  const currentBalance = Number(order.remainingBalance ?? order.balanceDue ?? (isDownpayment ? Math.max(0, totalVal - paidVal) : 0));
+  const isDownpayment =
+    order.paymentOption === "downpayment" || Number(order.downpaymentAmount) > 0;
+  const paidVal = Number(
+    order.downpaymentAmount ?? (isDownpayment ? Math.round(totalVal * 0.3) : totalVal)
+  );
+  const currentBalance = Number(
+    order.remainingBalance ??
+      order.balanceDue ??
+      (isDownpayment ? Math.max(0, totalVal - paidVal) : 0)
+  );
 
   const confirmed = await showAdminConfirmModal({
     title: "Mark Balance Settled",
@@ -10111,7 +10568,10 @@ async function handleMarkBalanceSettled(orderId) {
       updatedAt: now,
     });
     console.log(`Marked balance settled for order ${orderId}`);
-    showAdminToast(`Balance of ₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} marked as settled.`, "success");
+    showAdminToast(
+      `Balance of ₱${currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} marked as settled.`,
+      "success"
+    );
   } catch (err) {
     console.error("Failed to settle balance:", err);
     showAdminToast(err.message || "Could not mark balance settled.", "error");
@@ -10134,7 +10594,9 @@ function renderWorkshopQueue(orders) {
     const st = normalizeOrderStatus(o.status);
     return st === "downpayment confirmed" || st === "placed";
   });
-  const groupProduction = activeOrders.filter((o) => normalizeOrderStatus(o.status) === "in production");
+  const groupProduction = activeOrders.filter(
+    (o) => normalizeOrderStatus(o.status) === "in production"
+  );
   const groupQC = activeOrders.filter((o) => normalizeOrderStatus(o.status) === "quality checked");
   const groupShipped = activeOrders.filter((o) => normalizeOrderStatus(o.status) === "shipped");
 
@@ -10146,7 +10608,10 @@ function renderWorkshopQueue(orders) {
   if (elQueued) elQueued.textContent = String(groupQueued.length);
   if (elInProd) elInProd.textContent = String(groupProduction.length);
   if (elQc) elQc.textContent = String(groupQC.length);
-  if (elShowroom) elShowroom.textContent = String((allProducts || []).reduce((sum, p) => sum + (Number(p.stock) || 0), 0));
+  if (elShowroom)
+    elShowroom.textContent = String(
+      (allProducts || []).reduce((sum, p) => sum + (Number(p.stock) || 0), 0)
+    );
 
   const setBadge = (id, count) => {
     const el = document.getElementById(id);
@@ -10238,7 +10703,13 @@ function renderWorkshopQueue(orders) {
   };
 
   renderCol(containerQueued, groupQueued, "in production", "Start Crafting", "No queued orders");
-  renderCol(containerProduction, groupProduction, "quality checked", "Pass QC Check", "No orders in crafting");
+  renderCol(
+    containerProduction,
+    groupProduction,
+    "quality checked",
+    "Pass QC Check",
+    "No orders in crafting"
+  );
   renderCol(containerQC, groupQC, "shipped", "Dispatch Order", "No orders awaiting dispatch");
   renderCol(containerShipped, groupShipped, null, null, "No recently shipped orders");
 }
@@ -10373,7 +10844,8 @@ function updateAdminNavChatBadge() {
     unreadFilterBadge.textContent = String(totalUnread);
   }
   if (dashWidgetCount) {
-    dashWidgetCount.textContent = totalUnread > 0 ? `${countStr} Unread` : `${allChatSessions.length} Active`;
+    dashWidgetCount.textContent =
+      totalUnread > 0 ? `${countStr} Unread` : `${allChatSessions.length} Active`;
     dashWidgetCount.style.background = totalUnread > 0 ? "#fef2f2" : "#eff6ff";
     dashWidgetCount.style.color = totalUnread > 0 ? "#dc2626" : "#2563eb";
   }
@@ -10480,7 +10952,9 @@ function setupAdminLiveChat() {
       if (m) {
         const { mediaUrl, displayText } = parseChatMessageContent(m);
         const snippet = displayText || (mediaUrl ? "[Photo Attachment]" : "Message");
-        replySenderEl.textContent = m.senderName || (m.senderRole === "admin" || m.senderRole === "staff" ? "Lanica Workshop" : "Customer");
+        replySenderEl.textContent =
+          m.senderName ||
+          (m.senderRole === "admin" || m.senderRole === "staff" ? "Lanica Workshop" : "Customer");
         replySnippetEl.textContent = `"${snippet.slice(0, 65)}${snippet.length > 65 ? "..." : ""}"`;
         replyPreviewEl.style.display = "flex";
         if (chatInput) chatInput.focus();
@@ -10496,9 +10970,10 @@ function setupAdminLiveChat() {
 
   function renderAvatarHtml(photoURL, name, isSupport = false, size = 36) {
     const nameParts = (name || "Customer").trim().split(/\s+/);
-    const initials = nameParts.length > 1
-      ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-      : (nameParts[0].slice(0, 2)).toUpperCase();
+    const initials =
+      nameParts.length > 1
+        ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+        : nameParts[0].slice(0, 2).toUpperCase();
 
     const bg = isSupport ? "#fef3c7" : "#f1f5f9";
     const fg = isSupport ? "#92400e" : "#334155";
@@ -10506,7 +10981,12 @@ function setupAdminLiveChat() {
 
     const fallback = `<span style="display: ${photoURL ? "none" : "flex"}; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: ${Math.round(size * 0.38)}px; font-weight: 700; color: ${fg}; user-select: none;">${escapeHtml(initials)}</span>`;
 
-    if (photoURL && (photoURL.startsWith("http://") || photoURL.startsWith("https://") || photoURL.startsWith("data:"))) {
+    if (
+      photoURL &&
+      (photoURL.startsWith("http://") ||
+        photoURL.startsWith("https://") ||
+        photoURL.startsWith("data:"))
+    ) {
       return `
         <div style="width: ${size}px; height: ${size}px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: ${bg}; border: 1.5px solid ${border}; position: relative; display: flex; align-items: center; justify-content: center;">
           <img src="${escapeHtml(photoURL)}" alt="${escapeHtml(name)}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
@@ -10524,21 +11004,23 @@ function setupAdminLiveChat() {
 
   function setChatFilter(filter) {
     currentChatFilter = filter;
-    [filterAllBtn, filterUnreadBtn, filterSupportBtn, filterOrdersBtn, filterClosedBtn].forEach((btn) => {
-      if (!btn) return;
-      btn.classList.remove("active");
-      btn.removeAttribute("data-active");
-    });
+    [filterAllBtn, filterUnreadBtn, filterSupportBtn, filterOrdersBtn, filterClosedBtn].forEach(
+      (btn) => {
+        if (!btn) return;
+        btn.classList.remove("active");
+        btn.removeAttribute("data-active");
+      }
+    );
     const activeBtn =
       filter === "unread"
         ? filterUnreadBtn
         : filter === "support"
-        ? filterSupportBtn
-        : filter === "orders"
-        ? filterOrdersBtn
-        : filter === "closed"
-        ? filterClosedBtn
-        : filterAllBtn;
+          ? filterSupportBtn
+          : filter === "orders"
+            ? filterOrdersBtn
+            : filter === "closed"
+              ? filterClosedBtn
+              : filterAllBtn;
     if (activeBtn) {
       activeBtn.classList.add("active");
       activeBtn.setAttribute("data-active", "true");
@@ -10563,7 +11045,8 @@ function setupAdminLiveChat() {
     sessions.forEach((s) => {
       if (sessionMessageUnsubs.has(s.id)) return;
 
-      const isSupport = s.sessionType === "support" || s.isUserSupport || String(s.id).startsWith("user_");
+      const isSupport =
+        s.sessionType === "support" || s.isUserSupport || String(s.id).startsWith("user_");
       const cleanUid = s.userId || s.actualId || String(s.id).replace(/^user_/, "");
       const messagesColRef = isSupport
         ? collection(db, "users", cleanUid, "messages")
@@ -10577,9 +11060,7 @@ function setupAdminLiveChat() {
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
           const isFromStaff =
-            d.senderRole === "admin" ||
-            d.senderRole === "staff" ||
-            d.senderId === "support_admin";
+            d.senderRole === "admin" || d.senderRole === "staff" || d.senderId === "support_admin";
 
           // Unread by admin if sent by customer and isRead is false
           if (!isFromStaff && d.isRead === false) {
@@ -10711,12 +11192,12 @@ function setupAdminLiveChat() {
           currentChatFilter === "unread"
             ? "unread"
             : currentChatFilter === "support"
-            ? "general live support"
-            : currentChatFilter === "orders"
-            ? "order crafting"
-            : currentChatFilter === "closed"
-            ? "closed / archived"
-            : "active"
+              ? "general live support"
+              : currentChatFilter === "orders"
+                ? "order crafting"
+                : currentChatFilter === "closed"
+                  ? "closed / archived"
+                  : "active"
         } conversations found.</div>`;
       }
       return;
@@ -10851,9 +11332,10 @@ function setupAdminLiveChat() {
     if (chatInput) {
       chatInput.disabled = false;
       chatInput.style.background = "#ffffff";
-      chatInput.placeholder = session.isArchived || session.isClosed
-        ? "Type to send a message and unarchive this conversation..."
-        : "Type a message or WIP photo update...";
+      chatInput.placeholder =
+        session.isArchived || session.isClosed
+          ? "Type to send a message and unarchive this conversation..."
+          : "Type a message or WIP photo update...";
       chatInput.focus();
     }
     if (chatSubmitBtn) {
@@ -10864,7 +11346,12 @@ function setupAdminLiveChat() {
 
     // Header Avatar
     if (activeAvatarEl) {
-      activeAvatarEl.innerHTML = renderAvatarHtml(session.photoURL, session.customerName, isSupport, 40);
+      activeAvatarEl.innerHTML = renderAvatarHtml(
+        session.photoURL,
+        session.customerName,
+        isSupport,
+        40
+      );
     }
 
     // Configure Header Actions (Order, Messenger Dropdown Options)
@@ -10930,7 +11417,8 @@ function setupAdminLiveChat() {
           if (optionsDropdown) optionsDropdown.style.display = "none";
           const confirmed = await showConfirmModal({
             title: "Delete Conversation?",
-            message: "Are you sure you want to delete this entire conversation? All message history will be permanently deleted.",
+            message:
+              "Are you sure you want to delete this entire conversation? All message history will be permanently deleted.",
             confirmText: "Delete",
             cancelText: "Cancel",
             isDestructive: true,
@@ -10943,10 +11431,12 @@ function setupAdminLiveChat() {
               activeChatSessionId = null;
               if (chatWorkspaceEl) chatWorkspaceEl.classList.remove("mobile-chat-open");
               if (customerNameEl) customerNameEl.textContent = "Select a conversation";
-              if (customerEmailEl) customerEmailEl.textContent = "Choose a customer from the left panel to begin";
+              if (customerEmailEl)
+                customerEmailEl.textContent = "Choose a customer from the left panel to begin";
               if (activeAvatarEl) activeAvatarEl.innerHTML = "";
               if (chatHeaderActions) chatHeaderActions.style.display = "none";
-              if (messagesEl) messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.9rem;">Select a conversation from the left to start chatting.</div>`;
+              if (messagesEl)
+                messagesEl.innerHTML = `<div style="margin: auto; text-align: center; color: #9ca3af; font-size: 0.9rem;">Select a conversation from the left to start chatting.</div>`;
               if (chatInput) {
                 chatInput.disabled = true;
                 chatInput.placeholder = "Select a conversation to reply...";
@@ -11012,7 +11502,8 @@ function setupAdminLiveChat() {
       if (hiddenCount > 0) {
         const loadMoreBtn = document.createElement("div");
         loadMoreBtn.className = "chat-load-earlier-btn";
-        loadMoreBtn.style.cssText = "text-align: center; margin: 4px auto 12px auto; font-size: 0.78rem; color: #2563eb; cursor: pointer; padding: 6px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; font-weight: 600; width: fit-content; user-select: none; transition: all 0.15s ease;";
+        loadMoreBtn.style.cssText =
+          "text-align: center; margin: 4px auto 12px auto; font-size: 0.78rem; color: #2563eb; cursor: pointer; padding: 6px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; font-weight: 600; width: fit-content; user-select: none; transition: all 0.15s ease;";
         loadMoreBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>Load earlier messages (${hiddenCount} hidden)`;
         loadMoreBtn.addEventListener("click", () => {
           const oldScrollHeight = messagesEl.scrollHeight;
@@ -11030,22 +11521,22 @@ function setupAdminLiveChat() {
           m.senderRole === "bot" ||
           m.sender === "system" ||
           m.senderId === "system" ||
-          (typeof m.senderName === "string" && (m.senderName.toLowerCase().includes("system") || m.senderName.toLowerCase().includes("bot")));
+          (typeof m.senderName === "string" &&
+            (m.senderName.toLowerCase().includes("system") ||
+              m.senderName.toLowerCase().includes("bot")));
 
         const isStaff =
           !isSystem &&
-          (m.senderRole === "admin" ||
-           m.senderRole === "staff" ||
-           m.senderId === "support_admin");
+          (m.senderRole === "admin" || m.senderRole === "staff" || m.senderId === "support_admin");
 
         const row = document.createElement("div");
         row.className = `chat-message-row ${isSystem ? "is-system" : isStaff ? "is-staff" : "is-customer"}`;
 
         const senderLabel = isSystem
-          ? (m.senderName || "Lanica System")
+          ? m.senderName || "Lanica System"
           : isStaff
             ? "Lanica Workshop & Admin"
-            : (session.customerName || m.senderName || "Customer");
+            : session.customerName || m.senderName || "Customer";
 
         const timeVal = m.timestamp || m.createdAt;
         const timeStr = timeVal?.toDate
@@ -11062,19 +11553,20 @@ function setupAdminLiveChat() {
             : "";
 
         // Quoted Reply HTML
-        const quotedHtml = m.replyTo && m.replyTo.text
-          ? `
+        const quotedHtml =
+          m.replyTo && m.replyTo.text
+            ? `
             <div class="chat-quoted-box">
               <span class="chat-quoted-box-sender">Replying to ${escapeHtml(m.replyTo.senderName || "User")}</span>
               <span class="chat-quoted-box-text">${escapeHtml(m.replyTo.text)}</span>
             </div>
           `
-          : "";
+            : "";
 
         row.innerHTML = `
           ${avatarCol}
           <div class="chat-message-content-wrap">
-            <span style="font-size: 0.72rem; color: ${isSystem ? '#b45309' : '#6b7280'}; margin-bottom: 2px; font-weight: ${isSystem ? '700' : '500'};">
+            <span style="font-size: 0.72rem; color: ${isSystem ? "#b45309" : "#6b7280"}; margin-bottom: 2px; font-weight: ${isSystem ? "700" : "500"};">
               ${escapeHtml(senderLabel)} • ${timeStr}
             </span>
             <div class="chat-bubble-with-actions">
@@ -11088,7 +11580,7 @@ function setupAdminLiveChat() {
                   isSystem ? "#fde68a" : isStaff ? "#6b4423" : "#e5e7eb"
                 }; box-shadow: 0 1px 2px rgba(0,0,0,0.05); max-width: 100%;">
                   ${quotedHtml}
-                  ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? '8px' : '0'} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
+                  ${displayText ? `<p style="margin: 0 0 ${mediaUrl ? "8px" : "0"} 0; white-space: pre-wrap; word-break: break-word;">${escapeHtml(displayText)}</p>` : ""}
                   ${
                     mediaUrl
                       ? `<a href="${mediaUrl}" target="_blank" rel="noopener" style="display: block; border-radius: 8px; overflow: hidden; max-width: 280px; max-height: 280px; border: 1px solid rgba(0,0,0,0.08); background: #000; text-decoration: none;" title="Click to view full image">
@@ -11137,7 +11629,12 @@ function setupAdminLiveChat() {
                 unsendFor: result.unsendFor,
                 currentUserId: currentUser ? currentUser.uid : "admin",
               });
-              showToast(result.unsendFor === "everyone" ? "You unsent a message." : "Message removed for you.", "info");
+              showToast(
+                result.unsendFor === "everyone"
+                  ? "You unsent a message."
+                  : "Message removed for you.",
+                "info"
+              );
             } catch (err) {
               console.error("Unsend error:", err);
               showToast(err.message || "Could not unsend message.", "error");
@@ -11160,19 +11657,24 @@ function setupAdminLiveChat() {
       };
     }
 
-    activeChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
-      if (!messagesEl) return;
+    activeChatUnsubscribe = subscribeToMessages(
+      session.id,
+      (messages) => {
+        if (!messagesEl) return;
 
-      // Mark messages read in real time as they arrive while chat is open
-      markOrderMessagesAsRead(session.id, "admin", isSupport);
-      sessionUnreadCounts.set(session.id, 0);
-      updateAdminNavChatBadge();
+        // Mark messages read in real time as they arrive while chat is open
+        markOrderMessagesAsRead(session.id, "admin", isSupport);
+        sessionUnreadCounts.set(session.id, 0);
+        updateAdminNavChatBadge();
 
-      allLoadedMessages = messages;
-      renderMessageBatch();
+        allLoadedMessages = messages;
+        renderMessageBatch();
 
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }, null, isSupport);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      null,
+      isSupport
+    );
   }
 
   if (chatForm) {
@@ -11190,7 +11692,12 @@ function setupAdminLiveChat() {
       const replyPayload = activeReplyingMessage
         ? {
             id: activeReplyingMessage.id,
-            senderName: activeReplyingMessage.senderName || (activeReplyingMessage.senderRole === "admin" || activeReplyingMessage.senderRole === "staff" ? "Lanica Workshop" : "Customer"),
+            senderName:
+              activeReplyingMessage.senderName ||
+              (activeReplyingMessage.senderRole === "admin" ||
+              activeReplyingMessage.senderRole === "staff"
+                ? "Lanica Workshop"
+                : "Customer"),
             text: activeReplyingMessage.text || activeReplyingMessage.content || "[Photo]",
           }
         : null;
@@ -11209,7 +11716,7 @@ function setupAdminLiveChat() {
 
         await sendChatMessage({
           orderId: isSupport ? null : activeChatSessionId,
-          userId: isSupport ? (activeSession?.userId || activeSession?.actualId) : null,
+          userId: isSupport ? activeSession?.userId || activeSession?.actualId : null,
           sessionType: activeSession?.sessionType || "order",
           isUserSupport: isSupport,
           senderId: currentUser ? currentUser.uid : "support_admin",
@@ -11245,5 +11752,3 @@ window.addEventListener("hashchange", () => {
   const currentHash = (window.location.hash || "").replace("#", "").toLowerCase();
   showAdminSection(currentHash || "dashboard");
 });
-
-
