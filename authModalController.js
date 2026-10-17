@@ -1,3 +1,4 @@
+import { Validators } from "./validator.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 import {
@@ -259,6 +260,25 @@ export function initAuthModalController() {
       const errorBanner = document.getElementById("register-error-banner");
 
       if (errorBanner) errorBanner.style.display = "none";
+
+      // Pre-flight Format Validation
+      if (!Validators.isValidName(name)) {
+        if (errorBanner) {
+          errorBanner.textContent = "Please enter a valid full name (2-60 characters, letters only).";
+          errorBanner.style.display = "block";
+        }
+        showAuthToast("Invalid full name format.", "error");
+        return;
+      }
+
+      if (!Validators.isValidEmail(email)) {
+        if (errorBanner) {
+          errorBanner.textContent = "Please enter a valid email address (e.g. yourname@domain.com).";
+          errorBanner.style.display = "block";
+        }
+        showAuthToast("Invalid email address format.", "error");
+        return;
+      }
 
       // A. Confirm Password Check
       if (pass !== confirmPass) {

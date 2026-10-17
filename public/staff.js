@@ -1,3 +1,4 @@
+import { Validators, initGlobalInputGuards } from "./validator.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
 import {
   getFirestore,
@@ -5075,6 +5076,12 @@ if (applyDeliveryModalBtn) {
 
     if (!orderId || !selectedDate) {
       showToast("Please choose a valid target delivery date.", "warning");
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (selectedDate < todayStr) {
+      showToast("Target delivery date cannot be in the past.", "warning");
       return;
     }
 

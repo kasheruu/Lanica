@@ -1,3 +1,5 @@
+import { Validators, initGlobalInputGuards } from "./validator.js";
+initGlobalInputGuards();
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
 import {
   getFirestore,
@@ -2536,6 +2538,30 @@ productForm.addEventListener("submit", async (e) => {
     // 70% - 90%: Payload validation and database save
     updateSaveProgress(75, "Validating product details...");
 
+    const rawProdPrice = String(document.getElementById("product-price")?.value || "").replace(/,/g, "").trim();
+    if (!Validators.isValidCurrency(rawProdPrice, 10, 5000000)) {
+      showToast("Product price must be a valid positive amount between ₱10 and ₱5,000,000.", "warning");
+      submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
+      submitBtn.disabled = false;
+      cancelBtn.disabled = false;
+      closeModalBtn.disabled = false;
+      isSavingProduct = false;
+      hideSaveProgress();
+      return;
+    }
+
+    const rawProdStock = parseInt(document.getElementById("product-stock")?.value || "0", 10);
+    if (isNaN(rawProdStock) || rawProdStock < 0 || rawProdStock > 10000) {
+      showToast("Stock quantity must be a valid number between 0 and 10,000.", "warning");
+      submitBtn.textContent = isEditing ? "Update Product" : "Save Product";
+      submitBtn.disabled = false;
+      cancelBtn.disabled = false;
+      closeModalBtn.disabled = false;
+      isSavingProduct = false;
+      hideSaveProgress();
+      return;
+    }
+
     // Sync current DOM rows for bed sizes before saving
     const bedRows = document.querySelectorAll("#bed-sizes-repeater-list .bed-size-repeater-row");
     bedRows.forEach((row) => {
@@ -3081,24 +3107,24 @@ function renderBedSizesRepeater() {
     <div class="bed-size-repeater-row" data-index="${index}">
       <div class="bed-size-field-group bed-size-name-col">
         <label class="bed-size-field-sublabel">Size Name</label>
-        <input type="text" class="bed-size-input-name" placeholder="Size Name (e.g. Queen)" value="${escapeHtml(size.name || "")}" />
+        <input type="text" class="bed-size-input-name" placeholder="Size Name (e.g. Queen)" maxlength="60" value="${escapeHtml(size.name || "")}" />
       </div>
 
       <div class="bed-size-field-group bed-size-width-col">
         <label class="bed-size-field-sublabel">Width (<span class="bed-size-unit-indicator">${escapeHtml(currentUnit)}</span>)</label>
-        <input type="number" class="bed-size-input-width" placeholder="Width" min="0.01" step="any" value="${w != null ? w : ""}" />
+        <input type="number" class="bed-size-input-width" placeholder="Width" min="0.01" max="1500" step="any" maxlength="6" value="${w != null ? w : ""}" />
       </div>
 
       <div class="bed-size-field-group bed-size-length-col">
         <label class="bed-size-field-sublabel">Length (<span class="bed-size-unit-indicator">${escapeHtml(currentUnit)}</span>)</label>
-        <input type="number" class="bed-size-input-length" placeholder="Length" min="0.01" step="any" value="${l != null ? l : ""}" />
+        <input type="number" class="bed-size-input-length" placeholder="Length" min="0.01" max="1500" step="any" maxlength="6" value="${l != null ? l : ""}" />
       </div>
 
       <div class="bed-size-field-group bed-size-price-col">
         <label class="bed-size-field-sublabel">Price Delta</label>
         <div class="bed-size-price-input-wrapper">
           <span class="bed-size-price-prefix">+₱</span>
-          <input type="number" class="bed-size-input-price" placeholder="Delta Price" min="0" step="any" value="${size.priceDelta != null ? size.priceDelta : 0}" style="border: none !important; outline: none !important; box-shadow: none !important; background: transparent !important; padding: 0 4px !important; margin: 0 !important; border-radius: 0 !important; width: 100% !important; height: 100% !important; min-width: 0 !important;" />
+          <input type="number" class="bed-size-input-price" placeholder="Delta Price" min="0" max="500000" step="any" maxlength="7" value="${size.priceDelta != null ? size.priceDelta : 0}" style="border: none !important; outline: none !important; box-shadow: none !important; background: transparent !important; padding: 0 4px !important; margin: 0 !important; border-radius: 0 !important; width: 100% !important; height: 100% !important; min-width: 0 !important;" />
         </div>
       </div>
 
@@ -3254,11 +3280,11 @@ function renderAddonsRepeater() {
       const isActive = addon.active !== false;
       return `
     <div class="addon-repeater-row" data-index="${index}" style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px 10px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
-      <input type="text" class="addon-input-name" placeholder="Upgrade Name (e.g. Throw Pillows)" value="${escapeHtml(addon.name || "")}" style="flex: 2; height: 38px; padding: 0 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" />
+      <input type="text" class="addon-input-name" placeholder="Upgrade Name (e.g. Throw Pillows)" value="${escapeHtml(addon.name || "")}" maxlength="60" style="flex: 2; height: 38px; padding: 0 12px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" />
 
       <div style="display: flex; align-items: center; gap: 6px; flex: 1.2; height: 38px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; box-sizing: border-box;">
         <span style="font-size: 0.85rem; font-weight: 700; color: #64748b; line-height: 1;">₱</span>
-        <input type="number" class="addon-input-price" placeholder="Price" min="0" step="any" value="${addon.price != null ? addon.price : ""}" style="width: 100%; height: 100%; font-size: 0.85rem; font-weight: 600; border: none; background: transparent; outline: none; margin: 0; padding: 0;" />
+        <input type="number" class="addon-input-price" placeholder="Price" min="0" max="500000" step="any" maxlength="7" value="${addon.price != null ? addon.price : ""}" style="width: 100%; height: 100%; font-size: 0.85rem; font-weight: 600; border: none; background: transparent; outline: none; margin: 0; padding: 0;" />
       </div>
 
       <button type="button" class="btn-toggle-addon-status" data-index="${index}" title="Click to toggle Active/Inactive" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; user-select: none; box-sizing: border-box; transition: all 0.2s; ${
@@ -8097,6 +8123,16 @@ function setupUserManagementControls() {
       const roleSelectEl = document.getElementById("role-modal-select");
       const newRole = roleSelectEl ? roleSelectEl.value : targetUser?.role || "staff";
 
+      if (!Validators.isValidRole(newRole)) {
+        showToast("Invalid role selected. Must be customer, staff, or admin.", "error");
+        return;
+      }
+
+      if (currentUser && currentUser.uid === docId && newRole !== "admin") {
+        showToast("Action blocked: You cannot demote your own administrator account.", "warning");
+        return;
+      }
+
       const statusSelectEl = document.getElementById("role-modal-status-select");
       const newStatus = statusSelectEl ? statusSelectEl.value : targetUser?.status || "active";
 
@@ -9963,6 +9999,12 @@ if (applyAdminDeliveryModalBtn) {
 
     if (!orderId || !selectedDate) {
       showToast("Please choose a valid target delivery date.", "warning");
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (selectedDate < todayStr) {
+      showToast("Delivery target date cannot be in the past.", "warning");
       return;
     }
 

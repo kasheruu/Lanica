@@ -333,12 +333,12 @@
 
           <div>
             <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Recipient Name</label>
-            <input type="text" id="addr-recipient" class="auth-input-field" placeholder="HEIDI AMATORIO" required maxlength="60" />
+            <input type="text" id="addr-recipient" class="auth-input-field" placeholder="HEIDI AMATORIO" required maxlength="60" pattern="[A-Za-zÀ-ÿ\s.\'-]{2,60}" title="Recipient name can only contain letters, spaces, hyphens, and apostrophes" />
           </div>
 
           <div>
             <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Contact Phone Number</label>
-            <input type="tel" id="addr-phone" class="auth-input-field" placeholder="+639282326967" required maxlength="16" />
+            <input type="tel" id="addr-phone" class="auth-input-field" placeholder="0917XXXXXXX or +63917XXXXXXX" required maxlength="13" inputmode="tel" pattern="(\+639|09)[0-9]{9}" title="Enter an 11-digit (09XXXXXXXXX) or 13-char (+639XXXXXXXXX) PH mobile number" />
           </div>
 
           <div>
@@ -349,17 +349,17 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <div>
               <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">City / Municipality</label>
-              <input type="text" id="addr-city" class="auth-input-field" placeholder="Calamba" required maxlength="50" />
+              <input type="text" id="addr-city" class="auth-input-field" placeholder="Calamba" required maxlength="50" pattern="[A-Za-zÀ-ÿ\s.\'-]{2,50}" title="City name should only contain letters and spaces" />
             </div>
             <div>
               <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Province</label>
-              <input type="text" id="addr-province" class="auth-input-field" placeholder="Laguna" required maxlength="50" />
+              <input type="text" id="addr-province" class="auth-input-field" placeholder="Laguna" required maxlength="50" pattern="[A-Za-zÀ-ÿ\s.\'-]{2,50}" title="Province name should only contain letters and spaces" />
             </div>
           </div>
 
           <div>
             <label style="font-size: 0.82rem; font-weight: 700; color: #374151;">Zip Code</label>
-            <input type="text" id="addr-zip" class="auth-input-field" placeholder="4027" required maxlength="10" />
+            <input type="text" id="addr-zip" class="auth-input-field" placeholder="4027" required maxlength="4" pattern="[1-9][0-9]{3}" title="Please enter a 4-digit Philippine postal code (e.g. 4027)" />
           </div>
 
           <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
@@ -414,7 +414,7 @@
                 </div>
                 <div style="flex: 1;">
                   <label class="field-label-small">Full Name</label>
-                  <input type="text" id="edit-full-name" class="field-input-clean" placeholder="HEIDI AMATORIO" required maxlength="60" />
+                  <input type="text" id="edit-full-name" class="field-input-clean" placeholder="HEIDI AMATORIO" required maxlength="60" pattern="[A-Za-zÀ-ÿ\s.\'-]{2,60}" title="Full name can only contain letters, spaces, hyphens, and apostrophes" />
                 </div>
               </div>
 
@@ -430,7 +430,7 @@
                 </div>
                 <div style="flex: 1;">
                   <label class="field-label-small">Phone Number</label>
-                  <input type="tel" id="edit-phone-number" class="field-input-clean" placeholder="+639282826967" maxlength="16" />
+                  <input type="tel" id="edit-phone-number" class="field-input-clean" placeholder="0917XXXXXXX or +63917XXXXXXX" maxlength="13" inputmode="tel" pattern="(\+639|09)[0-9]{9}" title="Enter an 11-digit (09XXXXXXXXX) or 13-char (+639XXXXXXXXX) PH mobile number" />
                 </div>
               </div>
             </div>
@@ -625,7 +625,7 @@
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                     <circle cx="12" cy="7" r="4"></circle>
                   </svg>
-                  <input type="text" id="reg-name" class="auth-input-field" required placeholder="Juan Dela Cruz" autocomplete="name" maxlength="60" />
+                  <input type="text" id="reg-name" class="auth-input-field" required placeholder="Juan Dela Cruz" autocomplete="name" maxlength="60" pattern="[A-Za-zÀ-ÿ\s.\'-]{2,60}" title="Name can only contain letters, spaces, hyphens, and apostrophes" />
                 </div>
               </div>
 

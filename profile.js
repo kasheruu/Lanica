@@ -1,3 +1,5 @@
+import { Validators, initGlobalInputGuards } from "./validator.js";
+initGlobalInputGuards();
 /**
  * Lanica E-Commerce Profile & Account Hub Logic
  * Real-time Firestore sync, image upload for profile avatar, address CRUD, FAQs & Bug Reports
@@ -345,13 +347,26 @@ function setupAddressModal() {
       const zipCode = document.getElementById("addr-zip").value;
       const isDefault = document.getElementById("addr-is-default").checked;
 
+      if (!Validators.isValidName(recipientName)) {
+        showToast("Please enter a valid recipient name (2-60 letters, no special characters).", "warning");
+        return;
+      }
+      if (!Validators.isPhilippinePhone(phoneNumber)) {
+        showToast("Please enter a valid Philippine mobile number (e.g. 09XXXXXXXXX or +639XXXXXXXXX).", "warning");
+        return;
+      }
+      if (!Validators.isPhilippinePostalCode(zipCode)) {
+        showToast("Please enter a valid 4-digit Philippine postal code (e.g. 4027).", "warning");
+        return;
+      }
+
       const payload = {
-        label: label.trim(),
-        recipientName: recipientName.trim(),
-        phoneNumber: phoneNumber.trim(),
-        streetAddress: streetAddress.trim(),
-        city: city.trim(),
-        province: province.trim(),
+        label: Validators.sanitizeText(label, 30) || "HOME",
+        recipientName: Validators.sanitizeText(recipientName, 60),
+        phoneNumber: Validators.normalizePhilippinePhone(phoneNumber) || phoneNumber.trim(),
+        streetAddress: Validators.sanitizeText(streetAddress, 150),
+        city: Validators.sanitizeText(city, 60),
+        province: Validators.sanitizeText(province, 60),
         zipCode: zipCode.trim(),
         isDefault,
         createdAt: serverTimestamp(),
@@ -514,6 +529,15 @@ function setupEditProfileModal() {
 
       const fullName = document.getElementById("edit-full-name").value.trim();
       const phoneNumber = document.getElementById("edit-phone-number").value.trim();
+
+      if (!Validators.isValidName(fullName)) {
+        showToast("Please enter a valid full name (2-60 letters, no special symbols).", "warning");
+        return;
+      }
+      if (phoneNumber && !Validators.isPhilippinePhone(phoneNumber)) {
+        showToast("Please enter a valid Philippine mobile number (e.g. 09XXXXXXXXX or +639XXXXXXXXX).", "warning");
+        return;
+      }
 
       const submitBtn = form.querySelector("button[type='submit']");
       if (submitBtn) {

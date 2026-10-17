@@ -8,48 +8,79 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Check if user is not trying to change their own role
+    // Retrieve active user role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUserRole() == 'admin';
+    }
+
+    function isStaff() {
+      return isSignedIn() && (getUserRole() == 'staff' || getUserRole() == 'admin');
+    }
+
+    // Check if user is not trying to change their own role or permissions
     function isNotChangingRole() {
-      return !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      return !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']));
     }
 
     // --- 1) PRODUCTS ---
     match /products/{productId} {
       allow read: if true;
 
-      // Admins have full control - can create, delete, update anything
-      allow create, delete, update: if isSignedIn();
+      // Only authenticated Staff & Admins can create or update products with valid attributes
+      allow create, update: if isStaff() &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() >= 2 &&
+        request.resource.data.name.size() <= 120 &&
+        request.resource.data.price is number &&
+        request.resource.data.price >= 0 &&
+        request.resource.data.stock is number &&
+        request.resource.data.stock >= 0;
 
-      // Future: Implement role-based restrictions at application level
-      // For now, trust authenticated users since client-side handles role validation
+      // Only Admins can delete catalog products
+      allow delete: if isAdmin();
     }
 
     // --- 2) USERS & USER CHAT SUBCOLLECTIONS ---
     match /users/{userId} {
-      // Allow authenticated users to read user profiles
       allow read: if isSignedIn();
 
-      // Users can update their own profile (except role changes), admins/staff can update profiles/chat metadata
-      allow update: if isSignedIn() && (request.auth.uid == userId ? isNotChangingRole() : true);
+      // Users can update their own profile (cannot elevate role/permissions)
+      // Admins can update any profile including roles & permissions
+      allow update: if isSignedIn() && (isAdmin() || (request.auth.uid == userId && isNotChangingRole()));
 
-      // Admins and authenticated users can create user profiles
+      // Profile creation
       allow create: if isSignedIn();
 
-      // Allow authenticated users (customers, admins, staff) to read & write all subcollections (messages, addresses, favorites, notifications, cart, history)
+      // User subcollections (cart, addresses, favorites, notifications, messages)
       match /{allSubcollections=**} {
-        allow read, write: if isSignedIn();
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isStaff());
       }
     }
 
     // --- 3) ORDERS & ORDER CHAT SUBCOLLECTIONS ---
     match /orders/{orderId} {
-      // Allow authenticated users to read orders
       allow read: if isSignedIn();
 
-      // Allow authenticated users to create, update, or delete orders
-      allow create, update, delete: if isSignedIn();
+      // Order creation: Must be signed in, total amount must be non-negative number
+      allow create: if isSignedIn() &&
+        request.resource.data.totalAmount is number &&
+        request.resource.data.totalAmount >= 0;
 
-      // Allow authenticated users (customers, admins, staff) to read & write order messages subcollections
+      // Order update: Staff/Admin can update, or customer can update orderReceived/ratings on their own order
+      allow update: if isSignedIn() && (
+        isStaff() || 
+        (resource.data.userId == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'orderStatus', 'orderReceived', 'orderReceivedAt', 'completedAt', 'updatedAt', 'rating', 'feedback', 'proofUrl', 'paymentProofUrl']))
+      );
+
+      // Only Admins can permanently delete orders
+      allow delete: if isAdmin();
+
+      // Order chat messages subcollection
       match /{allSubcollections=**} {
         allow read, write: if isSignedIn();
       }
@@ -62,39 +93,26 @@ service cloud.firestore {
 
     // --- 4) VERIFICATION COLLECTIONS ---
     match /profile_verifications/{userId} {
-      // Users can create and read their own verification records
-      allow create, read: if isSignedIn() && request.auth.uid == userId;
-      // Users can update their own verification records
-      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow create, read, update: if isSignedIn() && (request.auth.uid == userId || isStaff());
     }
 
     match /photo_verifications/{userId} {
-      // Users can create and read their own verification records
-      allow create, read: if isSignedIn() && request.auth.uid == userId;
-      // Users can update their own verification records
-      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow create, read, update: if isSignedIn() && (request.auth.uid == userId || isStaff());
     }
 
     // --- 5) VERIFICATION CODES ---
     match /verification_codes/{codeId} {
-      // Users can create their own verification codes
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
-      // Users can read their own verification codes
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      // Users can update their own verification codes
       allow update: if isSignedIn() && request.auth.uid == request.resource.data.userId;
-      // Users can delete their own verification codes
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
 
     // --- 6) AUDIT LOGS ---
     match /audit_logs/{logId} {
-      // Users can create their own audit logs (allow any authenticated user to create logs)
       allow create: if isSignedIn();
-      // Admins can read all audit logs
-      allow read: if isSignedIn();
-      // Admins can update audit logs
-      allow update: if isSignedIn();
+      allow read: if isStaff();
+      allow update, delete: if isAdmin();
     }
   }
 }

@@ -1,3 +1,4 @@
+import { Validators, initGlobalInputGuards } from "./validator.js";
 import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
 import {
   getAuth,

@@ -1,3 +1,4 @@
+import { Validators } from "./validator.js";
 import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
 import {
   getAuth,
@@ -244,10 +245,12 @@ export async function updateCartItemQuantity(userId, itemId, newQuantity) {
   if (!userId || !itemId) return;
   const itemRef = doc(db, "users", userId, "cart", itemId);
 
-  if (newQuantity <= 0) {
+  const parsedQty = parseInt(newQuantity, 10);
+  if (isNaN(parsedQty) || parsedQty <= 0) {
     await deleteDoc(itemRef);
     return;
   }
+  const safeQuantity = Math.min(30, Math.max(1, parsedQty));
 
   const snap = await getDoc(itemRef);
   if (!snap.exists()) return;
@@ -334,6 +337,9 @@ export async function placeOrderAtomic({
   if (!userId) throw new Error("User ID is required to place an order.");
   if (!cartItems || cartItems.length === 0) throw new Error("Cart is empty.");
   if (!address || !address.fullAddress) throw new Error("Delivery address is required.");
+  if (address.phoneNumber && !Validators.isPhilippinePhone(address.phoneNumber)) {
+    throw new Error("Invalid Philippine mobile number (e.g. 0917XXXXXXX or +63917XXXXXXX).");
+  }
 
   const orderId = customOrderId || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const orderRef = doc(db, "orders", orderId);
@@ -430,9 +436,21 @@ export async function placeOrderAtomic({
       paymentType = "qr_code";
     }
 
+    // Server/Service Authority: Recalculate official totals from catalog documents to prevent client-side pricing tampering
+    let authoritativeItemsSubtotal = 0;
+    for (const item of cartItems) {
+      const pData = productDataMap[item.productId] || {};
+      const catalogPrice = Number(pData.price || 0);
+      const reqQty = Math.max(1, Math.min(30, parseInt(item.quantity, 10) || 1));
+      authoritativeItemsSubtotal += catalogPrice * reqQty;
+    }
+
+    const deliveryFee = Number(address.shippingCost ?? address.deliveryFee ?? 1000);
+    const authoritativeTotal = Math.max(0, authoritativeItemsSubtotal + deliveryFee);
+
     const isWalkInCash = paymentType === "walk_in_cash" || paymentMethod === "walk_in_cash";
     const isDownpayment = paymentOption === "downpayment" || isWalkInCash;
-    const parsedTotal = Number(totalAmount);
+    const parsedTotal = authoritativeTotal > 0 ? authoritativeTotal : Math.max(0, Number(totalAmount) || 0);
     const downpaymentRequired = Math.round(parsedTotal * 0.30);
     const downpaymentAmount = isDownpayment ? downpaymentRequired : parsedTotal;
     const remainingBalance = isDownpayment ? Math.max(0, parsedTotal - downpaymentAmount) : 0;

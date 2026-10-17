@@ -1,3 +1,4 @@
+import { Validators, initGlobalInputGuards } from "./validator.js";
 import {
   signOut,
   onAuthStateChanged,
