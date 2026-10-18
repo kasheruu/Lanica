@@ -41,7 +41,18 @@ export async function recordAuditLog({
     const displayName = user
       ? (user.displayName || user.name || (user.email ? user.email.split("@")[0] : "Admin Staff"))
       : "System Automated";
-    const role = (user && user.role) ? user.role : (user && user.uid ? "admin" : "system");
+    let detectedRole = (user && user.role) ? user.role : null;
+    if (!detectedRole && typeof window !== "undefined") {
+      const path = (window.location.pathname || "").toLowerCase();
+      if (path.includes("staff")) {
+        detectedRole = "staff";
+      } else if (path.includes("admin")) {
+        detectedRole = "admin";
+      } else {
+        detectedRole = sessionStorage.getItem("userRole") || (user && user.uid ? "staff" : "system");
+      }
+    }
+    const role = detectedRole || (user && user.uid ? "staff" : "system");
 
     const clientDateString = new Date().toLocaleString("en-PH", {
       timeZone: "Asia/Manila",

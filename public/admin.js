@@ -3966,6 +3966,7 @@ function renderCategoryDonutChart(products) {
   const circumference = 2 * Math.PI * radius;
 
   let svgPaths = `<svg viewBox="0 0 ${size} ${size}">`;
+  svgPaths += `<g transform="rotate(-90 ${center} ${center})">`;
 
   entries.forEach(([cat, count], idx) => {
     const percent = count / total;
@@ -3987,6 +3988,7 @@ function renderCategoryDonutChart(products) {
     cumulativePercent += percent;
   });
 
+  svgPaths += `</g>`;
   svgPaths += `<text x="50%" y="46%" text-anchor="middle" dominant-baseline="central" font-size="20" font-weight="bold" fill="#111827">${total}</text>`;
   svgPaths += `<text x="50%" y="60%" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500" fill="#6b7280">Products</text>`;
   svgPaths += `</svg>`;
@@ -7511,8 +7513,71 @@ async function renderAuditLogsSection() {
     });
   }
 
+  if (!allUsers || allUsers.length === 0) {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      allUsers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn("Could not load users for audit log role resolution:", e);
+    }
+  }
+
   allAuditLogsData = await fetchAuditLogs(300);
   applyAuditLogsFilters();
+}
+
+function resolveAuditLogRole(log) {
+  if (!log) return "staff";
+
+  const logUid = log.performedBy?.uid || log.userId;
+  const logEmail = (log.performedBy?.email || log.userEmail || "").toLowerCase().trim();
+
+  // 1. Dynamic lookup against active users list by UID or Email
+  if (Array.isArray(allUsers) && allUsers.length > 0) {
+    const matched = allUsers.find(
+      (u) =>
+        (logUid && (u.uid === logUid || u.id === logUid)) ||
+        (logEmail && (u.email || "").toLowerCase().trim() === logEmail)
+    );
+    if (matched && matched.role) {
+      return String(matched.role).toLowerCase().trim();
+    }
+  }
+
+  // 2. Check description/action for explicit staff or system context
+  const desc = (log.description || log.details || "").toLowerCase().trim();
+  if (
+    desc.startsWith("staff ") ||
+    desc.includes("staff updated") ||
+    desc.includes("staff confirmed") ||
+    desc.includes("staff assigned")
+  ) {
+    return "staff";
+  }
+  if (
+    desc.startsWith("system ") ||
+    desc.includes("system automated") ||
+    logUid === "system" ||
+    logEmail === "system"
+  ) {
+    return "system";
+  }
+
+  // 3. Check staffMembers if populated
+  if (Array.isArray(staffMembers) && staffMembers.length > 0) {
+    const staffMatch = staffMembers.find(
+      (s) =>
+        (logUid && (s.uid === logUid || s.id === logUid)) ||
+        (logEmail && (s.email || "").toLowerCase().trim() === logEmail)
+    );
+    if (staffMatch && staffMatch.role) {
+      return String(staffMatch.role).toLowerCase().trim();
+    }
+  }
+
+  // 4. Fallback to logged role
+  const recordedRole = (log.performedBy?.role || log.userRole || "").toLowerCase().trim();
+  return recordedRole || "staff";
 }
 
 function applyAuditLogsFilters() {
@@ -7523,7 +7588,7 @@ function applyAuditLogsFilters() {
   const actionVal = document.getElementById("audit-log-action-filter")?.value || "all";
 
   let filtered = allAuditLogsData.filter((log) => {
-    const logRole = (log.performedBy?.role || log.userRole || "").toLowerCase();
+    const logRole = resolveAuditLogRole(log);
     if (roleVal !== "all" && logRole !== roleVal) return false;
 
     const logAction = (log.action || log.actionType || "").toUpperCase();
@@ -7580,7 +7645,7 @@ function applyAuditLogsFilters() {
       email: log.userEmail || "",
       role: log.userRole || "staff",
     };
-    const roleName = String(who.role || "staff").toUpperCase();
+    const roleName = resolveAuditLogRole(log).toUpperCase();
     let roleBg = "#f3f4f6";
     let roleColor = "#4b5563";
     if (roleName === "ADMIN") {
@@ -8828,6 +8893,9 @@ function startAdminRealtimeListeners(user) {
             .filter((u) => !!u.uid);
           applyUsersFilter();
           applyOrdersFilter();
+          if (allAuditLogsData && allAuditLogsData.length > 0) {
+            applyAuditLogsFilters();
+          }
         },
         (err) => {
           console.warn("Could not load users directory (will retry):", err);

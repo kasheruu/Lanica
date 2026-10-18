@@ -374,7 +374,7 @@ async function loadProductsCatalog() {
                   )
                   .join("")}
               </div>
-              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D / AR">
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" data-materials="${escapeHtml(JSON.stringify(extractProductMaterials(product)))}" title="View in 3D / AR">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 <span>3D</span>
               </button>
@@ -386,7 +386,7 @@ async function loadProductsCatalog() {
           : `
             <div class="product-image-container">
               <img src="${thumbnails[0]}" alt="${escapeHtml(product.name)}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/product_sofa.png'">
-              <button class="btn-ar-view" data-product-id="${docSnap.id}" title="View in 3D / AR">
+              <button class="btn-ar-view" data-product-id="${docSnap.id}" data-materials="${escapeHtml(JSON.stringify(extractProductMaterials(product)))}" title="View in 3D / AR">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 <span>3D</span>
               </button>
@@ -1830,6 +1830,39 @@ function initAnimations() {
   bindARButtons();
 }
 
+// Extract product materials helper
+function extractProductMaterials(data) {
+  if (!data) return [];
+  let mats = [];
+  if (Array.isArray(data.materials) && data.materials.length > 0) {
+    mats = data.materials.map((m) => String(m).trim()).filter(Boolean);
+  } else if (typeof data.material === "string" && data.material.trim()) {
+    mats = data.material.split(/[\n,]+/).map((m) => m.trim()).filter(Boolean);
+  }
+  return mats;
+}
+
+function render3DMaterialsListHTML(materials) {
+  const checkSvg = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+  const items = Array.isArray(materials) && materials.length > 0
+    ? materials
+    : [
+        "Pure Goodlumber Wood Frame (Kiln-Dried)",
+        "Pure 4-Inch High-Density Uratex Foam",
+        "Anti-Anay at Bukbok Treated",
+        "Plush Heavy-Duty Premium Fabric"
+      ];
+
+  return items.map((m) => `
+    <div class="pdp-check-item" style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.84rem; color: #334155; line-height: 1.4;">
+      <span class="pdp-check-icon" style="width: 18px; height: 18px; min-width: 18px; border-radius: 50%; background: #dcfce7; color: #15803d; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">
+        ${checkSvg}
+      </span>
+      <span style="font-weight: 500;">${escapeHtml(m)}</span>
+    </div>
+  `).join("");
+}
+
 // AR Buttons 3D Viewer binding
 function bindARButtons() {
   const arButtons = document.querySelectorAll(".btn-ar-view");
@@ -1847,13 +1880,19 @@ function bindARButtons() {
       const productImage = productCard?.querySelector(".product-img")?.src || "";
       const productId = newBtn.getAttribute("data-product-id");
 
-      await show3DModelViewer(productName, productImage, productId, newBtn, originalText);
+      let initialMaterials = [];
+      const matAttr = newBtn.getAttribute("data-materials");
+      if (matAttr) {
+        try { initialMaterials = JSON.parse(matAttr); } catch (_) {}
+      }
+
+      await show3DModelViewer(productName, productImage, productId, newBtn, originalText, initialMaterials);
     });
   });
 }
 
 // Show 3D Model Viewer Modal with Admin Parity (Progress & Meshy Polling)
-async function show3DModelViewer(productName, productImage, productId, button, originalButtonText) {
+async function show3DModelViewer(productName, productImage, productId, button, originalButtonText, initialMaterials = []) {
   let pollTimer = null;
 
   const modalOverlay = document.createElement("div");
@@ -1889,14 +1928,31 @@ async function show3DModelViewer(productName, productImage, productId, button, o
               loading="eager"
               ar
               ar-modes="webxr scene-viewer quick-look"
-              alt="${productName} 3D Model">
+              alt="${escapeHtml(productName)} 3D Model">
             </model-viewer>
           </div>
         </div>
         <div class="model-viewer-info">
           <div class="product-details">
-            <h4>${productName}</h4>
+            <h4>${escapeHtml(productName)}</h4>
             <p id="pv-3d-desc">Experience this furniture piece in 3D. Rotate to view from different angles and zoom to inspect details.</p>
+
+            <div class="model-viewer-materials-section" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                <span style="width: 24px; height: 24px; border-radius: 6px; background: #fef3c7; color: #b45309; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2l9 4.9V17L12 22l-9-4.9V7z"/>
+                    <path d="M12 12L3 7"/>
+                    <path d="M12 12l9-5"/>
+                    <path d="M12 12v10"/>
+                  </svg>
+                </span>
+                <h5 style="margin: 0; font-size: 0.88rem; font-weight: 700; color: #1e293b; letter-spacing: 0.02em; text-transform: uppercase;">Materials &amp; Quality</h5>
+              </div>
+              <div id="pv-3d-materials-list" style="display: flex; flex-direction: column; gap: 8px;">
+                ${render3DMaterialsListHTML(initialMaterials)}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2017,6 +2073,13 @@ async function show3DModelViewer(productName, productImage, productId, button, o
     }
 
     const pData = productDoc.data();
+    const fetchedMaterials = extractProductMaterials(pData);
+    if (fetchedMaterials.length > 0) {
+      const matListEl = modalOverlay.querySelector("#pv-3d-materials-list");
+      if (matListEl) {
+        matListEl.innerHTML = render3DMaterialsListHTML(fetchedMaterials);
+      }
+    }
     const modelUrl =
       pData.modelUrl || pData.glbUrl || pData.model_url || pData.arModelUrl || pData.usdzUrl;
     currentRawModelUrl = modelUrl;

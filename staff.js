@@ -747,6 +747,13 @@ async function logStaffAction(action, details, success = true) {
       success: success,
       timestamp: Timestamp.now(),
       userAgent: navigator.userAgent,
+      userRole: "staff",
+      performedBy: {
+        uid: currentUser.uid,
+        email: currentUser.email,
+        displayName: currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "Staff Member"),
+        role: "staff",
+      },
       sessionId: currentUser.uid + "_" + Date.now(),
     });
     console.log(`Audit log: ${action} - ${success ? "SUCCESS" : "FAILED"}`);
@@ -3663,6 +3670,10 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   currentUser = user;
+  currentUser.role = "staff";
+  try {
+    sessionStorage.setItem("userRole", "staff");
+  } catch (_) {}
 
   try {
     await reload(user);
