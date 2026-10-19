@@ -329,7 +329,7 @@ export async function placeOrderAtomic({
   totalAmount,
   paymentMethod,
   address,
-  paymentOption = "full", // "full" or "downpayment" (50% deposit)
+  paymentOption = "full", // "full" or "downpayment" (30% deposit)
   customNotes = "",
   paymentDetails = {},
   orderId: customOrderId = null,
@@ -344,77 +344,62 @@ export async function placeOrderAtomic({
   const orderId = customOrderId || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const orderRef = doc(db, "orders", orderId);
 
+  // Fetch cart documents to purge before entering transaction
+  const cartRef = collection(db, "users", userId, "cart");
+  let cartDocs = [];
+  try {
+    const cartSnap = await getDocs(cartRef);
+    cartDocs = cartSnap.docs || [];
+  } catch (cartErr) {
+    console.warn("Could not pre-fetch cart items for purge:", cartErr);
+  }
+
   await runTransaction(db, async (transaction) => {
-    const productUpdates = [];
     const productDataMap = {};
     let hasMadeToOrderItems = false;
 
+    // Validate products from catalog
     for (const item of cartItems) {
+      if (!item.productId) continue;
       const productRef = doc(db, "products", item.productId);
       const productSnap = await transaction.get(productRef);
 
-      if (!productSnap.exists()) {
-        throw new Error(`Product "${item.name}" is no longer listed in catalog.`);
+      if (productSnap.exists()) {
+        const pData = productSnap.data();
+        productDataMap[item.productId] = pData;
+        const mat = (item.material || "Fabric").toLowerCase();
+        const reqQty = Number(item.quantity || 1);
+
+        let available;
+        if (mat === "fabric" && typeof pData.FabricStocks === "number") {
+          available = pData.FabricStocks;
+        } else if (mat === "leather" && typeof pData.LeatherStocks === "number") {
+          available = pData.LeatherStocks;
+        } else {
+          available = typeof pData.stock === "number" ? pData.stock : 0;
+        }
+
+        const allowsPreorder = pData.allowPreorder !== false && pData.isMadeToOrder !== false;
+        if (available <= 0 && !allowsPreorder) {
+          throw new Error(`Product "${item.name}" is currently out of stock and pre-orders are disabled.`);
+        }
+
+        if (available <= 0 || reqQty > available) {
+          hasMadeToOrderItems = true;
+        }
       }
-
-      const pData = productSnap.data();
-      productDataMap[item.productId] = pData;
-      const mat = (item.material || "Fabric").toLowerCase();
-      const reqQty = Number(item.quantity || 1);
-
-      let available;
-      if (mat === "fabric" && typeof pData.FabricStocks === "number") {
-        available = pData.FabricStocks;
-      } else if (mat === "leather" && typeof pData.LeatherStocks === "number") {
-        available = pData.LeatherStocks;
-      } else {
-        available = typeof pData.stock === "number" ? pData.stock : 0;
-      }
-
-      const allowsPreorder = pData.allowPreorder !== false && pData.isMadeToOrder !== false;
-      if (available <= 0 && !allowsPreorder) {
-        throw new Error(`Product "${item.name}" is currently out of stock and pre-orders are disabled.`);
-      }
-
-      if (available <= 0 || reqQty > available) {
-        hasMadeToOrderItems = true;
-      }
-
-      // If physical stock is available, decrement up to available amount; otherwise keep at 0
-      const currentGeneralStock = typeof pData.stock === "number" ? pData.stock : 0;
-      const newGeneralStock = Math.max(0, currentGeneralStock - reqQty);
-
-      const updatePayload = {
-        stock: newGeneralStock,
-      };
-
-      if (mat === "fabric" && typeof pData.FabricStocks === "number") {
-        updatePayload.FabricStocks = Math.max(0, pData.FabricStocks - reqQty);
-      }
-      if (mat === "leather" && typeof pData.LeatherStocks === "number") {
-        updatePayload.LeatherStocks = Math.max(0, pData.LeatherStocks - reqQty);
-      }
-
-      productUpdates.push({ ref: productRef, updates: updatePayload });
-    }
-
-    // Read cart docs to purge inside transaction
-    const cartRef = collection(db, "users", userId, "cart");
-    const cartSnap = await getDocs(cartRef);
-
-    // Apply stock decrements
-    for (const pUpd of productUpdates) {
-      transaction.update(pUpd.ref, pUpd.updates);
     }
 
     // Build Item Breakdown
     const orderItemsBreakdown = cartItems.map((item) => {
       const pData = productDataMap[item.productId] || {};
+      const priceNum = Number(pData.price !== undefined && pData.price !== null ? pData.price : parsePrice(item.price));
+      const qtyNum = Number(item.quantity || 1);
       return {
-        productId: item.productId,
-        name: item.name,
-        price: Number(item.price),
-        quantity: Number(item.quantity),
+        productId: item.productId || "",
+        name: item.name || pData.name || "Custom Furniture",
+        price: priceNum,
+        quantity: qtyNum,
         material: item.material || "Fabric",
         color: item.color || item.fabricColor || pData.color || pData.fabricColor || (Array.isArray(pData.colors) && pData.colors[0]) || "",
         freebies: item.freebies || pData.freebies || "",
@@ -423,29 +408,31 @@ export async function placeOrderAtomic({
         orderType: item.orderType || (hasMadeToOrderItems ? "Made-to-Order" : "Ready-to-Ship"),
         leadTime:
           item.leadTime || (hasMadeToOrderItems ? "14-21 Business Days" : "3-5 Business Days"),
-        url: item.url || "",
-        subtotal: Number(item.price) * Number(item.quantity),
+        url: item.url || pData.url || pData.imageUrl || "",
+        subtotal: priceNum * qtyNum,
       };
     });
 
     const pMethodLower = String(paymentMethod || "").toLowerCase();
     let paymentType = "qr_code";
-    if (pMethodLower.includes("cash") || pMethodLower.includes("walk_in") || pMethodLower.includes("walk-in") || pMethodLower.includes("over-the-counter")) {
+    if (pMethodLower.includes("cash") || pMethodLower.includes("walk_in") || pMethodLower.includes("walk-in") || pMethodLower.includes("counter")) {
       paymentType = "walk_in_cash";
     } else {
       paymentType = "qr_code";
     }
 
-    // Server/Service Authority: Recalculate official totals from catalog documents to prevent client-side pricing tampering
+    // Recalculate official totals from catalog documents to prevent client-side pricing tampering
     let authoritativeItemsSubtotal = 0;
     for (const item of cartItems) {
       const pData = productDataMap[item.productId] || {};
-      const catalogPrice = Number(pData.price || 0);
+      const catalogPrice = Number(pData.price !== undefined && pData.price !== null ? pData.price : parsePrice(item.price));
       const reqQty = Math.max(1, Math.min(30, parseInt(item.quantity, 10) || 1));
       authoritativeItemsSubtotal += catalogPrice * reqQty;
     }
 
-    const deliveryFee = Number(address.shippingCost ?? address.deliveryFee ?? 1000);
+    const isPickup = address?.pickupAtWorkshop === true || address?.fulfillmentType === "pickup";
+    const rawDeliveryFee = address.shippingCost ?? address.deliveryFee ?? address.shippingFee;
+    const deliveryFee = isPickup ? 0 : (rawDeliveryFee !== undefined && rawDeliveryFee !== null ? Number(rawDeliveryFee) : 0);
     const authoritativeTotal = Math.max(0, authoritativeItemsSubtotal + deliveryFee);
 
     const isWalkInCash = paymentType === "walk_in_cash" || paymentMethod === "walk_in_cash";
@@ -458,12 +445,9 @@ export async function placeOrderAtomic({
       ? new Date(Date.now() + 48 * 60 * 60 * 1000)
       : null;
 
-    const fulfillmentType =
-      address?.pickupAtWorkshop || address?.fulfillmentType === "pickup" ? "pickup" : "delivery";
-
+    const fulfillmentType = isPickup ? "pickup" : "delivery";
     const customerName = address.recipientName || address.fullName || address.name || "";
     const customerEmail = address.email || "";
-
     const landmarkText = String(address.nearestLandmark || address.landmark || "").trim();
 
     const shippingAddressObj = {
@@ -491,14 +475,47 @@ export async function placeOrderAtomic({
 
     const isDownpaymentPaid = Boolean(
       paymentDetails?.downpaymentPaid ||
-      paymentDetails?.paymentStatus === "downpayment_paid"
+      paymentDetails?.paymentStatus === "downpayment_paid" ||
+      paymentDetails?.paymentStatus === "Paid"
     );
+
+    let paymentStatusStr = "Paid / Pending Verification";
+    let orderStatusStr = "placed";
+    let statusStr = "Placed";
+
+    if (isWalkInCash) {
+      paymentStatusStr = "awaiting_counter_downpayment";
+      orderStatusStr = "slot_reserved";
+      statusStr = "Slot Reserved";
+    } else if (isDownpaymentPaid) {
+      paymentStatusStr = isDownpayment ? "downpayment_paid" : "Paid";
+      orderStatusStr = "downpayment confirmed";
+      statusStr = "Deposit Verified";
+    } else {
+      paymentStatusStr = isDownpayment
+        ? "Downpayment Pending Verification"
+        : paymentMethod === "COD"
+          ? "Unpaid (COD)"
+          : "Paid / Pending Verification";
+      orderStatusStr = "placed";
+      statusStr = "Placed";
+    }
 
     const orderDocData = {
       orderId: orderId,
+      id: orderId,
       userId: userId,
+      customerId: userId,
+      customerUid: userId,
+      buyerUid: userId,
+      orderedByUid: userId,
+      createdByUid: userId,
       items: orderItemsBreakdown,
       totalAmount: parsedTotal,
+      total: parsedTotal,
+      subtotal: authoritativeItemsSubtotal,
+      deliveryFee: deliveryFee,
+      shippingFee: deliveryFee,
       orderType: "made_to_order",
       paymentOption: isDownpayment ? "downpayment" : "full",
       downpaymentAmount: downpaymentAmount,
@@ -506,6 +523,7 @@ export async function placeOrderAtomic({
       downpaymentPaid: isDownpaymentPaid ? downpaymentAmount : 0,
       remainingBalance: remainingBalance,
       balanceDue: remainingBalance,
+      outstandingBalance: remainingBalance,
       balanceStatus: isDownpayment ? "pending" : "settled",
       balanceSettlementMethod: isDownpayment ? null : "full_paid",
       balanceSettledAmount: isDownpayment ? 0 : parsedTotal,
@@ -513,27 +531,15 @@ export async function placeOrderAtomic({
       customerName: customerName,
       customerEmail: customerEmail,
       paymentType: isWalkInCash ? "walk_in_cash" : paymentType,
-      paymentMethod: isWalkInCash ? "walk_in_cash" : paymentMethod,
-      paymentStatus: isWalkInCash
-        ? "awaiting_counter_downpayment"
-        : (isDownpaymentPaid
-          ? "downpayment_paid"
-          : isDownpayment
-            ? "Downpayment Pending Verification"
-            : paymentMethod === "COD"
-              ? "Unpaid (COD)"
-              : "Paid / Pending Verification"),
-      orderStatus: isWalkInCash
-        ? "slot_reserved"
-        : (isDownpaymentPaid ? "downpayment confirmed" : "placed"),
-      status: isWalkInCash
-        ? "Slot Reserved"
-        : (isDownpaymentPaid ? "Deposit Verified" : "placed"),
+      paymentMethod: isWalkInCash ? "walk_in_cash" : (paymentMethod || "QR Ph (PayMongo)"),
+      paymentStatus: paymentStatusStr,
+      orderStatus: orderStatusStr,
+      status: statusStr,
       reservationExpiresAt: reservationExpiresAt,
       paymentIntentId: paymentDetails?.paymentIntentId || null,
       downpaymentPaidAt: isDownpaymentPaid ? serverTimestamp() : null,
       placedAt: serverTimestamp(),
-      stockDeducted: true, // Prevents duplicate inventory deduction in admin dashboard
+      stockDeducted: false, // Inventory deduction is executed by workshop staff/admin during production
       isMadeToOrder: true,
       estimatedLeadTime: "14-21 Business Days (Crafted Upon Order)",
       shippingAddress: shippingAddressObj,
@@ -542,16 +548,19 @@ export async function placeOrderAtomic({
       customNotes: String(customNotes || "").trim(),
       paymentDetails: paymentDetails || {},
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
 
+    // Save order document
     transaction.set(orderRef, orderDocData);
 
-    // Cart Purge
-    cartSnap.docs.forEach((cartDoc) => {
+    // Purge cart documents inside transaction
+    cartDocs.forEach((cartDoc) => {
       transaction.delete(cartDoc.ref);
     });
   });
 
+  clearLocalWishlist();
   return { success: true, orderId: orderId };
 }
 

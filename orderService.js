@@ -427,47 +427,78 @@ export function subscribeToUserOrders(userId, callback, errorCallback) {
   }
 
   const ordersRef = collection(db, "orders");
-  // Query by userId without composite index requirements
-  const q = query(ordersRef, where("userId", "==", userId));
+  const userMap = new Map();
+  const customerMap = new Map();
 
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const orders = snapshot.docs
-        .filter((docSnap) => {
-          const data = docSnap.data();
-          return !data.isDeleted && data.action !== "delete";
-        })
-        .map((docSnap) => {
-          const data = docSnap.data();
-          const canonicalStatus = getOrderCanonicalStatus(data);
-          return {
-            orderId: docSnap.id,
-            id: docSnap.id,
-            ...data,
-            canonicalStatus: canonicalStatus,
-          };
+  const emitMerged = () => {
+    const mergedMap = new Map();
+    // Merge orders from both userId and customerId queries
+    for (const [id, order] of userMap.entries()) {
+      mergedMap.set(id, order);
+    }
+    for (const [id, order] of customerMap.entries()) {
+      mergedMap.set(id, order);
+    }
+
+    const orders = Array.from(mergedMap.values());
+
+    // Sort in-memory by createdAt descending
+    orders.sort((a, b) => {
+      const getT = (val) => {
+        if (!val) return 0;
+        if (typeof val.toMillis === "function") return val.toMillis();
+        if (val.seconds) return val.seconds * 1000;
+        return new Date(val).getTime() || 0;
+      };
+      return getT(b.createdAt) - getT(a.createdAt);
+    });
+
+    if (typeof callback === "function") callback(orders);
+  };
+
+  const processSnapshot = (snapshot, targetMap) => {
+    targetMap.clear();
+    snapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (!data.isDeleted && data.action !== "delete") {
+        const canonicalStatus = getOrderCanonicalStatus(data);
+        targetMap.set(docSnap.id, {
+          orderId: docSnap.id,
+          id: docSnap.id,
+          ...data,
+          canonicalStatus: canonicalStatus,
         });
+      }
+    });
+    emitMerged();
+  };
 
-      // Sort in-memory by createdAt descending
-      orders.sort((a, b) => {
-        const getT = (val) => {
-          if (!val) return 0;
-          if (typeof val.toMillis === "function") return val.toMillis();
-          if (val.seconds) return val.seconds * 1000;
-          return new Date(val).getTime() || 0;
-        };
-        return getT(b.createdAt) - getT(a.createdAt);
-      });
+  // Dual query: matches orders placed on web (userId) and orders placed on mobile app (customerId)
+  const qUser = query(ordersRef, where("userId", "==", userId));
+  const qCustomer = query(ordersRef, where("customerId", "==", userId));
 
-      if (typeof callback === "function") callback(orders);
-    },
+  const unsubUser = onSnapshot(
+    qUser,
+    (snapshot) => processSnapshot(snapshot, userMap),
     (error) => {
-      console.error("Real-time order snapshot listener error:", error);
+      console.error("Real-time order snapshot (userId) listener error:", error);
       if (typeof errorCallback === "function") errorCallback(error);
       else if (typeof callback === "function") callback([]);
     }
   );
+
+  const unsubCustomer = onSnapshot(
+    qCustomer,
+    (snapshot) => processSnapshot(snapshot, customerMap),
+    (error) => {
+      console.warn("Real-time order snapshot (customerId) listener warning:", error);
+    }
+  );
+
+  return () => {
+    unsubUser();
+    unsubCustomer();
+  };
 }
 
 /**
@@ -495,7 +526,7 @@ export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
 
     const orderData = orderSnap.data();
 
-    if (orderData.userId !== userId) {
+    if (orderData.userId !== userId && orderData.customerId !== userId) {
       throw new Error("Unauthorized to cancel this order.");
     }
 
@@ -507,55 +538,12 @@ export async function cancelOrderAtomic({ orderId, userId, reason = "" }) {
       );
     }
 
-    const items = Array.isArray(orderData.items) ? orderData.items : [];
-
-    for (const item of items) {
-      if (!item.productId) continue;
-
-      const productRef = doc(db, "products", item.productId);
-      const productSnap = await transaction.get(productRef);
-
-      if (!productSnap.exists()) {
-        console.warn(`Product ${item.productId} not found during stock rollback.`);
-        continue;
-      }
-
-      const pData = productSnap.data();
-      const mat = (item.material || "Fabric").toLowerCase();
-      const qty = Math.max(1, Number(item.quantity || 1));
-
-      const updatePayload = {};
-
-      if (mat === "fabric") {
-        if (typeof pData.FabricStocks === "number") {
-          updatePayload.FabricStocks = pData.FabricStocks + qty;
-        }
-        if (typeof pData.fabricStock === "number") {
-          updatePayload.fabricStock = pData.fabricStock + qty;
-        }
-      } else if (mat === "leather") {
-        if (typeof pData.LeatherStocks === "number") {
-          updatePayload.LeatherStocks = pData.LeatherStocks + qty;
-        }
-        if (typeof pData.leatherStock === "number") {
-          updatePayload.leatherStock = pData.leatherStock + qty;
-        }
-      }
-
-      if (typeof pData.stock === "number") {
-        updatePayload.stock = pData.stock + qty;
-      }
-
-      if (Object.keys(updatePayload).length > 0) {
-        transaction.update(productRef, updatePayload);
-      }
-    }
-
     const cancellationPayload = {
       orderStatus: "Cancelled",
       status: "Cancelled",
       cancelledAt: serverTimestamp(),
       cancellationReason: String(reason || "").trim(),
+      updatedAt: serverTimestamp(),
     };
 
     transaction.update(orderRef, cancellationPayload);

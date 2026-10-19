@@ -1893,9 +1893,13 @@ async function handlePlaceOrderSubmit() {
     submitBtn.disabled = false;
     submitBtn.textContent = "Place Order Now";
 
+    const isDownpayment = selectedPaymentTerm === "downpayment";
+    const chargeAmount = isDownpayment ? Math.round(totalAmount * 0.30) : Math.round(totalAmount);
+
     await openPaymongoQrModal({
       orderId: draftOrderId,
       totalAmount: totalAmount,
+      exactAmount: chargeAmount,
       onConfirmPayment: async ({ paymentIntentId }) => {
         // POST-VERIFICATION PLACEMENT GATE:
         // Strictly execute atomic order creation only AFTER PayMongo confirms payment is succeeded!
@@ -1915,10 +1919,10 @@ async function handlePlaceOrderSubmit() {
             accountName: targetAddress.recipientName,
             submittedAt: new Date().toISOString(),
             downpaymentPaid: true,
-            paymentStatus: "downpayment_paid",
+            paymentStatus: isDownpayment ? "downpayment_paid" : "Paid",
             paymentIntentId: paymentIntentId,
-            downpaymentCentavos: Math.round(totalAmount * 0.30 * 100),
-            downpaymentAmount: Math.round(totalAmount * 0.30),
+            downpaymentCentavos: Math.round(chargeAmount * 100),
+            downpaymentAmount: chargeAmount,
             verifiedAt: new Date().toISOString(),
           },
         });

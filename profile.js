@@ -37,7 +37,7 @@ import {
 import { app, db, auth, storage } from "./firebaseConfig.js";
 import { initAuthModalController } from "./authModalController.js";
 import { fetchWishlist, updateCartItemQuantity, removeCartItem, renderCartDrawerComponent } from "./cartService.js";
-import { classifyOrderScope, getOrderCanonicalStatus } from "./orderService.js";
+import { classifyOrderScope, getOrderCanonicalStatus, subscribeToUserOrders } from "./orderService.js";
 import { showToast, showConfirmModal } from "./uiFeedback.js";
 
 let currentUser = null;
@@ -132,16 +132,12 @@ async function renderProfileHeader(user) {
 function subscribeUserMetrics(uid) {
   if (ordersUnsubscribe) ordersUnsubscribe();
 
-  const ordersRef = collection(db, "orders");
-  const q = query(ordersRef, where("userId", "==", uid));
-
-  ordersUnsubscribe = onSnapshot(q, (snapshot) => {
+  ordersUnsubscribe = subscribeToUserOrders(uid, (orders) => {
     let activeCount = 0;
     let completedCount = 0;
     let historyCount = 0;
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
+    orders.forEach((data) => {
       if (data.isDeleted || data.action === "delete") return;
 
       const scope = classifyOrderScope(data);

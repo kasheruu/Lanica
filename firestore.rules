@@ -70,11 +70,16 @@ service cloud.firestore {
         request.resource.data.totalAmount is number &&
         request.resource.data.totalAmount >= 0;
 
-      // Order update: Staff/Admin can update, or customer can update orderReceived/ratings on their own order
+      // Order update: Staff/Admin can update, or customer can update orderReceived/ratings/cancellation/refunds on their own order
       allow update: if isSignedIn() && (
         isStaff() || 
-        (resource.data.userId == request.auth.uid && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'orderStatus', 'orderReceived', 'orderReceivedAt', 'completedAt', 'updatedAt', 'rating', 'feedback', 'proofUrl', 'paymentProofUrl']))
+        ((resource.data.userId == request.auth.uid || resource.data.customerId == request.auth.uid) && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'status', 'orderStatus', 'orderReceived', 'orderReceivedAt', 'completedAt', 
+           'updatedAt', 'rating', 'feedback', 'proofUrl', 'paymentProofUrl',
+           'cancelledAt', 'cancellationReason', 'refundStatus', 'refundReason', 
+           'refundDetails', 'refundRequestedAt'
+         ]))
       );
 
       // Only Admins can permanently delete orders

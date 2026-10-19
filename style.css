@@ -53,8 +53,6 @@ img, svg, video, canvas, model-viewer {
   max-width: 100%;
   height: auto;
 }
-  overflow-x: hidden;
-}
 
 h1,
 h2,
