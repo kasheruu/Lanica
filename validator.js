@@ -308,7 +308,7 @@ export function initGlobalInputGuards() {
     "keydown",
     (e) => {
       const target = e.target;
-      if (!target || target.tagName !== "INPUT") return;
+      if (!target || target.tagName !== "INPUT" || !e.key) return;
 
       // Control keys (Shift, Backspace, Tab, Enter, Arrows, Delete, Copy/Paste) are ALWAYS allowed
       if (

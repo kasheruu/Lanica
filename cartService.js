@@ -356,6 +356,10 @@ export async function placeOrderAtomic({
     console.warn("Could not pre-fetch cart items for purge:", cartErr);
   }
 
+  const resolvedCustomerName = address.recipientName || address.fullName || address.name || "Customer";
+  const resolvedCustomerEmail = address.email || "";
+  let finalOrderTotal = Math.max(0, Number(totalAmount) || 0);
+
   await runTransaction(db, async (transaction) => {
     const productDataMap = {};
     let hasMadeToOrderItems = false;
@@ -440,6 +444,7 @@ export async function placeOrderAtomic({
     const isWalkInCash = paymentType === "walk_in_cash" || paymentMethod === "walk_in_cash";
     const isDownpayment = paymentOption === "downpayment" || isWalkInCash;
     const parsedTotal = authoritativeTotal > 0 ? authoritativeTotal : Math.max(0, Number(totalAmount) || 0);
+    finalOrderTotal = parsedTotal;
     const downpaymentRequired = Math.round(parsedTotal * 0.30);
     const downpaymentAmount = isDownpayment ? downpaymentRequired : parsedTotal;
     const remainingBalance = isDownpayment ? Math.max(0, parsedTotal - downpaymentAmount) : 0;
@@ -577,8 +582,9 @@ export async function placeOrderAtomic({
   sendEmailAlert({
     type: "new_order",
     orderId: orderId,
-    customerName: customerName,
-    totalAmount: parsedTotal,
+    customerName: resolvedCustomerName,
+    recipientEmail: resolvedCustomerEmail,
+    totalAmount: finalOrderTotal,
   }).catch(() => {});
 
   return { success: true, orderId: orderId };
