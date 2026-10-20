@@ -1,4 +1,5 @@
 import { Validators } from "./validator.js";
+import { sendEmailAlert } from "./notificationService.js";
 import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
 import {
   getAuth,
@@ -571,6 +572,15 @@ export async function placeOrderAtomic({
   });
 
   clearLocalWishlist();
+
+  // Background dispatch of email alert to Admin
+  sendEmailAlert({
+    type: "new_order",
+    orderId: orderId,
+    customerName: customerName,
+    totalAmount: parsedTotal,
+  }).catch(() => {});
+
   return { success: true, orderId: orderId };
 }
 

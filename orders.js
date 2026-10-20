@@ -58,6 +58,10 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 import { db } from "./orderService.js";
+import {
+  initNotifications,
+  notifyNewChatMessage,
+} from "./notificationService.js";
 
 const storage = getStorage();
 
@@ -2250,16 +2254,31 @@ function setupLiveChatWidget() {
     }
   }
 
+  let lastNotifiedStaffMsgId = null;
+
   function initUserChat(user) {
     if (!user) return;
+    initNotifications();
     renderChannelBar();
 
     if (supportUnreadUnsubscribe) supportUnreadUnsubscribe();
     supportUnreadUnsubscribe = subscribeToUserSupportMessages(user.uid, (messages) => {
-      const hasUnread = messages.some((m) => {
+      let latestIncomingStaffMsg = null;
+      let hasUnread = false;
+
+      messages.forEach((m) => {
         const isFromStaff = m.senderRole === "admin" || m.senderRole === "staff" || m.senderId === "support_admin";
-        return isFromStaff && m.isRead === false;
+        if (isFromStaff && m.isRead === false) {
+          hasUnread = true;
+          latestIncomingStaffMsg = m;
+        }
       });
+
+      if (latestIncomingStaffMsg && latestIncomingStaffMsg.id !== lastNotifiedStaffMsgId) {
+        lastNotifiedStaffMsgId = latestIncomingStaffMsg.id;
+        const preview = latestIncomingStaffMsg.text || latestIncomingStaffMsg.content || "Sent a message";
+        notifyNewChatMessage(preview, { id: user.uid, customerName: "Lanica Support" }, { role: "customer" });
+      }
 
       if (hasUnread && unreadBadge && !drawer?.classList.contains("active")) {
         unreadBadge.style.display = "block";

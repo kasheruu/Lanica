@@ -42,6 +42,12 @@ import {
 import { recordAuditLog } from "./auditService.js";
 import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
 import {
+  initNotifications,
+  requestNotificationPermission,
+  notifyNewOrder,
+  notifyNewChatMessage,
+} from "./notificationService.js";
+import {
   renderPagination,
   showTableSkeleton,
   renderTableEmptyState,
@@ -3772,6 +3778,7 @@ onAuthStateChanged(auth, async (user) => {
 
   // Start session timeout monitoring
   resetSessionTimer();
+  initNotifications();
 
   // Add activity listeners
   document.addEventListener("click", resetSessionTimer);
@@ -3864,8 +3871,22 @@ onAuthStateChanged(auth, async (user) => {
 
   showStaffSection("dashboard");
 
+  let initialStaffOrdersLoaded = false;
   const ordersQuery = query(collection(db, "orders"));
   onSnapshot(ordersQuery, (snapshot) => {
+    if (!initialStaffOrdersLoaded) {
+      initialStaffOrdersLoaded = true;
+    } else {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const newOrderData = { id: change.doc.id, ...change.doc.data() };
+          if (newOrderData.action !== "delete" && newOrderData.isDeleted !== true) {
+            notifyNewOrder(newOrderData, { role: "staff" });
+          }
+        }
+      });
+    }
+
     const all = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     allStaffOrders = all;
     allStaffOrders.sort((a, b) => {
@@ -5693,6 +5714,7 @@ function setupStaffLiveChat() {
           const { mediaUrl, displayText } = parseChatMessageContent(latestMsg || {});
           const preview = displayText || (mediaUrl ? "Sent a photo attachment" : "Sent a message");
           showStaffChatNotificationToast(preview, s);
+          notifyNewChatMessage(preview, s, { role: "staff" });
         }
 
         if (activeStaffChatSessionId === s.id && unread > 0) {

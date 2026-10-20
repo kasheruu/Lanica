@@ -550,6 +550,71 @@ app.post("/api/paymongo/verify-payment", checkoutLimiter, async (req, res) => {
   }
 });
 
+app.post("/api/notify", async (req, res) => {
+  try {
+    const { type, title, body, orderId, customerName, totalAmount, previewText, recipientEmail } = req.body || {};
+    const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+    const adminEmail = String(process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || "").trim();
+
+    if (!apiKey) {
+      return res.status(200).json({
+        success: true,
+        emailSent: false,
+        warning: "RESEND_API_KEY environment variable is not configured. Web Push notification active.",
+      });
+    }
+
+    const targetRecipient = recipientEmail || adminEmail;
+    if (!targetRecipient) {
+      return res.status(200).json({
+        success: true,
+        emailSent: false,
+        warning: "No recipient email configured. Set ADMIN_NOTIFICATION_EMAIL in environment variables.",
+      });
+    }
+
+    let subject = title || "Lanica Notification";
+    if (type === "new_order") {
+      subject = `[Lanica] 📦 New Order Alert #${(orderId || "").slice(0, 8)}`;
+    } else if (type === "new_chat") {
+      subject = `[Lanica] 💬 New Chat Message from ${customerName || "Customer"}`;
+    }
+
+    const htmlContent = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #0f172a; margin-top: 0;">${subject}</h2>
+        <p style="color: #475569; font-size: 15px;">${body || previewText || "A new real-time event was triggered in Lanica Furniture."}</p>
+        ${orderId ? `<p><strong>Order ID:</strong> ${orderId}<br><strong>Customer:</strong> ${customerName || "Customer"}<br><strong>Total:</strong> ₱${Number(totalAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>` : ""}
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">Lanica Luxury Living Furniture • Real-Time Notification System</p>
+      </div>
+    `;
+
+    const upstream = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Lanica Furniture <onboarding@resend.dev>",
+        to: [targetRecipient],
+        subject: subject,
+        html: htmlContent,
+      }),
+    });
+
+    const resData = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      return res.status(200).json({ success: true, emailSent: false, error: resData.message });
+    }
+
+    res.status(200).json({ success: true, emailSent: true, emailId: resData.id });
+  } catch (error) {
+    console.error("Local notify endpoint error:", error);
+    res.status(500).json({ error: "Failed to process notification." });
+  }
+});
+
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });

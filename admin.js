@@ -50,6 +50,12 @@ import { loadCachedModel, attachModelToViewer } from "./modelCacheService.js";
 
 import { recordAuditLog, logActivity, fetchAuditLogs } from "./auditService.js";
 import { showToast, showConfirmModal, showAlertModal } from "./uiFeedback.js";
+import {
+  initNotifications,
+  requestNotificationPermission,
+  notifyNewOrder,
+  notifyNewChatMessage,
+} from "./notificationService.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -9196,11 +9202,24 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     setupUserManagementControls();
     initLanicaReceiptModalListeners();
+    initNotifications();
   });
 } else {
   setupUserManagementControls();
   initLanicaReceiptModalListeners();
+  initNotifications();
 }
+
+// Graceful permission request on first user gesture in admin panel
+document.addEventListener(
+  "click",
+  () => {
+    if ("Notification" in window && Notification.permission === "default") {
+      requestNotificationPermission();
+    }
+  },
+  { once: true }
+);
 
 function applyUsersFilter() {
   let rows = allUsers;
@@ -9749,12 +9768,28 @@ function startAdminRealtimeListeners(user) {
     ordersRetryTimeout = null;
   }
 
+  let initialOrdersSnapshotLoaded = false;
+
   function setupOrdersListener() {
     try {
       const ordersQuerySorted = query(ORDERS_COLLECTION, orderBy("createdAt", "desc"));
       unsubOrders = onSnapshot(
         ordersQuerySorted,
         (snapshot) => {
+          if (!initialOrdersSnapshotLoaded) {
+            initialOrdersSnapshotLoaded = true;
+          } else {
+            // Real-time detection of newly arrived customer orders
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added") {
+                const newOrderData = { id: change.doc.id, ...change.doc.data() };
+                if (newOrderData.action !== "delete" && newOrderData.isDeleted !== true) {
+                  notifyNewOrder(newOrderData, { role: "admin" });
+                }
+              }
+            });
+          }
+
           allOrders = [];
           snapshot.forEach((d) => {
             const data = d.data();
@@ -9774,6 +9809,19 @@ function startAdminRealtimeListeners(user) {
             unsubOrders = onSnapshot(
               ORDERS_COLLECTION,
               (snapshot) => {
+                if (!initialOrdersSnapshotLoaded) {
+                  initialOrdersSnapshotLoaded = true;
+                } else {
+                  snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added") {
+                      const newOrderData = { id: change.doc.id, ...change.doc.data() };
+                      if (newOrderData.action !== "delete" && newOrderData.isDeleted !== true) {
+                        notifyNewOrder(newOrderData, { role: "admin" });
+                      }
+                    }
+                  });
+                }
+
                 allOrders = [];
                 snapshot.forEach((d) => {
                   const data = d.data();
@@ -12248,6 +12296,7 @@ function setupAdminLiveChat() {
           const { mediaUrl, displayText } = parseChatMessageContent(latestMsg || {});
           const preview = displayText || (mediaUrl ? "Sent a photo attachment" : "Sent a message");
           showChatNotificationToast(preview, s);
+          notifyNewChatMessage(preview, s, { role: "admin" });
         }
 
         // If this conversation is currently open, mark read immediately
