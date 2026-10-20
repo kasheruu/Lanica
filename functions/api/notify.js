@@ -91,7 +91,7 @@ export async function onRequestPost(context) {
               </tr>
             </table>
             <div style="text-align: center; margin-top: 28px;">
-              <a href="https://lanicafurniture.com/admin" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Open Admin Orders Hub</a>
+              <a href="https://lanicafurniture.com/login" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Open Admin Orders Hub</a>
             </div>
           </div>
           <div style="background: #f8fafc; padding: 16px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
@@ -118,7 +118,7 @@ export async function onRequestPost(context) {
               "${previewText || "Sent a message / attachment"}"
             </div>
             <div style="text-align: center;">
-              <a href="https://lanicafurniture.com/admin" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Reply in Admin Chat</a>
+              <a href="https://lanicafurniture.com/login" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Reply in Admin Chat</a>
             </div>
           </div>
           <div style="background: #f8fafc; padding: 16px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
