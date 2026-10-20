@@ -136,6 +136,59 @@ export function getRiderName(order) {
 }
 
 /**
+ * Determines whether a customer has deposited (downpayment verified or full payment made).
+ * Critical thesis defense business rule:
+ * Staff can ONLY claim an unassigned order and set its branch (Pila vs Calamba)
+ * AFTER customer deposit is verified.
+ */
+export function hasCustomerDeposited(order) {
+  if (!order) return false;
+  const st = normalizeOrderStatus(order.status).toLowerCase();
+  if (
+    st === "deposit verified" ||
+    st === "downpayment confirmed" ||
+    st === "confirmed" ||
+    st === "in production" ||
+    st === "quality checked" ||
+    st === "shipped" ||
+    st === "delivered" ||
+    st === "completed"
+  ) {
+    return true;
+  }
+  if (Number(order.downpaymentPaid || 0) > 0) return true;
+  if (order.depositVerified === true) return true;
+  const payStatus = String(order.paymentStatus || "").toLowerCase();
+  if (payStatus === "paid" || payStatus === "downpayment_paid" || payStatus === "partial_paid") {
+    return true;
+  }
+  if (order.paymentOption === "full" && payStatus !== "unpaid" && payStatus !== "failed") {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Returns the explicitly assigned branch key ("pila" | "calamba") or null if unassigned.
+ * Strict rule: NEVER guesses branch based on customer address/location automatically.
+ */
+export function getOrderBranchKey(order) {
+  if (!order) return null;
+  const raw = String(
+    order.branch ||
+    order.branchKey ||
+    order.branchName ||
+    order.pickupBranch ||
+    order.storeBranch ||
+    ""
+  ).trim().toLowerCase();
+
+  if (raw.includes("pila")) return "pila";
+  if (raw.includes("calamba")) return "calamba";
+  return null;
+}
+
+/**
  * Checks whether an order is cancellable by the customer.
  * Rule: For Made-to-Order furniture, cancellation is STRICTLY FORBIDDEN
  * once materials and crafting have started ("In Production" or later).

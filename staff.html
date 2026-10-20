@@ -249,6 +249,17 @@
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
+
+              <!-- Branch Filter Select -->
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label for="staff-orders-branch-filter" class="orders-filter-label" style="font-size: 0.82rem; font-weight: 600; color: #475569;">Branch</label>
+                <select id="staff-orders-branch-filter" class="orders-filter-select">
+                  <option value="all">All Branches</option>
+                  <option value="pila">📍 Pila Branch</option>
+                  <option value="calamba">📍 Calamba Branch</option>
+                  <option value="unassigned">📍 Unassigned (Needs Branch)</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -646,6 +657,61 @@
         <div style="display: flex; justify-content: flex-end; gap: 10px;">
           <button type="button" id="btn-cancel-delivery-modal" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Cancel</button>
           <button type="button" id="btn-apply-delivery-modal" class="btn-primary" style="padding: 8px 20px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Apply Delivery Date</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Claim & Branch Selection Modal for Staff -->
+    <div id="staff-claim-branch-modal" class="user-modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 10000; padding: 16px;">
+      <div class="user-modal-card" style="max-width: 480px; width: 100%; background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+          <div>
+            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; font-weight: 700; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px; margin-bottom: 6px;">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Customer Deposit Verified
+            </span>
+            <h3 style="margin: 0; font-size: 1.18rem; font-weight: 800; color: #0f172a;">Claim Order &amp; Assign Branch</h3>
+            <p id="claim-modal-order-subtitle" style="margin: 4px 0 0 0; font-size: 0.82rem; color: #64748b;">
+              Order #—
+            </p>
+          </div>
+          <button type="button" id="btn-close-claim-branch-modal" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+
+        <p style="font-size: 0.88rem; color: #334155; margin: 0 0 16px; line-height: 1.45;">
+          This order has satisfied the deposit requirement and is ready to be claimed. <strong>Select which workshop branch will fulfill this order:</strong>
+        </p>
+
+        <input type="hidden" id="claim-modal-order-id-val" />
+
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+          <!-- Pila Branch Option -->
+          <button type="button" class="btn-select-branch-choice" data-branch="pila" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 2px solid #bfdbfe; border-radius: 12px; background: #eff6ff; cursor: pointer; text-align: left; transition: all 0.2s;">
+            <div style="width: 40px; height: 40px; border-radius: 10px; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">
+              🏛️
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 700; font-size: 0.95rem; color: #1e3a8a;">Pila Branch</div>
+              <div style="font-size: 0.76rem; color: #3b82f6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">National Highway, Labuin, Pila, Laguna</div>
+            </div>
+            <span style="font-size: 0.78rem; font-weight: 700; color: #ffffff; background: #2563eb; padding: 6px 12px; border-radius: 8px; white-space: nowrap;">Assign Pila</span>
+          </button>
+
+          <!-- Calamba Branch Option -->
+          <button type="button" class="btn-select-branch-choice" data-branch="calamba" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 2px solid #a7f3d0; border-radius: 12px; background: #ecfdf5; cursor: pointer; text-align: left; transition: all 0.2s;">
+            <div style="width: 40px; height: 40px; border-radius: 10px; background: #d1fae5; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">
+              🏢
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 700; font-size: 0.95rem; color: #064e3b;">Calamba Branch</div>
+              <div style="font-size: 0.76rem; color: #059669; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Milan Prestige Bldg., Halang, Calamba Laguna</div>
+            </div>
+            <span style="font-size: 0.78rem; font-weight: 700; color: #ffffff; background: #059669; padding: 6px 12px; border-radius: 8px; white-space: nowrap;">Assign Calamba</span>
+          </button>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+          <button type="button" id="btn-cancel-claim-branch-modal" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Cancel</button>
         </div>
       </div>
     </div>

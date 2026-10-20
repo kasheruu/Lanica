@@ -74,6 +74,7 @@ const deliveredStatEl = document.getElementById("staff-delivered");
 const staffOrdersSearchInput = document.getElementById("staff-orders-search-input");
 const staffOrdersSearchClear = document.getElementById("staff-orders-search-clear");
 const staffOrdersStatusFilterEl = document.getElementById("staff-orders-status-filter");
+const staffOrdersBranchFilterEl = document.getElementById("staff-orders-branch-filter");
 
 const staffOrdersTableContainer = document.getElementById("staff-orders-table-container");
 const staffHistoryTableContainer = document.getElementById("staff-history-table-container");
@@ -613,6 +614,50 @@ let allStaffOrders = [];
 let allAssignedOrders = [];
 let staffOrdersSearchQuery = "";
 let staffOrdersStatusFilter = "all";
+let staffOrdersBranchFilter = "all";
+
+function getOrderBranchKey(order) {
+  if (!order) return null;
+  const raw = String(
+    order.branch ||
+    order.branchKey ||
+    order.branchName ||
+    order.pickupBranch ||
+    order.storeBranch ||
+    ""
+  ).trim().toLowerCase();
+
+  if (raw.includes("pila")) return "pila";
+  if (raw.includes("calamba")) return "calamba";
+  return null;
+}
+
+function hasCustomerDeposited(order) {
+  if (!order) return false;
+  const st = normalizeOrderStatus(order.status).toLowerCase();
+  if (
+    st === "deposit verified" ||
+    st === "downpayment confirmed" ||
+    st === "confirmed" ||
+    st === "in production" ||
+    st === "quality checked" ||
+    st === "shipped" ||
+    st === "delivered" ||
+    st === "completed"
+  ) {
+    return true;
+  }
+  if (Number(order.downpaymentPaid || 0) > 0) return true;
+  if (order.depositVerified === true) return true;
+  const payStatus = String(order.paymentStatus || "").toLowerCase();
+  if (payStatus === "paid" || payStatus === "downpayment_paid" || payStatus === "partial_paid") {
+    return true;
+  }
+  if (order.paymentOption === "full" && payStatus !== "unpaid" && payStatus !== "failed") {
+    return true;
+  }
+  return false;
+}
 let staffOrdersCurrentPage = 1;
 let staffOrdersPerPage = 10;
 
@@ -827,7 +872,9 @@ function renderStaffDashboard(orders) {
       ? isAssignedToMe
         ? `<span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; padding: 3px 8px; border-radius: 9999px; font-size: 0.76rem;">You</span>`
         : `<span style="font-size: 0.82rem; font-weight: 500; color: #334155;">${escapeHtml(order.assignedToName || "Staff Member")}</span>`
-      : `<button type="button" class="btn-primary btn-claim-order" data-order-id="${escapeHtml(order.id)}" style="padding: 4px 8px; font-size: 0.74rem; border-radius: 6px; white-space: nowrap; background: #6b4423; color: #fff; border: none; cursor: pointer; font-weight: 600;">Claim</button>`;
+      : hasCustomerDeposited(order)
+        ? `<button type="button" class="btn-primary btn-claim-order" data-order-id="${escapeHtml(order.id)}" style="padding: 4px 8px; font-size: 0.74rem; border-radius: 6px; white-space: nowrap; background: #6b4423; color: #fff; border: none; cursor: pointer; font-weight: 600;">Claim</button>`
+        : `<span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.74rem; font-weight: 600; padding: 3px 8px; border-radius: 6px; border: 1px solid #fde68a;" title="Customer deposit required before claiming">Awaiting Deposit</span>`;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -1717,6 +1764,16 @@ function applyStaffOrdersFilter() {
       return false;
     }
 
+    // Branch filter
+    if (staffOrdersBranchFilter !== "all") {
+      const bKey = getOrderBranchKey(o);
+      if (staffOrdersBranchFilter === "unassigned") {
+        if (bKey) return false;
+      } else if (bKey !== staffOrdersBranchFilter) {
+        return false;
+      }
+    }
+
     // Search query
     if (q) {
       const idMatch = (o.id || "").toLowerCase().includes(q) || String(o.orderId || "").toLowerCase().includes(q);
@@ -1778,6 +1835,15 @@ function applyStaffOrdersFilter() {
   // 3. Filter completed orders
   const completedOrders = allStaffOrders.filter((o) => {
     if (!isOrderCompleted(o) || o.isDeleted) return false;
+
+    if (staffOrdersBranchFilter !== "all") {
+      const bKey = getOrderBranchKey(o);
+      if (staffOrdersBranchFilter === "unassigned") {
+        if (bKey) return false;
+      } else if (bKey !== staffOrdersBranchFilter) {
+        return false;
+      }
+    }
 
     if (q) {
       const idMatch = (o.id || "").toLowerCase().includes(q) || String(o.orderId || "").toLowerCase().includes(q);
@@ -1865,9 +1931,17 @@ function renderOrdersList(orders, totalCount) {
       order.address?.pickupAtWorkshop ||
       order.shippingAddress?.pickupAtWorkshop;
     const fullAddr = formatOrderDeliveryAddress(order);
-    const fulfillmentBadgeHtml = isPickup
-      ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path><path d="M2 7h20"></path></svg>Store Pickup</span>`
-      : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Delivery</span>`;
+    const branchKey = getOrderBranchKey(order);
+    const branchName = branchKey === "pila" ? "Pila Branch" : branchKey === "calamba" ? "Calamba Branch" : "Unassigned";
+    const branchBadgeHtml = branchKey
+      ? `<span class="order-branch-badge ${branchKey}" style="margin-left: 6px;" title="Order assigned to ${branchName}">📍 ${branchName}</span>`
+      : `<span class="order-branch-badge unassigned" style="margin-left: 6px; background: #f1f5f9; color: #64748b; border: 1px dashed #cbd5e1;" title="Branch not yet assigned">📍 Unassigned</span>`;
+
+    const fulfillmentBadgeHtml =
+      (isPickup
+        ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path><path d="M2 7h20"></path></svg>Store Pickup</span>`
+        : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Delivery</span>`) +
+      branchBadgeHtml;
 
     const nearestLandmark = isPickup ? "" : formatOrderLandmark(order);
     const landmarkBadgeHtml = nearestLandmark
@@ -1952,11 +2026,29 @@ function renderOrdersList(orders, totalCount) {
     // Staff Assignment Display
     const isAssignedToMe = order.assignedToUid === currentUser?.uid;
     const isUnassigned = !order.assignedToUid;
-    const assignedHtml = order.assignedToUid
-      ? isAssignedToMe
+    const isDeposited = hasCustomerDeposited(order);
+
+    let assignedHtml = "";
+    if (order.assignedToUid) {
+      const staffLabel = isAssignedToMe
         ? `<span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 700; padding: 3px 8px; border-radius: 9999px; font-size: 0.76rem;">You</span>`
-        : `<span style="font-size: 0.82rem; font-weight: 500; color: #334155;">${escapeHtml(order.assignedToName || "Staff Member")}</span>`
-      : `<button type="button" class="btn-primary btn-claim-order" data-order-id="${escapeHtml(order.id)}" style="padding: 5px 10px; font-size: 0.76rem; border-radius: 6px; white-space: nowrap; background: #6b4423; color: #fff; border: none; cursor: pointer; font-weight: 600;">Claim Order</button>`;
+        : `<span style="font-size: 0.82rem; font-weight: 500; color: #334155;">${escapeHtml(order.assignedToName || "Staff Member")}</span>`;
+
+      assignedHtml = `
+        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 140px;">
+          <div>${staffLabel}</div>
+          <select class="order-branch-select" data-order-id="${escapeHtml(order.id)}" aria-label="Branch" style="padding: 4px 6px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; border: 1px solid ${!branchKey ? "#f59e0b" : branchKey === "pila" ? "#3b82f6" : "#10b981"}; background: ${!branchKey ? "#fffbeb" : "#ffffff"}; color: ${!branchKey ? "#b45309" : "#1e293b"}; cursor: pointer;">
+            <option value="" disabled ${!branchKey ? "selected" : ""}>— Select Branch —</option>
+            <option value="pila" ${branchKey === "pila" ? "selected" : ""}>📍 Pila Branch</option>
+            <option value="calamba" ${branchKey === "calamba" ? "selected" : ""}>📍 Calamba Branch</option>
+          </select>
+        </div>
+      `;
+    } else if (!isDeposited) {
+      assignedHtml = `<span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.74rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; border: 1px solid #fde68a;" title="Customer deposit must be received before this order can be claimed">Awaiting Deposit</span>`;
+    } else {
+      assignedHtml = `<button type="button" class="btn-primary btn-claim-order" data-order-id="${escapeHtml(order.id)}" style="padding: 5px 10px; font-size: 0.76rem; border-radius: 6px; white-space: nowrap; background: #6b4423; color: #fff; border: none; cursor: pointer; font-weight: 600;">Claim Order</button>`;
+    }
 
     // Kebab Actions
     const tr = document.createElement("tr");
@@ -2043,12 +2135,17 @@ function renderOrdersList(orders, totalCount) {
               Adjust Delivery Estimate
             </button>
             ${
-              isUnassigned
+              isUnassigned && isDeposited
                 ? `<button type="button" class="kebab-menu-item btn-claim-order" data-order-id="${escapeHtml(order.id)}">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
-                    Claim / Assign to Me
+                    Claim &amp; Assign Branch
                   </button>`
-                : ""
+                : isDeposited && order.assignedToUid
+                  ? `<button type="button" class="kebab-menu-item btn-open-claim-modal" data-order-id="${escapeHtml(order.id)}">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      ${branchKey ? "Change Branch" : "Assign Branch"}
+                    </button>`
+                  : ""
             }
           </div>
         </div>
@@ -2509,22 +2606,10 @@ function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
   activeReceiptOrder = order;
   activeReceiptTab = defaultTab || "voucher";
 
-  // Auto-detect branch based on order address/notes
+  // Use explicit branch assigned by admin/staff, defaulting cleanly if unassigned
   if (!activeReceiptOrder._selectedBranch) {
-    const rawAddr = (formatOrderDeliveryAddress(order) || "").toLowerCase();
-    const rawLandmark = (formatOrderLandmark(order) || "").toLowerCase();
-    const branchHint = String(order.branch || order.branchName || "").toLowerCase();
-
-    if (
-      rawAddr.includes("pila") ||
-      rawAddr.includes("labuin") ||
-      rawLandmark.includes("pila") ||
-      branchHint.includes("pila")
-    ) {
-      activeReceiptOrder._selectedBranch = "pila";
-    } else {
-      activeReceiptOrder._selectedBranch = "calamba";
-    }
+    const explicitBranch = getOrderBranchKey(order);
+    activeReceiptOrder._selectedBranch = explicitBranch || "pila";
   }
 
   renderLanicaDocumentContent();
@@ -4877,6 +4962,14 @@ if (staffOrdersStatusFilterEl) {
   });
 }
 
+if (staffOrdersBranchFilterEl) {
+  staffOrdersBranchFilterEl.addEventListener("change", (e) => {
+    staffOrdersBranchFilter = e.target.value;
+    staffOrdersCurrentPage = 1;
+    applyStaffOrdersFilter();
+  });
+}
+
 
 // Stat Cards Click-to-Filter Sync
 const statFilterPairs = [
@@ -5008,37 +5101,169 @@ async function handleTableActionClick(e) {
     if (!orderId || !currentUser) return;
 
     const targetOrder = allStaffOrders.find((o) => o.id === orderId);
-    if (targetOrder && targetOrder.assignedToUid) {
+    if (!targetOrder) return;
+    if (targetOrder.assignedToUid) {
       showToast("This order is already assigned and cannot be claimed.", "error");
       return;
     }
 
-    try {
-      claimBtn.disabled = true;
-      claimBtn.textContent = "Claiming...";
-      const staffName = pickFirstNonEmpty(
-        currentUser.displayName,
-        currentUser.name,
-        currentUser.email,
-        "Staff Member"
+    if (!hasCustomerDeposited(targetOrder)) {
+      showToast(
+        "Deposit Required: Customer deposit must be received/verified before claiming and assigning this order to a branch.",
+        "warning"
       );
-      await updateDoc(doc(db, "orders", orderId), {
-        assignedToUid: currentUser.uid,
-        assignedToName: staffName,
-        updatedAt: Timestamp.now(),
-      });
-      showToast("Order claimed successfully!", "success");
-    } catch (err) {
-      console.error("Failed to claim order:", err);
-      showToast("Failed to claim order: " + (err.message || ""), "error");
-      claimBtn.disabled = false;
-      claimBtn.textContent = "Claim Order";
+      return;
     }
+
+    openClaimBranchModal(targetOrder);
+    return;
+  }
+
+  const openClaimModalBtn = e.target.closest(".btn-open-claim-modal");
+  if (openClaimModalBtn) {
+    closeAllKebabMenus();
+    const orderId = openClaimModalBtn.getAttribute("data-order-id");
+    const targetOrder = allStaffOrders.find((o) => o.id === orderId);
+    if (targetOrder) openClaimBranchModal(targetOrder);
     return;
   }
 }
 
-if (ordersListEl) ordersListEl.addEventListener("click", handleTableActionClick);
+// Branch Selection Modal Functions for Staff
+function openClaimBranchModal(order) {
+  const modal = document.getElementById("staff-claim-branch-modal");
+  const sub = document.getElementById("claim-modal-order-subtitle");
+  const idVal = document.getElementById("claim-modal-order-id-val");
+  if (!modal) return;
+  if (sub) {
+    sub.innerHTML = `Order <strong>#${escapeHtml(order.id.slice(0, 8))}</strong> • Customer: <strong>${escapeHtml(resolveCustomerDisplay(order))}</strong>`;
+  }
+  if (idVal) idVal.value = order.id;
+  modal.style.display = "flex";
+}
+
+function closeClaimBranchModal() {
+  const modal = document.getElementById("staff-claim-branch-modal");
+  if (modal) modal.style.display = "none";
+}
+
+async function handleClaimWithBranch(orderId, branchVal) {
+  if (!orderId || !currentUser) return;
+  if (branchVal !== "pila" && branchVal !== "calamba") return;
+
+  const targetOrder = allStaffOrders.find((o) => o.id === orderId);
+  if (!targetOrder) return;
+
+  if (!hasCustomerDeposited(targetOrder)) {
+    showToast(
+      "Deposit Required: Customer deposit must be received/verified before claiming this order.",
+      "warning"
+    );
+    closeClaimBranchModal();
+    return;
+  }
+
+  const branchName = branchVal === "pila" ? "Pila Branch" : "Calamba Branch";
+  const staffName = pickFirstNonEmpty(
+    currentUser?.displayName,
+    currentUser?.name,
+    currentUser?.email,
+    "Staff Member"
+  );
+
+  try {
+    await updateDoc(doc(db, "orders", orderId), {
+      assignedToUid: currentUser.uid,
+      assignedToName: staffName,
+      branch: branchVal,
+      branchName: branchName,
+      branchKey: branchVal,
+      updatedAt: Timestamp.now(),
+    });
+
+    targetOrder.assignedToUid = currentUser.uid;
+    targetOrder.assignedToName = staffName;
+    targetOrder.branch = branchVal;
+    targetOrder.branchName = branchName;
+    targetOrder.branchKey = branchVal;
+
+    closeClaimBranchModal();
+    showToast(`Order claimed successfully and assigned to ${branchName}!`, "success");
+    applyStaffOrdersFilter();
+  } catch (err) {
+    console.error("Failed to claim order:", err);
+    showToast("Failed to claim order: " + (err.message || ""), "error");
+  }
+}
+
+async function handleStaffBranchChange(orderId, branchVal) {
+  const targetOrder = allStaffOrders.find((o) => o.id === orderId);
+  if (!targetOrder) return;
+
+  if (!hasCustomerDeposited(targetOrder)) {
+    showToast(
+      "Deposit Required: Customer deposit must be received/verified before assigning the branch.",
+      "warning"
+    );
+    applyStaffOrdersFilter();
+    return;
+  }
+
+  if (branchVal !== "pila" && branchVal !== "calamba") return;
+  const branchName = branchVal === "pila" ? "Pila Branch" : "Calamba Branch";
+
+  try {
+    await updateDoc(doc(db, "orders", orderId), {
+      branch: branchVal,
+      branchName: branchName,
+      branchKey: branchVal,
+      updatedAt: Timestamp.now(),
+    });
+
+    targetOrder.branch = branchVal;
+    targetOrder.branchName = branchName;
+    targetOrder.branchKey = branchVal;
+
+    showToast(`Order assigned to ${branchName}!`, "success");
+    applyStaffOrdersFilter();
+  } catch (err) {
+    console.error("Failed to update branch:", err);
+    showToast("Failed to update branch: " + (err.message || ""), "error");
+    applyStaffOrdersFilter();
+  }
+}
+
+// Bind Claim & Branch Modal listeners
+const closeClaimModalBtn = document.getElementById("btn-close-claim-branch-modal");
+const cancelClaimModalBtn = document.getElementById("btn-cancel-claim-branch-modal");
+if (closeClaimModalBtn) closeClaimModalBtn.addEventListener("click", closeClaimBranchModal);
+if (cancelClaimModalBtn) cancelClaimModalBtn.addEventListener("click", closeClaimBranchModal);
+
+document.querySelectorAll(".btn-select-branch-choice").forEach((btn) => {
+  if (!btn.dataset.bound) {
+    btn.dataset.bound = "true";
+    btn.addEventListener("click", async () => {
+      const branch = btn.getAttribute("data-branch");
+      const orderId = document.getElementById("claim-modal-order-id-val")?.value;
+      if (!orderId || !branch) return;
+      await handleClaimWithBranch(orderId, branch);
+    });
+  }
+});
+
+if (ordersListEl) {
+  ordersListEl.addEventListener("click", handleTableActionClick);
+  ordersListEl.addEventListener("change", (e) => {
+    const branchSelect = e.target.closest(".order-branch-select");
+    if (branchSelect) {
+      const orderId = branchSelect.getAttribute("data-order-id");
+      const branchVal = branchSelect.value;
+      if (orderId && branchVal) {
+        handleStaffBranchChange(orderId, branchVal);
+      }
+    }
+  });
+}
 if (historyListEl) historyListEl.addEventListener("click", handleTableActionClick);
 
 const staffWatchlistBody = document.getElementById("staff-dashboard-watchlist-body");

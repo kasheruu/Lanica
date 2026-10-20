@@ -333,6 +333,7 @@ export async function placeOrderAtomic({
   customNotes = "",
   paymentDetails = {},
   orderId: customOrderId = null,
+  branch = null,
 }) {
   if (!userId) throw new Error("User ID is required to place an order.");
   if (!cartItems || cartItems.length === 0) throw new Error("Cart is empty.");
@@ -501,6 +502,12 @@ export async function placeOrderAtomic({
       statusStr = "Placed";
     }
 
+    // Branch is NOT automatically set on customer checkout.
+    // Admin or Staff explicitly assigns Pila Branch or Calamba Branch after customer deposit is verified.
+    const explicitBranch = branch ? String(branch).trim().toLowerCase() : null;
+    const assignedBranch = explicitBranch === "pila" || explicitBranch === "calamba" ? explicitBranch : null;
+    const assignedBranchName = assignedBranch === "pila" ? "Pila Branch" : assignedBranch === "calamba" ? "Calamba Branch" : "Unassigned";
+
     const orderDocData = {
       orderId: orderId,
       id: orderId,
@@ -510,6 +517,9 @@ export async function placeOrderAtomic({
       buyerUid: userId,
       orderedByUid: userId,
       createdByUid: userId,
+      branch: assignedBranch,
+      branchName: assignedBranchName,
+      branchKey: assignedBranch,
       items: orderItemsBreakdown,
       totalAmount: parsedTotal,
       total: parsedTotal,

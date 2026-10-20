@@ -446,73 +446,272 @@
     </div>
 
     <div id="analytics-section" class="admin-section is-hidden">
-      <header class="admin-header">
+      <header class="admin-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
         <div>
-          <h1>Furniture & Production Analytics</h1>
-          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280;">Real-time Made-to-Order production pipeline, sales performance, and category breakdown.</p>
+          <h1 style="margin: 0; font-size: 1.85rem; font-weight: 800; color: #0f172a;">Furniture &amp; Production Analytics</h1>
+          <p class="admin-subtitle" style="margin-top: 4px; color: #6b7280; font-size: 0.88rem;">
+            Real-time Made-to-Order production pipeline, branch-filtered sales performance, and best-seller tracking.
+          </p>
         </div>
-        <button id="export-analytics-pdf-btn" class="btn-primary" type="button">Export PDF</button>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <!-- Multi-Branch Selector (Thesis Panel Requirement) -->
+          <div class="analytics-branch-picker" style="display: inline-flex; align-items: center; gap: 8px; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 7px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18M3 7v14M21 7v14M6 7V3h12v4M9 11h2M13 11h2M9 15h2M13 15h2"></path>
+            </svg>
+            <label for="analytics-branch-filter" style="font-size: 0.82rem; font-weight: 700; color: #475569; margin: 0;">Branch:</label>
+            <select id="analytics-branch-filter" class="analytics-branch-select" style="border: none; outline: none; background: transparent; font-weight: 700; font-size: 0.88rem; color: #0f172a; cursor: pointer; padding-right: 4px;">
+              <option value="all">🏢 All Branches (Combined Data)</option>
+              <option value="pila">📍 Pila Branch</option>
+              <option value="calamba">📍 Calamba Branch</option>
+            </select>
+          </div>
+          <button id="export-analytics-pdf-btn" class="btn-primary" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export PDF
+          </button>
+        </div>
       </header>
 
       <div id="analytics-export-area">
-        <!-- Top Metrics Cards -->
-        <div class="stats-grid stats-grid-modern">
-          <div class="stat-card">
-            <h3>Catalog Listings</h3>
-            <p class="stat-value" id="total-products">0</p>
-            <span style="font-size: 0.78rem; color: #6b7280;">Active furniture models</span>
+        <!-- Top Real-Time Metrics Suite -->
+        <div class="stats-grid dashboard-kpi-grid" style="margin-bottom: 24px;">
+          <!-- 1. Completed Revenue -->
+          <div class="stat-card kpi-card kpi-revenue">
+            <div class="kpi-icon-wrapper revenue-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+            </div>
+            <div class="kpi-content">
+              <h3>Total Revenue</h3>
+              <p class="stat-value" id="analytics-completed-revenue" style="color: #059669;">₱0.00</p>
+              <span class="kpi-subtitle">Completed &amp; delivered orders</span>
+            </div>
           </div>
-          <div class="stat-card">
-            <h3>Made-to-Order Queue</h3>
-            <p class="stat-value" id="low-stock" style="color: #2563eb;">0</p>
-            <span style="font-size: 0.78rem; color: #6b7280;" id="analytics-mto-sub">Crafting in workshop</span>
+
+          <!-- 2. Total Orders -->
+          <div class="stat-card kpi-card kpi-pending">
+            <div class="kpi-icon-wrapper pending-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 16 14"></polyline>
+              </svg>
+            </div>
+            <div class="kpi-content">
+              <h3>Total Orders</h3>
+              <p class="stat-value" id="analytics-total-units">0</p>
+              <span class="kpi-subtitle"><span id="analytics-avg-stock">0</span> fulfilled orders</span>
+            </div>
           </div>
-          <div class="stat-card">
-            <h3>Total Order Bookings</h3>
-            <p class="stat-value" id="total-value" style="color: #0f1115;">₱0.00</p>
-            <span style="font-size: 0.78rem; color: #6b7280;">Cumulative gross volume</span>
+
+          <!-- 3. Made-to-Order Queue -->
+          <div class="stat-card kpi-card kpi-workshop">
+            <div class="kpi-icon-wrapper workshop-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb;">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+              </svg>
+            </div>
+            <div class="kpi-content">
+              <h3>MTO Queue</h3>
+              <p class="stat-value" id="low-stock" style="color: #2563eb;">0</p>
+              <span class="kpi-subtitle" id="analytics-mto-sub">Crafting in workshop</span>
+            </div>
+          </div>
+
+          <!-- 4. Total Order Bookings (Gross Volume) -->
+          <div class="stat-card kpi-card kpi-fulfilled">
+            <div class="kpi-icon-wrapper fulfilled-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="1" y="3" width="15" height="13"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+              </svg>
+            </div>
+            <div class="kpi-content">
+              <h3>Gross Bookings</h3>
+              <p class="stat-value" id="total-value" style="color: #0f1115;">₱0.00</p>
+              <span class="kpi-subtitle" id="analytics-balance-due">₱0.00 balance pending</span>
+            </div>
+          </div>
+
+          <!-- 5. Active Catalog & Low Stock Alert -->
+          <div class="stat-card kpi-card kpi-products">
+            <div class="kpi-icon-wrapper products-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+              </svg>
+            </div>
+            <div class="kpi-content">
+              <h3>Catalog Listings</h3>
+              <p class="stat-value" id="total-products">0</p>
+              <span class="kpi-subtitle"><span id="analytics-out-of-stock" style="font-weight: 600; color: #d97706;">0</span> low stock models</span>
+            </div>
           </div>
         </div>
 
-        <!-- TOP CHART VISUALIZATIONS SECTION -->
+        <!-- Orders by Status Lifecycle Pipeline Breakdown -->
+        <div class="analytics-card" style="margin-bottom: 24px; padding: 18px 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a;">Orders by Status Lifecycle</h3>
+              <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Live count of database orders grouped by fulfillment stage</p>
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; color: #059669; font-size: 0.74rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid #a7f3d0;">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span> Live Database Stream
+            </span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+            <div class="pipeline-step-item" style="padding: 12px 10px; text-align: center;">
+              <div class="pipeline-step-badge step-placed" id="analytics-status-pending">0</div>
+              <div class="pipeline-step-name">1. Pending / Placed</div>
+              <div class="pipeline-step-sub">Awaiting Review</div>
+            </div>
+            <div class="pipeline-step-item" style="padding: 12px 10px; text-align: center;">
+              <div class="pipeline-step-badge step-downpayment" id="analytics-status-paid">0</div>
+              <div class="pipeline-step-name">2. Paid / Deposit</div>
+              <div class="pipeline-step-sub">Slot Confirmed</div>
+            </div>
+            <div class="pipeline-step-item" style="padding: 12px 10px; text-align: center;">
+              <div class="pipeline-step-badge step-production" id="analytics-status-production">0</div>
+              <div class="pipeline-step-name">3. In Production</div>
+              <div class="pipeline-step-sub">Crafting Active</div>
+            </div>
+            <div class="pipeline-step-item" style="padding: 12px 10px; text-align: center;">
+              <div class="pipeline-step-badge step-qc" id="analytics-status-qc">0</div>
+              <div class="pipeline-step-name">4. Quality Checked</div>
+              <div class="pipeline-step-sub">Passed Inspection</div>
+            </div>
+            <div class="pipeline-step-item" style="padding: 12px 10px; text-align: center;">
+              <div class="pipeline-step-badge step-delivered" id="analytics-status-delivered">0</div>
+              <div class="pipeline-step-name">5. Delivered</div>
+              <div class="pipeline-step-sub">Fulfilled Orders</div>
+            </div>
+            <div class="pipeline-step-item" style="padding: 12px 10px; text-align: center;">
+              <div class="pipeline-step-badge" style="color: #ef4444;" id="analytics-status-cancelled">0</div>
+              <div class="pipeline-step-name">6. Cancelled</div>
+              <div class="pipeline-step-sub">Voided Requests</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TOP CHART VISUALIZATIONS SECTION (Big Tech E-Commerce Grade) -->
         <div class="analytics-card revenue-analytics-card" style="margin-bottom: 24px;">
           <div class="orders-analytics-header">
             <div>
-              <h3 style="margin: 0">Revenue & Payment Collections</h3>
-              <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #6b7280;">Order booking value vs cash collected (downpayments & full payments)</p>
+              <h3 style="margin: 0; font-size: 1.12rem; font-weight: 700; color: #0f172a;">Revenue &amp; Payment Collections</h3>
+              <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #64748b;">Live comparison of gross order bookings vs cash collected across billing cycles</p>
             </div>
-            <div class="orders-date-range">
-              <label for="orders-date-start">From</label>
-              <input type="date" id="orders-date-start" />
-              <label for="orders-date-end">To</label>
-              <input type="date" id="orders-date-end" />
+            <div class="analytics-chart-controls">
+              <!-- Quick Timeframe Preset Pills -->
+              <div class="analytics-timeframe-pills" id="analytics-timeframe-pills" role="group" aria-label="Timeframe Presets">
+                <button type="button" class="analytics-timeframe-btn" data-preset="7d">7D</button>
+                <button type="button" class="analytics-timeframe-btn" data-preset="14d">14D</button>
+                <button type="button" class="analytics-timeframe-btn active" data-preset="30d">30D</button>
+                <button type="button" class="analytics-timeframe-btn" data-preset="90d">90D</button>
+                <button type="button" class="analytics-timeframe-btn" data-preset="ytd">YTD</button>
+                <button type="button" class="analytics-timeframe-btn" data-preset="all">All</button>
+              </div>
+
+              <!-- Date Pickers -->
+              <div class="orders-date-range">
+                <label for="orders-date-start">From</label>
+                <input type="date" id="orders-date-start" />
+                <label for="orders-date-end">To</label>
+                <input type="date" id="orders-date-end" />
+              </div>
+
+              <!-- Chart Mode Toggle (Area Spline vs Rounded Columns) -->
+              <div class="analytics-mode-toggle" id="analytics-mode-toggle" role="group" aria-label="Chart Style">
+                <button type="button" class="analytics-mode-btn active" data-mode="area" title="Smooth Area Spline">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18c4-6 6-12 10-12s5 7 8 5"></path><path d="M3 21h18"></path></svg> Area
+                </button>
+                <button type="button" class="analytics-mode-btn" data-mode="bar" title="Rounded Column Bars">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="4" height="11" rx="1"></rect><rect x="10" y="5" width="4" height="16" rx="1"></rect><rect x="17" y="12" width="4" height="9" rx="1"></rect></svg> Bars
+                </button>
+              </div>
             </div>
           </div>
+
           <div id="orders-date-validation" class="orders-date-validation" aria-live="polite"></div>
-          <div class="orders-analytics-legend">
-            <span class="orders-legend-item"><i class="orders-legend-dot revenue"></i>Gross Revenue (Bookings)</span>
-            <span class="orders-legend-item"><i class="orders-legend-dot profit"></i>Cash Collected</span>
+
+          <div class="orders-analytics-legend" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; gap: 18px; align-items: center;">
+              <span class="orders-legend-item"><i class="orders-legend-dot revenue"></i>Gross Revenue (Bookings)</span>
+              <span class="orders-legend-item"><i class="orders-legend-dot profit"></i>Cash Collected</span>
+            </div>
+            <div id="orders-chart-status-badge" style="font-size: 0.76rem; color: #64748b; font-weight: 500;">
+              Hover points for exact daily breakdown
+            </div>
           </div>
+
           <div class="orders-analytics-kpis">
             <div class="orders-analytics-kpi">
-              <span>Total Bookings</span>
+              <span>Gross Bookings</span>
               <strong id="orders-total-revenue">₱0.00</strong>
+              <span class="kpi-subtext" id="orders-total-count">0 orders in period</span>
             </div>
             <div class="orders-analytics-kpi">
               <span>Cash Collected</span>
-              <strong id="orders-total-profit">₱0.00</strong>
+              <strong id="orders-total-profit" style="color: #059669;">₱0.00</strong>
+              <span class="kpi-subtext" id="orders-collection-rate">0% collection efficiency</span>
             </div>
             <div class="orders-analytics-kpi">
               <span>Balance Pending Delivery</span>
               <strong id="orders-balance-due" style="color: #d97706;">₱0.00</strong>
+              <span class="kpi-subtext" id="orders-balance-rate">Pending final handover</span>
+            </div>
+            <div class="orders-analytics-kpi">
+              <span>Period Velocity &amp; Peak</span>
+              <strong id="orders-peak-day" style="font-size: 1.15rem; color: #1e293b;">₱0.00</strong>
+              <span class="kpi-subtext" id="orders-daily-velocity">Average daily sales</span>
             </div>
           </div>
+
           <div id="orders-revenue-graph" class="orders-revenue-graph"></div>
         </div>
 
-        <div class="analytics-grid analytics-grid-modern">
+        <!-- DYNAMIC BEST-SELLERS TRACKING (Thesis Panel Requirement) -->
+        <div class="analytics-card analytics-card-wide" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 1.12rem; font-weight: 800; color: #0f172a;">🏆 Best-Selling Furniture &amp; Top Performers</h3>
+                <span id="bestsellers-branch-badge" style="background: #eff6ff; color: #1d4ed8; font-size: 0.74rem; font-weight: 700; padding: 2px 10px; border-radius: 9999px; border: 1px solid #bfdbfe;">
+                  All Branches
+                </span>
+              </div>
+              <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #64748b;">
+                Real-time ranking of top customer-purchased products computed directly from live order transactions
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 0.78rem; font-weight: 600; color: #64748b;">Rank By:</span>
+              <div class="analytics-mode-toggle" id="bestsellers-sort-toggle" role="group" aria-label="Sort metric">
+                <button type="button" class="analytics-mode-btn active" id="btn-sort-bestsellers-units" data-sort="units" title="Sort by Units Sold">
+                  Units Sold
+                </button>
+                <button type="button" class="analytics-mode-btn" id="btn-sort-bestsellers-revenue" data-sort="revenue" title="Sort by Revenue Generated">
+                  Revenue (₱)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="analytics-bestsellers-list" class="bestsellers-grid">
+            <div class="analytics-empty" style="text-align: center; padding: 36px 16px; color: #64748b;">
+              Loading best-selling furniture data...
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics-grid analytics-grid-modern" style="margin-bottom: 24px;">
           <!-- Inventory Breakdown by Category (Donut Chart Visualization) -->
-          <div class="analytics-card analytics-card-wide">
+          <div class="analytics-card">
             <h3>Category Breakdown</h3>
             <div id="analytics-category-donut-container" class="donut-chart-container">
               <div id="analytics-category-donut" class="donut-chart"></div>
@@ -520,18 +719,48 @@
             </div>
           </div>
 
-          <!-- Made-to-Order Production Watchlist -->
-          <div class="analytics-card analytics-card-wide">
+          <!-- Low Stock Inventory Alerts -->
+          <div class="analytics-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
               <div>
-                <h3 style="margin: 0;">Active Made-to-Order Production Watchlist</h3>
-                <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Real-time queue of custom furniture orders crafting in workshop (14–21 days lead time)</p>
+                <h3 style="margin: 0;">Low Stock Inventory Alerts</h3>
+                <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Live items with inventory stock level &le; 3 units</p>
               </div>
-              <span id="analytics-mto-count-badge" style="font-size: 0.8rem; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
-                0 Orders in Queue
+              <span id="analytics-low-stock-badge" style="font-size: 0.78rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: #ecfdf5; color: #059669;">
+                0 Alerts
               </span>
             </div>
-            <div id="analytics-low-stock-list" class="analytics-mto-watchlist"></div>
+            <div id="analytics-low-stock-items" class="analytics-watchlist" style="max-height: 280px; overflow-y: auto;">
+              <div class="analytics-empty" style="color: #64748b; padding: 20px; text-align: center;">Checking inventory stocks...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Made-to-Order Production Watchlist -->
+        <div class="analytics-card analytics-card-wide" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="margin: 0;">Active Made-to-Order Production Watchlist</h3>
+              <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Real-time queue of custom furniture orders crafting in workshop (14–21 days lead time)</p>
+            </div>
+            <span id="analytics-mto-count-badge" style="font-size: 0.8rem; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
+              0 Orders in Queue
+            </span>
+          </div>
+          <div id="analytics-low-stock-list" class="analytics-mto-watchlist"></div>
+        </div>
+
+        <!-- Recent Sales Activity Table / Feed -->
+        <div class="analytics-card analytics-card-wide">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a;">Recent Sales Activity</h3>
+              <p style="margin: 3px 0 0 0; font-size: 0.8rem; color: #6b7280;">Live feed of the latest orders recorded in the database</p>
+            </div>
+            <span style="font-size: 0.78rem; font-weight: 600; color: #2563eb;">Live Database Feed</span>
+          </div>
+          <div id="analytics-recent-sales-list">
+            <div class="analytics-empty" style="padding: 24px; text-align: center; color: #64748b;">Loading recent orders...</div>
           </div>
         </div>
       </div>
@@ -1423,7 +1652,7 @@
               aria-label="Clear order search"
             >✕</button>
           </div>
-          <label for="orders-status-filter" class="orders-filter-label">Filter</label>
+          <label for="orders-status-filter" class="orders-filter-label">Status</label>
           <select id="orders-status-filter" class="orders-filter-select">
             <option value="all">All statuses</option>
             <option value="refund_requested" style="font-weight: bold; color: #dc2626;">Refund Requests Queue</option>
@@ -1436,6 +1665,13 @@
             <option value="completed" style="font-weight: bold; color: #059669;">Step 6: COMPLETED (Customer Received)</option>
             <option value="refunded">Refunded</option>
             <option value="cancelled">Cancelled</option>
+          </select>
+          <label for="orders-branch-filter" class="orders-filter-label">Branch</label>
+          <select id="orders-branch-filter" class="orders-filter-select">
+            <option value="all">All Branches</option>
+            <option value="pila">📍 Pila Branch</option>
+            <option value="calamba">📍 Calamba Branch</option>
+            <option value="unassigned">📍 Unassigned (Needs Branch)</option>
           </select>
           <button id="toggle-batch-delete-mode-btn" class="btn-secondary" type="button">
             Batch Delete Mode

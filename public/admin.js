@@ -176,6 +176,64 @@ const ordersDateValidationEl = document.getElementById("orders-date-validation")
 const exportAnalyticsPdfBtn = document.getElementById("export-analytics-pdf-btn");
 const analyticsExportArea = document.getElementById("analytics-export-area");
 
+// ==========================================================================
+// Multi-Branch Filtering State & Order Attribution (Pila vs Calamba Branches)
+// ==========================================================================
+let currentAnalyticsBranch = "all"; // "all" | "pila" | "calamba"
+let currentOrdersBranch = "all"; // "all" | "pila" | "calamba"
+let currentBestSellersSort = "units"; // "units" | "revenue"
+const analyticsBranchFilterEl = document.getElementById("analytics-branch-filter");
+const ordersBranchFilterEl = document.getElementById("orders-branch-filter");
+const bestsellersListEl = document.getElementById("analytics-bestsellers-list");
+
+function getOrderBranchKey(order) {
+  if (!order) return null;
+  const raw = String(
+    order.branch ||
+    order.branchKey ||
+    order.branchName ||
+    order.pickupBranch ||
+    order.storeBranch ||
+    ""
+  ).trim().toLowerCase();
+
+  if (raw.includes("pila")) return "pila";
+  if (raw.includes("calamba")) return "calamba";
+  return null;
+}
+
+function hasCustomerDeposited(order) {
+  if (!order) return false;
+  const st = normalizeOrderStatus(order.status).toLowerCase();
+  if (
+    st === "deposit verified" ||
+    st === "downpayment confirmed" ||
+    st === "confirmed" ||
+    st === "in production" ||
+    st === "quality checked" ||
+    st === "shipped" ||
+    st === "delivered" ||
+    st === "completed"
+  ) {
+    return true;
+  }
+  if (Number(order.downpaymentPaid || 0) > 0) return true;
+  if (order.depositVerified === true) return true;
+  const payStatus = String(order.paymentStatus || "").toLowerCase();
+  if (payStatus === "paid" || payStatus === "downpayment_paid" || payStatus === "partial_paid") {
+    return true;
+  }
+  if (order.paymentOption === "full" && payStatus !== "unpaid" && payStatus !== "failed") {
+    return true;
+  }
+  return false;
+}
+
+function getAnalyticsBranchOrders() {
+  if (currentAnalyticsBranch === "all") return allOrders;
+  return allOrders.filter((o) => getOrderBranchKey(o) === currentAnalyticsBranch);
+}
+
 // Auto-resize description text area
 const productDescriptionTextarea = document.getElementById("product-description");
 if (productDescriptionTextarea) {
@@ -4111,10 +4169,333 @@ function renderMtoProductionWatchlist(orders) {
     .join("");
 }
 
+function renderAnalyticsLowStock(products) {
+  const container = document.getElementById("analytics-low-stock-items");
+  const countBadge = document.getElementById("analytics-low-stock-badge");
+  if (!container) return;
+
+  const lowStock = (products || []).filter((p) => {
+    const s = Number(p.stock != null ? p.stock : 0);
+    return !Number.isNaN(s) && s <= 3;
+  });
+
+  if (countBadge) {
+    countBadge.textContent = `${lowStock.length} Low Stock Alert${lowStock.length === 1 ? "" : "s"}`;
+    countBadge.style.background = lowStock.length > 0 ? "#fee2e2" : "#ecfdf5";
+    countBadge.style.color = lowStock.length > 0 ? "#dc2626" : "#059669";
+  }
+
+  if (!lowStock.length) {
+    container.innerHTML = `
+      <div class="analytics-empty" style="color: #059669; font-weight: 500; padding: 18px 12px; text-align: center;">
+        ✓ All catalog inventory items are adequately stocked (stock &gt; 3 units).
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = lowStock
+    .map((p) => {
+      const stock = Number(p.stock != null ? p.stock : 0);
+      const isOut = stock <= 0;
+      const badgeStyle = isOut
+        ? "background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;"
+        : "background: #fef3c7; color: #d97706; border: 1px solid #fcd34d;";
+      const stockText = isOut ? "Out of Stock (0 units)" : `${stock} unit${stock === 1 ? "" : "s"} left`;
+
+      return `
+        <div class="analytics-watch-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border: 1px solid #f1f5f9; border-radius: 10px; margin-bottom: 8px; background: #fafafa;">
+          <div>
+            <div class="analytics-watch-name" style="font-weight: 600; color: #0f172a; font-size: 0.88rem;">${escapeHtml(p.name || "Untitled Model")}</div>
+            <span style="font-size: 0.76rem; color: #64748b;">Category: ${escapeHtml(p.category || "General")} • Price: ${formatPeso(Number(p.price) || 0)}</span>
+          </div>
+          <span style="font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; ${badgeStyle}">
+            ${stockText}
+          </span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderAnalyticsRecentSales(orders) {
+  const container = document.getElementById("analytics-recent-sales-list");
+  if (!container) return;
+
+  const activeOrders = Array.isArray(orders)
+    ? orders.filter((o) => normalizeOrderAction(o.action) !== "delete")
+    : [];
+
+  if (!activeOrders.length) {
+    container.innerHTML = `
+      <div class="analytics-empty" style="padding: 24px; text-align: center; color: #64748b;">
+        No sales activity recorded in the database yet.
+      </div>`;
+    return;
+  }
+
+  const recent = activeOrders.slice(0, 6);
+
+  container.innerHTML = recent
+    .map((o) => {
+      const st = normalizeOrderStatus(o.status);
+      const isCompleted = isOrderCompleted(o) || st === "delivered" || st === "completed";
+      const total = Number(o.total != null ? o.total : o.totalAmount) || 0;
+      const customer = resolveCustomerDisplay(o);
+
+      let dateStr = "Recently";
+      if (o.createdAt && typeof o.createdAt.toDate === "function") {
+        dateStr = o.createdAt.toDate().toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } else if (o.createdAt && o.createdAt.seconds) {
+        dateStr = new Date(o.createdAt.seconds * 1000).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      const items = Array.isArray(o.items) ? o.items : [];
+      const itemDesc = items.length
+        ? items.map((it) => `${escapeHtml(it.name || "Item")}${it.quantity > 1 ? ` × ${it.quantity}` : ""}`).join(", ")
+        : "Custom Furniture";
+
+      let statusBadgeColor = "background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;";
+      let statusLabel = st.toUpperCase();
+      if (isCompleted) {
+        statusBadgeColor = "background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;";
+        statusLabel = "DELIVERED";
+      } else if (st === "in production") {
+        statusBadgeColor = "background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe;";
+        statusLabel = "IN PRODUCTION";
+      } else if (st === "cancelled" || st === "declined") {
+        statusBadgeColor = "background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;";
+        statusLabel = "CANCELLED";
+      } else if (st === "downpayment confirmed") {
+        statusBadgeColor = "background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;";
+        statusLabel = "DEPOSIT PAID";
+      }
+
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border: 1px solid #f1f5f9; border-radius: 10px; margin-bottom: 8px; background: #ffffff; flex-wrap: wrap; gap: 8px;">
+          <div style="min-width: 200px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <strong style="color: #0f172a; font-size: 0.88rem;">#${escapeHtml((o.id || o.orderId || "—").slice(0, 8))}</strong>
+              <span style="font-size: 0.75rem; color: #64748b;">• ${escapeHtml(customer)}</span>
+            </div>
+            <div style="font-size: 0.8rem; color: #475569; margin-top: 2px;">${itemDesc}</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; margin-left: auto;">
+            <div style="text-align: right;">
+              <strong style="display: block; font-size: 0.92rem; color: #0f172a;">${formatPeso(total)}</strong>
+              <span style="font-size: 0.72rem; color: #94a3b8;">${escapeHtml(dateStr)}</span>
+            </div>
+            <span style="font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; ${statusBadgeColor}">
+              ${statusLabel}
+            </span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderBestSellers(orders, products, sortMetric = "units") {
+  const container = document.getElementById("analytics-bestsellers-list");
+  if (!container) return;
+
+  const validOrders = (orders || []).filter((o) => {
+    const st = normalizeOrderStatus(o.status);
+    return (
+      st !== "cancelled" &&
+      st !== "declined" &&
+      normalizeOrderAction(o.action) !== "delete"
+    );
+  });
+
+  const productSalesMap = new Map();
+
+  validOrders.forEach((order) => {
+    const items = Array.isArray(order.items) ? order.items : [];
+    items.forEach((item) => {
+      const pId = String(item.productId || item.id || "").trim();
+      const pName = String(item.name || "Custom Furniture").trim();
+      const key = pId || pName.toLowerCase();
+      if (!key) return;
+
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const price = Number(item.price || item.unitPrice || 0);
+      const subtotal = Number(item.subtotal) || price * qty;
+
+      if (!productSalesMap.has(key)) {
+        productSalesMap.set(key, {
+          id: pId,
+          name: pName,
+          category: item.category || "",
+          material: item.material || "",
+          imageUrl: item.url || item.imageUrl || "",
+          unitsSold: 0,
+          totalRevenue: 0,
+          orderCount: 0,
+        });
+      }
+
+      const entry = productSalesMap.get(key);
+      entry.unitsSold += qty;
+      entry.totalRevenue += subtotal;
+      entry.orderCount += 1;
+      if (!entry.imageUrl && (item.url || item.imageUrl)) {
+        entry.imageUrl = item.url || item.imageUrl;
+      }
+    });
+  });
+
+  // Enrich with catalog metadata from allProducts
+  if (Array.isArray(products)) {
+    productSalesMap.forEach((entry) => {
+      const match = products.find(
+        (p) =>
+          (p.id && String(p.id).trim() === entry.id) ||
+          (p.name && p.name.trim().toLowerCase() === entry.name.toLowerCase())
+      );
+      if (match) {
+        if (!entry.imageUrl && (match.imageUrl || match.url)) {
+          entry.imageUrl = match.imageUrl || match.url;
+        }
+        if (!entry.category && match.category) {
+          entry.category = match.category;
+        }
+      }
+    });
+  }
+
+  const items = Array.from(productSalesMap.values());
+
+  if (!items.length) {
+    const branchName =
+      currentAnalyticsBranch === "pila"
+        ? "Pila Branch"
+        : currentAnalyticsBranch === "calamba"
+          ? "Calamba Branch"
+          : "All Branches";
+    container.innerHTML = `
+      <div class="analytics-empty" style="grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: #64748b;">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 8px;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <p style="margin: 0; font-weight: 600; font-size: 0.92rem; color: #334155;">No sales recorded yet for ${escapeHtml(branchName)}</p>
+        <p style="margin: 4px 0 0; font-size: 0.8rem; color: #94a3b8;">Customer orders placed for this branch will appear here dynamically.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Sort by units or revenue
+  if (sortMetric === "revenue") {
+    items.sort((a, b) => b.totalRevenue - a.totalRevenue || b.unitsSold - a.unitsSold);
+  } else {
+    items.sort((a, b) => b.unitsSold - a.unitsSold || b.totalRevenue - a.totalRevenue);
+  }
+
+  const topItems = items.slice(0, 8);
+  const maxMetricVal = Math.max(
+    1,
+    ...topItems.map((it) => (sortMetric === "revenue" ? it.totalRevenue : it.unitsSold))
+  );
+
+  container.innerHTML = topItems
+    .map((item, idx) => {
+      const rank = idx + 1;
+      const rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "rank-other";
+      const rankLabel = rank === 1 ? "🥇 #1 Top" : rank === 2 ? "🥈 #2" : rank === 3 ? "🥉 #3" : `#${rank}`;
+      const metricVal = sortMetric === "revenue" ? item.totalRevenue : item.unitsSold;
+      const pct = Math.min(100, Math.round((metricVal / maxMetricVal) * 100));
+      const fallbackImg = "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=300&q=80";
+      const imgUrl = item.imageUrl || fallbackImg;
+
+      return `
+        <div class="bestseller-card">
+          <span class="bestseller-rank-badge ${rankClass}">${rankLabel}</span>
+          <div class="bestseller-img-wrap">
+            <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.src='${fallbackImg}'" />
+          </div>
+          <div class="bestseller-info">
+            <h4 class="bestseller-title" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h4>
+            <div class="bestseller-meta">
+              <span class="bestseller-cat-pill">${escapeHtml(item.category || "Furniture")}</span>
+              <span>${item.orderCount} order${item.orderCount === 1 ? "" : "s"}</span>
+            </div>
+            <div class="bestseller-stats-row">
+              <span class="bestseller-units">${item.unitsSold} unit${item.unitsSold === 1 ? "" : "s"} sold</span>
+              <span class="bestseller-rev">${formatPeso(item.totalRevenue)}</span>
+            </div>
+            <div class="bestseller-progress-track">
+              <div class="bestseller-progress-bar" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function initBranchAnalyticsControls() {
+  const branchFilter = document.getElementById("analytics-branch-filter");
+  if (branchFilter && !branchFilter.dataset.bound) {
+    branchFilter.dataset.bound = "true";
+    branchFilter.addEventListener("change", (e) => {
+      currentAnalyticsBranch = e.target.value || "all";
+      const badge = document.getElementById("bestsellers-branch-badge");
+      if (badge) {
+        badge.textContent =
+          currentAnalyticsBranch === "pila"
+            ? "Pila Branch"
+            : currentAnalyticsBranch === "calamba"
+              ? "Calamba Branch"
+              : "All Branches";
+      }
+      updateStats(allProducts);
+      renderRevenueGraph();
+    });
+  }
+
+  const sortToggle = document.getElementById("bestsellers-sort-toggle");
+  if (sortToggle && !sortToggle.dataset.bound) {
+    sortToggle.dataset.bound = "true";
+    sortToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest(".analytics-mode-btn");
+      if (!btn) return;
+      const sort = btn.getAttribute("data-sort");
+      if (!sort || sort === currentBestSellersSort) return;
+      currentBestSellersSort = sort;
+      sortToggle.querySelectorAll(".analytics-mode-btn").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+      });
+      renderBestSellers(getAnalyticsBranchOrders(), allProducts, currentBestSellersSort);
+    });
+  }
+
+  const ordersBranchFilter = document.getElementById("orders-branch-filter");
+  if (ordersBranchFilter && !ordersBranchFilter.dataset.bound) {
+    ordersBranchFilter.dataset.bound = "true";
+    ordersBranchFilter.addEventListener("change", (e) => {
+      currentOrdersBranch = e.target.value || "all";
+      applyOrdersFilter();
+    });
+  }
+}
+
 const updateStats = (products) => {
   const totalCatalogListings = products ? products.length : 0;
-  const activeOrders = Array.isArray(allOrders)
-    ? allOrders.filter((o) => normalizeOrderAction(o.action) !== "delete")
+  const branchOrders = getAnalyticsBranchOrders();
+  const activeOrders = Array.isArray(branchOrders)
+    ? branchOrders.filter((o) => normalizeOrderAction(o.action) !== "delete")
     : [];
 
   const inProductionOrders = activeOrders.filter((o) => {
@@ -4130,7 +4511,7 @@ const updateStats = (products) => {
 
   const completedOrders = activeOrders.filter((o) => {
     const st = normalizeOrderStatus(o.status);
-    return st === "delivered" || st === "shipped";
+    return isOrderCompleted(o) || st === "delivered" || st === "completed";
   });
 
   const totalBookings = activeOrders.reduce((sum, o) => {
@@ -4138,9 +4519,16 @@ const updateStats = (products) => {
     return sum + val;
   }, 0);
 
+  const totalCompletedRevenue = completedOrders.reduce((sum, o) => {
+    const val = Number(o.total != null ? o.total : o.totalAmount);
+    if (!Number.isNaN(val) && Number.isFinite(val)) return sum + val;
+    return sum + getOrderRevenue(o);
+  }, 0);
+
   const totalCashCollected = activeOrders.reduce((sum, o) => {
     const total = Number(o.total != null ? o.total : o.totalAmount) || 0;
     if (
+      isOrderCompleted(o) ||
       o.balanceStatus === "settled" ||
       o.paymentOption === "full" ||
       o.balanceSettlementMethod === "full_paid"
@@ -4154,7 +4542,48 @@ const updateStats = (products) => {
 
   const totalBalanceDue = Math.max(0, totalBookings - totalCashCollected);
 
+  // Status Lifecycle Breakdown (Pending, Paid, In Production, QC Checked, Delivered, Cancelled)
+  const statusCounts = {
+    pending: 0,
+    paid: 0,
+    production: 0,
+    qc: 0,
+    delivered: 0,
+    cancelled: 0,
+  };
+
+  activeOrders.forEach((o) => {
+    const st = normalizeOrderStatus(o.status);
+    if (isOrderCompleted(o) || st === "delivered" || st === "completed") {
+      statusCounts.delivered++;
+    } else if (st === "cancelled" || st === "declined") {
+      statusCounts.cancelled++;
+    } else if (st === "in production") {
+      statusCounts.production++;
+    } else if (st === "quality checked") {
+      statusCounts.qc++;
+    } else if (st === "downpayment confirmed" || st === "slot reserved") {
+      statusCounts.paid++;
+    } else {
+      statusCounts.pending++;
+    }
+  });
+
+  const setStatusEl = (id, count) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(count);
+  };
+  setStatusEl("analytics-status-pending", statusCounts.pending);
+  setStatusEl("analytics-status-paid", statusCounts.paid);
+  setStatusEl("analytics-status-production", statusCounts.production);
+  setStatusEl("analytics-status-qc", statusCounts.qc);
+  setStatusEl("analytics-status-delivered", statusCounts.delivered);
+  setStatusEl("analytics-status-cancelled", statusCounts.cancelled);
+
   // Top stats grid
+  const completedRevEl = document.getElementById("analytics-completed-revenue");
+  if (completedRevEl) completedRevEl.textContent = formatPeso(totalCompletedRevenue);
+
   if (totalProductsStat) totalProductsStat.textContent = totalCatalogListings;
   if (lowStockStat) lowStockStat.textContent = inProductionCount;
   if (analyticsMtoSubEl) {
@@ -4173,9 +4602,15 @@ const updateStats = (products) => {
     analyticsBalanceDueEl.textContent = `${formatPeso(totalBalanceDue)} balance pending`;
   }
 
-  // Production & Order Health Card
+  // Low stock inventory calculation (stock <= 3 threshold)
+  const lowStockCount = (products || []).filter((p) => {
+    const s = Number(p.stock != null ? p.stock : 0);
+    return !Number.isNaN(s) && s <= 3;
+  }).length;
+
+  // Production & Order Health Card / Analytics Units
   if (analyticsTotalUnitsEl) analyticsTotalUnitsEl.textContent = String(activeOrders.length);
-  if (analyticsOutOfStockEl) analyticsOutOfStockEl.textContent = String(inProductionCount);
+  if (analyticsOutOfStockEl) analyticsOutOfStockEl.textContent = String(lowStockCount);
   if (analyticsAvgPriceEl) {
     const avgOrder = activeOrders.length ? totalBookings / activeOrders.length : 0;
     analyticsAvgPriceEl.textContent = formatPeso(avgOrder);
@@ -4211,8 +4646,12 @@ const updateStats = (products) => {
   renderBars(analyticsMaterialBarsEl, materialEntries, Math.max(1, totalMaterialUnits));
 
   if (products) renderCategoryDonutChart(products);
-  renderMtoProductionWatchlist(allOrders);
+  renderMtoProductionWatchlist(branchOrders);
+  renderAnalyticsLowStock(products);
+  renderAnalyticsRecentSales(branchOrders);
+  renderBestSellers(branchOrders, products, currentBestSellersSort);
   updateDashboardKpis(products, allOrders);
+  initBranchAnalyticsControls();
 };
 
 // --- Order Management (Firestore `orders` + inventory stock) ---
@@ -5040,6 +5479,8 @@ function getOrderRevenue(order) {
   }, 0);
 }
 
+let currentRevenueChartMode = "area"; // "area" | "bar"
+
 function getRevenueBuckets(orders, startDate, endDate, granularity) {
   const buckets = [];
   const keyOf = (dt) => {
@@ -5059,19 +5500,44 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
     }
     return `${y}-${m}-${d}`;
   };
+
   const labelOf = (dt) => {
     if (granularity === "month")
       return dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
     if (granularity === "week") {
-      const end = new Date(dt);
-      end.setDate(end.getDate() + 6);
-      return `${dt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     }
     return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  const fullDateLabelOf = (dt) => {
+    if (granularity === "week") {
+      const endW = new Date(dt);
+      endW.setDate(endW.getDate() + 6);
+      return `${dt.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${endW.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+    }
+    if (granularity === "month") {
+      return dt.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+    return dt.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  let end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+  if (granularity === "week") {
+    // Snap to the Sunday of the start week and Sunday of the end week
+    cursor.setDate(cursor.getDate() - cursor.getDay());
+    end.setDate(end.getDate() - end.getDay());
+  } else if (granularity === "month") {
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    end = new Date(end.getFullYear(), end.getMonth(), 1);
+  }
 
   const seen = new Set();
   let guard = 0;
@@ -5079,12 +5545,32 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
     const key = keyOf(cursor);
     if (!seen.has(key)) {
       seen.add(key);
-      buckets.push({ key, label: labelOf(cursor), revenue: 0, profit: 0 }); // profit represents cash collections
+      buckets.push({
+        key,
+        label: labelOf(cursor),
+        fullLabel: fullDateLabelOf(cursor),
+        rawDate: new Date(cursor),
+        revenue: 0,
+        profit: 0,
+        orderCount: 0,
+      });
     }
     if (granularity === "month") cursor.setMonth(cursor.getMonth() + 1, 1);
     else if (granularity === "week") cursor.setDate(cursor.getDate() + 7);
     else cursor.setDate(cursor.getDate() + 1);
     guard += 1;
+  }
+
+  if (!buckets.length) {
+    buckets.push({
+      key: keyOf(startDate),
+      label: labelOf(startDate),
+      fullLabel: fullDateLabelOf(startDate),
+      rawDate: new Date(startDate),
+      revenue: 0,
+      profit: 0,
+      orderCount: 0,
+    });
   }
 
   const indexByKey = new Map(buckets.map((b, idx) => [b.key, idx]));
@@ -5096,12 +5582,16 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
     const ms = dt.getTime();
     if (ms < startDate.getTime() || ms > endDate.getTime()) return;
     const key = keyOf(dt);
-    const idx = indexByKey.get(key);
-    if (idx == null) return;
+    let idx = indexByKey.get(key);
+    // If not found in boundary mapping, fallback to nearest bucket
+    if (idx == null) {
+      idx = ms >= buckets[buckets.length - 1].rawDate.getTime() ? buckets.length - 1 : 0;
+    }
 
     const revenue = getOrderRevenue(order);
     let collected = 0;
     if (
+      isOrderCompleted(order) ||
       order.balanceStatus === "settled" ||
       order.paymentOption === "full" ||
       order.balanceSettlementMethod === "full_paid"
@@ -5114,72 +5604,533 @@ function getRevenueBuckets(orders, startDate, endDate, granularity) {
 
     buckets[idx].revenue += revenue;
     buckets[idx].profit += collected;
+    buckets[idx].orderCount += 1;
   });
 
   return buckets;
+}
+
+function getSplinePath(pts, baselineY) {
+  if (!pts || !pts.length) return "";
+  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  if (pts.length === 2) {
+    return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} L ${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
+  }
+
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i === 0 ? i : i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+
+    let cp1x = p1.x + (p2.x - p0.x) / 6;
+    let cp1y = p1.y + (p2.y - p0.y) / 6;
+    let cp2x = p2.x - (p3.x - p1.x) / 6;
+    let cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    // Prevent Bezier control points from overshooting below zero baseline
+    if (baselineY != null) {
+      if (p1.y >= baselineY - 0.5 && p2.y >= baselineY - 0.5) {
+        cp1y = baselineY;
+        cp2y = baselineY;
+      } else {
+        cp1y = Math.min(baselineY, cp1y);
+        cp2y = Math.min(baselineY, cp2y);
+      }
+    }
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+function getAreaPath(pts, baselineY) {
+  if (!pts || !pts.length) return "";
+  const spline = getSplinePath(pts, baselineY);
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return `${spline} L ${last.x.toFixed(1)} ${baselineY.toFixed(1)} L ${first.x.toFixed(1)} ${baselineY.toFixed(1)} Z`;
+}
+
+function formatCompactPeso(val) {
+  const num = Number(val || 0);
+  if (num >= 1000000) return `₱${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `₱${(num / 1000).toFixed(0)}k`;
+  return `₱${Math.round(num)}`;
 }
 
 function renderRevenueGraph() {
   if (!ordersRevenueGraphEl) return;
   const range = validateDateRange();
   if (!range.valid) {
-    ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty">Please correct the date range.</div>`;
-    ordersRevenueGraphEl.style.gridTemplateColumns = "1fr";
+    ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty" style="text-align: center; padding: 48px 16px; color: #64748b;">Please select a valid date range to view revenue analytics.</div>`;
     if (ordersTotalRevenueEl) ordersTotalRevenueEl.textContent = formatPeso(0);
     if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(0);
     if (ordersBalanceDueEl) ordersBalanceDueEl.textContent = formatPeso(0);
     return;
   }
 
-  const granularity = range.days > 180 ? "month" : range.days > 45 ? "week" : "day";
-  const buckets = getRevenueBuckets(allOrders, range.start, range.end, granularity);
-  const maxValue = Math.max(
-    1,
+  const branchOrders = getAnalyticsBranchOrders();
+
+  // 90 days and below uses high-fidelity daily resolution (Shopify/Stripe standard)
+  const granularity = range.days > 180 ? "month" : range.days > 90 ? "week" : "day";
+  const buckets = getRevenueBuckets(branchOrders, range.start, range.end, granularity);
+
+  const rawMax = Math.max(
+    0,
     ...buckets.map((b) => Math.max(Number(b.revenue) || 0, Number(b.profit) || 0))
   );
-  const totalRevenue = buckets.reduce((sum, b) => sum + b.revenue, 0);
-  const totalCollected = buckets.reduce((sum, b) => sum + b.profit, 0);
-  const totalBalanceDue = Math.max(0, totalRevenue - totalCollected);
+  // Add 15% headroom for top aesthetics
+  const maxValue = rawMax > 0 ? rawMax * 1.15 : 10000;
 
+  // Direct calculation from live orders in selected range (guarantees 100% KPI consistency)
+  const periodOrders = branchOrders.filter((order) => {
+    const st = normalizeOrderStatus(order.status);
+    if (st === "cancelled" || normalizeOrderAction(order.action) === "delete") return false;
+    const dt = orderEventDate(order);
+    if (!dt) return false;
+    const ms = dt.getTime();
+    return ms >= range.start.getTime() && ms <= range.end.getTime();
+  });
+
+  let totalRevenue = 0;
+  let totalCollected = 0;
+  periodOrders.forEach((order) => {
+    const rev = getOrderRevenue(order);
+    let col = 0;
+    if (
+      isOrderCompleted(order) ||
+      order.balanceStatus === "settled" ||
+      order.paymentOption === "full" ||
+      order.balanceSettlementMethod === "full_paid"
+    ) {
+      col = rev;
+    } else {
+      const dp = Number(order.downpaymentAmount);
+      col = !isNaN(dp) && dp > 0 ? dp : rev * 0.3;
+    }
+    totalRevenue += rev;
+    totalCollected += col;
+  });
+  const totalBalanceDue = Math.max(0, totalRevenue - totalCollected);
+  const totalOrdersInPeriod = periodOrders.length;
+
+  // Update Header KPIs
   if (ordersTotalRevenueEl) ordersTotalRevenueEl.textContent = formatPeso(totalRevenue);
   if (ordersTotalProfitEl) ordersTotalProfitEl.textContent = formatPeso(totalCollected);
   if (ordersBalanceDueEl) ordersBalanceDueEl.textContent = formatPeso(totalBalanceDue);
 
+  const totalCountEl = document.getElementById("orders-total-count");
+  if (totalCountEl) {
+    totalCountEl.textContent = `${totalOrdersInPeriod} order${totalOrdersInPeriod === 1 ? "" : "s"} placed in period`;
+  }
+
+  const collectionRateEl = document.getElementById("orders-collection-rate");
+  if (collectionRateEl) {
+    const rate = totalRevenue > 0 ? ((totalCollected / totalRevenue) * 100).toFixed(1) : "0.0";
+    collectionRateEl.textContent = `${rate}% collection efficiency`;
+  }
+
+  const balanceRateEl = document.getElementById("orders-balance-rate");
+  if (balanceRateEl) {
+    const balRate = totalRevenue > 0 ? ((totalBalanceDue / totalRevenue) * 100).toFixed(1) : "0.0";
+    balanceRateEl.textContent = `${balRate}% pending settlement`;
+  }
+
+  // Find Peak Day & Velocity
+  let peakBucket = buckets[0] || null;
+  buckets.forEach((b) => {
+    if (!peakBucket || b.revenue > peakBucket.revenue) peakBucket = b;
+  });
+
+  const peakDayEl = document.getElementById("orders-peak-day");
+  if (peakDayEl) {
+    if (peakBucket && peakBucket.revenue > 0) {
+      peakDayEl.textContent = `${formatPeso(peakBucket.revenue)}`;
+    } else {
+      peakDayEl.textContent = "₱0.00";
+    }
+  }
+
+  const dailyVelocityEl = document.getElementById("orders-daily-velocity");
+  if (dailyVelocityEl) {
+    const activeDays = Math.max(1, range.days);
+    const avgDaily = totalRevenue / activeDays;
+    if (peakBucket && peakBucket.revenue > 0) {
+      dailyVelocityEl.textContent = `Peak on ${peakBucket.label} • Avg: ${formatPeso(avgDaily)}/day`;
+    } else {
+      dailyVelocityEl.textContent = `Avg: ${formatPeso(avgDaily)}/day`;
+    }
+  }
+
+  // If no buckets exist
   if (!buckets.length) {
-    ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty">No revenue data yet.</div>`;
-    ordersRevenueGraphEl.style.gridTemplateColumns = "1fr";
+    ordersRevenueGraphEl.innerHTML = `<div class="analytics-empty" style="text-align: center; padding: 48px 16px; color: #64748b;">No analytics data available for the chosen period.</div>`;
     return;
   }
-  ordersRevenueGraphEl.style.gridTemplateColumns = `repeat(${buckets.length}, minmax(0, 1fr))`;
-  const labelInterval =
-    buckets.length > 36 ? 6 : buckets.length > 20 ? 3 : buckets.length > 12 ? 2 : 1;
 
-  ordersRevenueGraphEl.innerHTML = buckets
-    .map((bucket, index) => {
-      const revPct = Math.max(0, Math.min(100, (bucket.revenue / maxValue) * 100));
-      const profitPct = Math.max(0, Math.min(100, (Math.max(bucket.profit, 0) / maxValue) * 100));
-      const hasData = bucket.revenue > 0 || bucket.profit > 0;
-      const showLabel = index % labelInterval === 0 || index === buckets.length - 1;
-      return `<div class="orders-revenue-row">
-        <div class="orders-revenue-bars">
-          <div class="orders-revenue-fill revenue" style="height:${revPct.toFixed(1)}%" title="Gross Bookings: ${escapeHtml(
-            formatPeso(bucket.revenue)
-          )}"></div>
-          <div class="orders-revenue-fill profit" style="height:${profitPct.toFixed(1)}%" title="Cash Collected: ${escapeHtml(
-            formatPeso(bucket.profit)
-          )}"></div>
-        </div>
-        <span class="orders-revenue-label ${showLabel ? "is-visible" : ""} ${hasData ? "has-data" : ""}">${escapeHtml(
-          bucket.label
-        )}</span>
-        <div class="orders-revenue-values" title="Bookings: ${escapeHtml(formatPeso(bucket.revenue))} | Collected: ${escapeHtml(
-          formatPeso(bucket.profit)
-        )}">
-          ${hasData ? `Booked ${escapeHtml(formatPeso(bucket.revenue))}<br/>Paid ${escapeHtml(formatPeso(bucket.profit))}` : ""}
-        </div>
-      </div>`;
+  // SVG Chart Geometry Constants
+  const svgWidth = 1000;
+  const svgHeight = 290;
+  const padLeft = 72;
+  const padRight = 24;
+  const padTop = 20;
+  const padBottom = 34;
+
+  const plotWidth = svgWidth - padLeft - padRight;
+  const plotHeight = svgHeight - padTop - padBottom;
+  const baselineY = svgHeight - padBottom;
+
+  // Calculate Y-axis horizontal gridlines (5 tiers)
+  const numGridLines = 4;
+  const gridLines = [];
+  for (let i = 0; i <= numGridLines; i++) {
+    const ratio = i / numGridLines;
+    const yVal = ratio * maxValue;
+    const yPos = baselineY - ratio * plotHeight;
+    gridLines.push({ yVal, yPos });
+  }
+
+  // Compute (x, y) coordinates for each data point
+  const xStep = buckets.length > 1 ? plotWidth / (buckets.length - 1) : plotWidth / 2;
+  const revenuePoints = [];
+  const profitPoints = [];
+
+  buckets.forEach((bucket, idx) => {
+    const x = buckets.length > 1 ? padLeft + idx * xStep : padLeft + plotWidth / 2;
+    const yRev = baselineY - (Math.max(0, bucket.revenue) / maxValue) * plotHeight;
+    const yProfit = baselineY - (Math.max(0, bucket.profit) / maxValue) * plotHeight;
+    revenuePoints.push({ x, y: yRev, bucket, idx });
+    profitPoints.push({ x, y: yProfit, bucket, idx });
+  });
+
+  // Unique Gradient IDs
+  const gradRevId = "lanica-rev-grad";
+  const gradProfitId = "lanica-profit-grad";
+
+  let chartContentHtml = "";
+
+  if (currentRevenueChartMode === "bar") {
+    // Big-Tech Rounded Column Bar Chart
+    const barGroupWidth = Math.max(6, Math.min(36, (plotWidth / buckets.length) * 0.72));
+    const singleBarWidth = Math.max(2.5, barGroupWidth / 2 - 1.5);
+
+    chartContentHtml = buckets
+      .map((b, idx) => {
+        const cx = buckets.length > 1 ? padLeft + idx * xStep : padLeft + plotWidth / 2;
+        const revH = Math.max(0, (b.revenue / maxValue) * plotHeight);
+        const profitH = Math.max(0, (b.profit / maxValue) * plotHeight);
+
+        const xRev = cx - singleBarWidth - 1;
+        const yRev = baselineY - revH;
+        const xProfit = cx + 1;
+        const yProfit = baselineY - profitH;
+
+        return `
+          <g class="chart-bar-group" data-idx="${idx}">
+            <rect x="${xRev.toFixed(1)}" y="${yRev.toFixed(1)}" width="${singleBarWidth.toFixed(1)}" height="${revH.toFixed(1)}" rx="3" fill="#2563eb" opacity="0.9" />
+            <rect x="${xProfit.toFixed(1)}" y="${yProfit.toFixed(1)}" width="${singleBarWidth.toFixed(1)}" height="${profitH.toFixed(1)}" rx="3" fill="#10b981" opacity="0.95" />
+          </g>
+        `;
+      })
+      .join("");
+  } else {
+    // Big-Tech Smooth Area Spline Chart (Shopify / Stripe default)
+    const areaRevenueD = getAreaPath(revenuePoints, baselineY);
+    const lineRevenueD = getSplinePath(revenuePoints, baselineY);
+    const areaProfitD = getAreaPath(profitPoints, baselineY);
+    const lineProfitD = getSplinePath(profitPoints, baselineY);
+
+    // Render active marker circles for buckets with transactions
+    const markerCircles = buckets
+      .map((b, idx) => {
+        if (b.revenue <= 0 && b.profit <= 0) return "";
+        const ptRev = revenuePoints[idx];
+        const ptProf = profitPoints[idx];
+        return `
+          <circle cx="${ptRev.x.toFixed(1)}" cy="${ptRev.y.toFixed(1)}" r="4.5" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="chart-point-marker" />
+          <circle cx="${ptProf.x.toFixed(1)}" cy="${ptProf.y.toFixed(1)}" r="4" fill="#10b981" stroke="#ffffff" stroke-width="2" class="chart-point-marker" />
+        `;
+      })
+      .join("");
+
+    chartContentHtml = `
+      <!-- Area Fills -->
+      <path d="${areaRevenueD}" fill="url(#${gradRevId})" />
+      <path d="${areaProfitD}" fill="url(#${gradProfitId})" />
+
+      <!-- Spline Strokes -->
+      <path d="${lineRevenueD}" stroke="#2563eb" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="${lineProfitD}" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+
+      <!-- Data Dots -->
+      ${markerCircles}
+    `;
+  }
+
+  // Smart downsampling so X-axis labels never collide or crowd
+  const maxLabels = Math.min(6, buckets.length);
+  const tickIndices = new Set();
+  if (buckets.length <= maxLabels) {
+    for (let i = 0; i < buckets.length; i++) tickIndices.add(i);
+  } else {
+    tickIndices.add(0);
+    tickIndices.add(buckets.length - 1);
+    const step = (buckets.length - 1) / (maxLabels - 1);
+    for (let i = 1; i < maxLabels - 1; i++) {
+      tickIndices.add(Math.round(i * step));
+    }
+  }
+
+  const xAxisLabels = buckets
+    .map((b, idx) => {
+      if (!tickIndices.has(idx)) return "";
+      const x = buckets.length > 1 ? padLeft + idx * xStep : padLeft + plotWidth / 2;
+      let textAnchor = "middle";
+      if (idx === 0) textAnchor = "start";
+      else if (idx === buckets.length - 1) textAnchor = "end";
+
+      return `<text x="${x.toFixed(1)}" y="${(baselineY + 20).toFixed(1)}" text-anchor="${textAnchor}" class="chart-x-axis-text">${escapeHtml(b.label)}</text>`;
     })
     .join("");
+
+  // Horizontal Grid Lines & Y-Axis Labels
+  const gridHtml = gridLines
+    .map((line) => {
+      return `
+        <line x1="${padLeft}" y1="${line.yPos.toFixed(1)}" x2="${(svgWidth - padRight).toFixed(1)}" y2="${line.yPos.toFixed(1)}" class="chart-grid-line" />
+        <text x="${(padLeft - 10).toFixed(1)}" y="${(line.yPos + 4).toFixed(1)}" class="chart-y-axis-text">${escapeHtml(formatCompactPeso(line.yVal))}</text>
+      `;
+    })
+    .join("");
+
+  // Empty state overlay if all revenues are 0
+  const zeroStateOverlay =
+    rawMax === 0
+      ? `
+        <g transform="translate(${svgWidth / 2}, ${svgHeight / 2 - 10})">
+          <rect x="-180" y="-22" width="360" height="44" rx="22" fill="rgba(241, 245, 249, 0.9)" stroke="#e2e8f0" />
+          <text x="0" y="5" text-anchor="middle" font-size="12" font-weight="600" fill="#64748b">
+            No transactions in this date range • Adjust dates or choose a preset
+          </text>
+        </g>
+      `
+      : "";
+
+  ordersRevenueGraphEl.innerHTML = `
+    <svg class="revenue-chart-svg" viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none">
+      <defs>
+        <!-- Gross Bookings Gradient -->
+        <linearGradient id="${gradRevId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2563eb" stop-opacity="0.28" />
+          <stop offset="65%" stop-color="#3b82f6" stop-opacity="0.08" />
+          <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.0" />
+        </linearGradient>
+
+        <!-- Cash Collected Gradient -->
+        <linearGradient id="${gradProfitId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#10b981" stop-opacity="0.26" />
+          <stop offset="70%" stop-color="#10b981" stop-opacity="0.06" />
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+        </linearGradient>
+      </defs>
+
+      <!-- Background Gridlines & Y-Axis -->
+      ${gridHtml}
+
+      <!-- Baseline X Axis -->
+      <line x1="${padLeft}" y1="${baselineY}" x2="${svgWidth - padRight}" y2="${baselineY}" class="chart-axis-line" />
+
+      <!-- Dynamic Chart Series -->
+      ${chartContentHtml}
+
+      <!-- X-Axis Labels -->
+      ${xAxisLabels}
+
+      <!-- Zero-data notice if empty -->
+      ${zeroStateOverlay}
+
+      <!-- Interactive Crosshair Tracker -->
+      <line id="chart-crosshair" x1="0" y1="${padTop}" x2="0" y2="${baselineY}" class="chart-crosshair-line" />
+      <circle id="chart-pulse-rev" cx="0" cy="0" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2.5" class="chart-point-pulse" opacity="0" />
+      <circle id="chart-pulse-profit" cx="0" cy="0" r="5.5" fill="#10b981" stroke="#ffffff" stroke-width="2.5" class="chart-point-pulse" opacity="0" />
+
+      <!-- Transparent Mouse Tracking Layer -->
+      <rect id="chart-hit-rect" x="${padLeft}" y="${padTop}" width="${plotWidth}" height="${plotHeight}" fill="transparent" style="cursor: crosshair;" />
+    </svg>
+
+    <!-- Floating Glassmorphic Tooltip Card -->
+    <div id="revenue-chart-tooltip" class="revenue-chart-tooltip"></div>
+  `;
+
+  // Attach interactive crosshair & tooltip event listeners
+  initRevenueChartInteractivity(buckets, padLeft, plotWidth, xStep, revenuePoints, profitPoints);
+  initRevenueChartControls();
+}
+
+function initRevenueChartInteractivity(buckets, padLeft, plotWidth, xStep, revPts, profPts) {
+  const hitRect = document.getElementById("chart-hit-rect");
+  const crosshair = document.getElementById("chart-crosshair");
+  const pulseRev = document.getElementById("chart-pulse-rev");
+  const pulseProf = document.getElementById("chart-pulse-profit");
+  const tooltip = document.getElementById("revenue-chart-tooltip");
+  const container = ordersRevenueGraphEl;
+
+  if (!hitRect || !crosshair || !tooltip || !container) return;
+
+  function updateTooltip(clientX, clientY) {
+    const rect = container.getBoundingClientRect();
+    const relX = clientX - rect.left;
+    const relY = clientY - rect.top;
+
+    // Convert DOM pixels to SVG coordinates
+    const scaleX = 1000 / rect.width;
+    const svgX = relX * scaleX;
+
+    if (svgX < padLeft - 10 || svgX > padLeft + plotWidth + 10) {
+      hideTooltip();
+      return;
+    }
+
+    const rawIdx = (svgX - padLeft) / (xStep || 1);
+    const idx = Math.max(0, Math.min(buckets.length - 1, Math.round(rawIdx)));
+    const bucket = buckets[idx];
+    if (!bucket) {
+      hideTooltip();
+      return;
+    }
+
+    const ptRev = revPts[idx] || { x: padLeft + idx * xStep, y: 150 };
+    const ptProf = profPts[idx] || { x: padLeft + idx * xStep, y: 150 };
+
+    // Snap crosshair and pulsing markers
+    crosshair.setAttribute("x1", ptRev.x.toFixed(1));
+    crosshair.setAttribute("x2", ptRev.x.toFixed(1));
+    crosshair.style.opacity = "1";
+
+    pulseRev.setAttribute("cx", ptRev.x.toFixed(1));
+    pulseRev.setAttribute("cy", ptRev.y.toFixed(1));
+    pulseRev.style.opacity = "1";
+
+    pulseProf.setAttribute("cx", ptProf.x.toFixed(1));
+    pulseProf.setAttribute("cy", ptProf.y.toFixed(1));
+    pulseProf.style.opacity = "1";
+
+    // Format Tooltip Content
+    const balance = Math.max(0, bucket.revenue - bucket.profit);
+    const orderTxt =
+      bucket.orderCount > 0
+        ? `${bucket.orderCount} order${bucket.orderCount === 1 ? "" : "s"}`
+        : "No orders";
+
+    tooltip.innerHTML = `
+      <div class="tooltip-header">${escapeHtml(bucket.fullLabel || bucket.label)}</div>
+      <div class="tooltip-row">
+        <span><span class="tooltip-row-dot" style="background:#2563eb;"></span>Bookings</span>
+        <span class="tooltip-row-val">${formatPeso(bucket.revenue)}</span>
+      </div>
+      <div class="tooltip-row">
+        <span><span class="tooltip-row-dot" style="background:#10b981;"></span>Collected</span>
+        <span class="tooltip-row-val" style="color:#10b981;">${formatPeso(bucket.profit)}</span>
+      </div>
+      <div class="tooltip-row">
+        <span><span class="tooltip-row-dot" style="background:#f59e0b;"></span>Pending</span>
+        <span class="tooltip-row-val" style="color:#f59e0b;">${formatPeso(balance)}</span>
+      </div>
+      <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.1); font-size:0.73rem; color:#94a3b8; display:flex; justify-content:space-between;">
+        <span>Activity</span>
+        <span style="color:#ffffff; font-weight:600;">${orderTxt}</span>
+      </div>
+    `;
+
+    // Tooltip position in DOM pixels
+    const domX = (ptRev.x / 1000) * rect.width;
+    tooltip.style.left = `${Math.max(110, Math.min(rect.width - 110, domX))}px`;
+    tooltip.style.top = `${Math.max(70, relY)}px`;
+    tooltip.style.opacity = "1";
+  }
+
+  function hideTooltip() {
+    crosshair.style.opacity = "0";
+    pulseRev.style.opacity = "0";
+    pulseProf.style.opacity = "0";
+    tooltip.style.opacity = "0";
+  }
+
+  hitRect.addEventListener("mousemove", (e) => updateTooltip(e.clientX, e.clientY));
+  hitRect.addEventListener("mouseleave", hideTooltip);
+
+  hitRect.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches && e.touches[0]) {
+        updateTooltip(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    },
+    { passive: true }
+  );
+  hitRect.addEventListener("touchend", hideTooltip);
+}
+
+function initRevenueChartControls() {
+  // Timeframe presets (7D, 14D, 30D, 90D, YTD, All)
+  const pillContainer = document.getElementById("analytics-timeframe-pills");
+  if (pillContainer && !pillContainer.dataset.bound) {
+    pillContainer.dataset.bound = "true";
+    pillContainer.addEventListener("click", (e) => {
+      const btn = e.target.closest(".analytics-timeframe-btn");
+      if (!btn) return;
+      const preset = btn.getAttribute("data-preset");
+      if (!preset) return;
+
+      const now = new Date();
+      const endStr = dateToInputValue(now);
+      let start = new Date(now);
+
+      if (preset === "7d") start.setDate(now.getDate() - 6);
+      else if (preset === "14d") start.setDate(now.getDate() - 13);
+      else if (preset === "30d") start.setDate(now.getDate() - 29);
+      else if (preset === "90d") start.setDate(now.getDate() - 89);
+      else if (preset === "ytd") start = new Date(now.getFullYear(), 0, 1);
+      else if (preset === "all") {
+        let earliest = now.getTime();
+        allOrders.forEach((o) => {
+          const ms = orderTimestampMs(o);
+          if (ms > 0 && ms < earliest) earliest = ms;
+        });
+        start = new Date(earliest);
+      }
+
+      if (ordersDateStartEl) ordersDateStartEl.value = dateToInputValue(start);
+      if (ordersDateEndEl) ordersDateEndEl.value = endStr;
+
+      pillContainer.querySelectorAll(".analytics-timeframe-btn").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+      });
+
+      renderRevenueGraph();
+    });
+  }
+
+  // Chart Mode Switcher (Area Spline vs Rounded Bars)
+  const modeContainer = document.getElementById("analytics-mode-toggle");
+  if (modeContainer && !modeContainer.dataset.bound) {
+    modeContainer.dataset.bound = "true";
+    modeContainer.addEventListener("click", (e) => {
+      const btn = e.target.closest(".analytics-mode-btn");
+      if (!btn) return;
+      const mode = btn.getAttribute("data-mode");
+      if (!mode || mode === currentRevenueChartMode) return;
+
+      currentRevenueChartMode = mode;
+      modeContainer.querySelectorAll(".analytics-mode-btn").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+      });
+
+      renderRevenueGraph();
+    });
+  }
 }
 
 function materialHint(m) {
@@ -5660,6 +6611,10 @@ function showAdminSection(name) {
   if (showWorkshop) renderWorkshopQueue(allOrders);
   if (showTransactions) renderAdminTransactionsList(allOrders);
   if (showAuditLogs) renderAuditLogsSection();
+  if (showAnalytics) {
+    updateStats(allProducts);
+    renderRevenueGraph();
+  }
 
   window.location.hash = name || "dashboard";
 }
@@ -6697,22 +7652,10 @@ function openLanicaReceiptModal(orderId, defaultTab = "voucher") {
   activeReceiptOrder = order;
   activeReceiptTab = defaultTab || "voucher";
 
-  // Auto-detect branch based on order address/notes if not already explicitly selected
+  // Use explicit branch assigned by admin/staff, defaulting cleanly if unassigned
   if (!activeReceiptOrder._selectedBranch) {
-    const rawAddr = (formatOrderDeliveryAddress(order) || "").toLowerCase();
-    const rawLandmark = (formatOrderLandmark(order) || "").toLowerCase();
-    const branchHint = String(order.branch || order.branchName || "").toLowerCase();
-
-    if (
-      rawAddr.includes("pila") ||
-      rawAddr.includes("labuin") ||
-      rawLandmark.includes("pila") ||
-      branchHint.includes("pila")
-    ) {
-      activeReceiptOrder._selectedBranch = "pila";
-    } else {
-      activeReceiptOrder._selectedBranch = "calamba";
-    }
+    const explicitBranch = getOrderBranchKey(order);
+    activeReceiptOrder._selectedBranch = explicitBranch || "pila";
   }
 
   renderLanicaDocumentContent();
@@ -8454,6 +9397,15 @@ function applyOrdersFilter() {
     });
   }
 
+  // 5. Branch filter in Orders Hub
+  if (currentOrdersBranch && currentOrdersBranch !== "all") {
+    if (currentOrdersBranch === "unassigned") {
+      rows = rows.filter((o) => !getOrderBranchKey(o));
+    } else {
+      rows = rows.filter((o) => getOrderBranchKey(o) === currentOrdersBranch);
+    }
+  }
+
   renderOrdersList(rows);
   renderCompletedOrdersHistory(allOrders.filter((o) => isOrderCompleted(o)));
   renderWorkshopQueue(allOrders);
@@ -8461,6 +9413,7 @@ function applyOrdersFilter() {
   renderRevenueGraph();
   syncBatchDeleteUi();
   updateDashboardKpis(allProducts, allOrders);
+  updateStats(allProducts);
 }
 
 if (ordersDateStartEl && ordersDateEndEl) {
@@ -9199,15 +10152,23 @@ function renderOrdersList(orders) {
 
     const customer = resolveCustomerDisplay(order);
 
-    // Fulfillment calculation & badge
+    // Fulfillment calculation & branch attribution badge
     const isPickup =
       order.fulfillmentType === "pickup" ||
       order.address?.pickupAtWorkshop ||
       order.shippingAddress?.pickupAtWorkshop;
     const fullAddr = formatOrderDeliveryAddress(order);
-    const fulfillmentBadgeHtml = isPickup
-      ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path><path d="M2 7h20"></path></svg>Store Pickup</span>`
-      : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Delivery</span>`;
+    const branchKey = getOrderBranchKey(order);
+    const branchName = branchKey === "pila" ? "Pila Branch" : branchKey === "calamba" ? "Calamba Branch" : "Unassigned";
+    const branchBadgeHtml = branchKey
+      ? `<span class="order-branch-badge ${branchKey}" style="margin-left: 6px;" title="Order assigned to ${branchName}">📍 ${branchName}</span>`
+      : `<span class="order-branch-badge unassigned" style="margin-left: 6px; background: #f1f5f9; color: #64748b; border: 1px dashed #cbd5e1;" title="Branch not yet assigned">📍 Unassigned</span>`;
+
+    const fulfillmentBadgeHtml =
+      (isPickup
+        ? `<span class="fulfillment-badge pickup" title="Pickup at Lanica Workshop" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path><path d="M2 7h20"></path></svg>Store Pickup</span>`
+        : `<span class="fulfillment-badge delivery" title="${escapeHtml(fullAddr || "Home Delivery")}" style="display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Delivery</span>`) +
+      branchBadgeHtml;
 
     const nearestLandmark = isPickup ? "" : formatOrderLandmark(order);
     const landmarkBadgeHtml = nearestLandmark
@@ -9362,16 +10323,23 @@ function renderOrdersList(orders) {
       <td>${statusColumnHtml}</td>
       <td>${deliveryDisplayHtml}</td>
       <td>
-        <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; border: 1.5px solid ${!order.assignedToUid ? "#f59e0b" : "#cbd5e1"}; background: ${!order.assignedToUid ? "#fffbeb" : "#ffffff"}; color: ${!order.assignedToUid ? "#b45309" : "#1e293b"}; font-weight: ${!order.assignedToUid ? "600" : "400"}; cursor: pointer;">
-          <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>Unassigned (Assign Staff)</option>
-          ${staffMembers
-            .map((s) => {
-              const sel = order.assignedToUid === s.uid ? "selected" : "";
-              const roleSuffix = s.role && s.role !== "staff" ? ` (${s.role})` : "";
-              return `<option value="${escapeHtml(s.uid)}" ${sel}>${escapeHtml(s.displayName)}${roleSuffix}</option>`;
-            })
-            .join("")}
-        </select>
+        <div style="display: flex; flex-direction: column; gap: 6px; min-width: 155px;">
+          <select class="order-assign-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign staff" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 5px 8px; border-radius: 6px; font-size: 0.8rem; border: 1.5px solid ${!order.assignedToUid ? "#f59e0b" : "#cbd5e1"}; background: ${!order.assignedToUid ? "#fffbeb" : "#ffffff"}; color: ${!order.assignedToUid ? "#b45309" : "#1e293b"}; font-weight: ${!order.assignedToUid ? "600" : "400"}; cursor: pointer;">
+            <option value="" disabled ${!order.assignedToUid ? "selected" : ""}>Unassigned Staff</option>
+            ${staffMembers
+              .map((s) => {
+                const sel = order.assignedToUid === s.uid ? "selected" : "";
+                const roleSuffix = s.role && s.role !== "staff" ? ` (${s.role})` : "";
+                return `<option value="${escapeHtml(s.uid)}" ${sel}>${escapeHtml(s.displayName)}${roleSuffix}</option>`;
+              })
+              .join("")}
+          </select>
+          <select class="order-branch-select" data-order-id="${escapeHtml(order.id)}" aria-label="Assign branch" ${st === "delivered" || st === "cancelled" || st === "declined" || isRefundCompleted ? "disabled" : ""} style="padding: 5px 8px; border-radius: 6px; font-size: 0.8rem; border: 1.5px solid ${!branchKey ? "#f59e0b" : branchKey === "pila" ? "#3b82f6" : "#10b981"}; background: ${!branchKey ? "#fffbeb" : "#ffffff"}; color: ${!branchKey ? "#b45309" : "#1e293b"}; font-weight: 600; cursor: pointer;">
+            <option value="" disabled ${!branchKey ? "selected" : ""}>— Select Branch —</option>
+            <option value="pila" ${branchKey === "pila" ? "selected" : ""}>📍 Pila Branch</option>
+            <option value="calamba" ${branchKey === "calamba" ? "selected" : ""}>📍 Calamba Branch</option>
+          </select>
+        </div>
       </td>
       <td>
         <div class="kebab-menu-container" style="position: relative; display: inline-block;">
@@ -9931,6 +10899,15 @@ async function handleOrderAssign(orderId, staffUid) {
     return;
   }
 
+  if (!hasCustomerDeposited(current)) {
+    showAdminToast(
+      `Deposit Required: Customer deposit must be received/verified before assigning staff to Order #${orderId.slice(0, 8)}.`,
+      "warning"
+    );
+    applyOrdersFilter();
+    return;
+  }
+
   const staffName = staff.displayName || staff.name || "Staff Member";
   const prevAssignedName =
     current?.assignedToName || (current?.assignedToUid ? "Previous Staff" : "Unassigned");
@@ -9968,6 +10945,59 @@ async function handleOrderAssign(orderId, staffUid) {
   }
 }
 
+async function handleOrderBranchChange(orderId, branchVal) {
+  const current = allOrders.find((o) => o.id === orderId);
+  if (!current) return;
+
+  if (!hasCustomerDeposited(current)) {
+    showAdminToast(
+      `Deposit Required: Customer deposit must be received/verified before setting the fulfillment branch for Order #${orderId.slice(0, 8)}.`,
+      "warning"
+    );
+    applyOrdersFilter();
+    return;
+  }
+
+  if (branchVal !== "pila" && branchVal !== "calamba") return;
+
+  const branchName = branchVal === "pila" ? "Pila Branch" : "Calamba Branch";
+  const prevBranchName = current.branchName || "Unassigned";
+
+  try {
+    await updateDoc(doc(db, "orders", orderId), {
+      branch: branchVal,
+      branchName: branchName,
+      branchKey: branchVal,
+      updatedAt: serverTimestamp(),
+    });
+
+    current.branch = branchVal;
+    current.branchName = branchName;
+    current.branchKey = branchVal;
+
+    await recordAuditLog({
+      action: "SETTINGS_CHANGED",
+      targetType: "order",
+      targetId: orderId,
+      description: `Assigned Order #${orderId.slice(0, 8)} to branch: ${branchName} (previously ${prevBranchName})`,
+      diff: {
+        before: { branch: current.branch, branchName: prevBranchName },
+        after: { branch: branchVal, branchName: branchName },
+      },
+      performedBy: currentUser,
+    });
+
+    showAdminToast(`Order #${orderId.slice(0, 8)} assigned to ${branchName}!`, "success");
+    applyOrdersFilter();
+    updateStats(allProducts);
+    renderRevenueGraph();
+  } catch (err) {
+    console.error("Order branch assignment failed:", err);
+    showAdminToast("Failed to assign branch: " + (err.message || ""), "error");
+    applyOrdersFilter();
+  }
+}
+
 if (ordersListEl) {
   ordersListEl.addEventListener("change", (e) => {
     const t = e.target;
@@ -9987,6 +11017,10 @@ if (ordersListEl) {
     if (t.classList.contains("order-assign-select")) {
       const id = t.getAttribute("data-order-id");
       if (id) handleOrderAssign(id, t.value);
+    }
+    if (t.classList.contains("order-branch-select")) {
+      const id = t.getAttribute("data-order-id");
+      if (id) handleOrderBranchChange(id, t.value);
     }
   });
 
