@@ -583,7 +583,6 @@ export async function placeOrderAtomic({
     type: "new_order",
     orderId: orderId,
     customerName: resolvedCustomerName,
-    recipientEmail: resolvedCustomerEmail,
     totalAmount: finalOrderTotal,
   }).catch(() => {});
 

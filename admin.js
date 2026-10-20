@@ -8357,6 +8357,8 @@ if (navOrders) {
     e.preventDefault();
     showAdminSection("orders");
     loadStaffMembers();
+    (allOrders || []).forEach((o) => seenAdminOrderIds.add(o.id));
+    updateAdminNavOrdersBadge();
   });
 }
 if (navTransactions) {
@@ -9352,7 +9354,31 @@ function updateOrderStats(orders) {
   set("orders-refund-requests", counts.refund_requested);
 }
 
+const seenAdminOrderIds = new Set();
+
+function updateAdminNavOrdersBadge() {
+  const navBadge = document.getElementById("nav-orders-unread-badge");
+  if (!navBadge) return;
+
+  const newOrPendingOrders = (allOrders || []).filter((o) => {
+    if (normalizeOrderAction(o.action) === "delete" || isOrderCompleted(o)) return false;
+    const st = normalizeOrderStatus(o.status || o.orderStatus);
+    const branchKey = getOrderBranchKey(o);
+    const isNew = st === "placed" || st === "slot reserved" || !branchKey;
+    return isNew && !seenAdminOrderIds.has(o.id);
+  });
+
+  const count = newOrPendingOrders.length;
+  if (count > 0) {
+    navBadge.textContent = count > 99 ? "99+" : String(count);
+    navBadge.style.display = "inline-block";
+  } else {
+    navBadge.style.display = "none";
+  }
+}
+
 function applyOrdersFilter() {
+  updateAdminNavOrdersBadge();
   const activeOrders = allOrders.filter(
     (o) => !isOrderCompleted(o) && normalizeOrderAction(o.action) !== "delete"
   );

@@ -1112,6 +1112,8 @@ if (navOrders) {
   navOrders.addEventListener("click", (e) => {
     e.preventDefault();
     showStaffSection("orders");
+    (allStaffOrders || []).forEach((o) => seenStaffOrderIds.add(o.id));
+    updateStaffNavOrdersBadge();
   });
 }
 
@@ -1754,7 +1756,30 @@ function updateStats() {
   renderStaffWorkshopQueue(allStaffOrders);
 }
 
+const seenStaffOrderIds = new Set();
+
+function updateStaffNavOrdersBadge() {
+  const navBadge = document.getElementById("staff-nav-orders-unread-badge");
+  if (!navBadge) return;
+
+  const count = (allStaffOrders || []).filter((o) => {
+    if (isOrderCompleted(o) || o.isDeleted) return false;
+    const st = (o.status || o.orderStatus || "").toLowerCase();
+    const branchKey = getOrderBranchKey(o);
+    const isNew = st === "placed" || st === "slot reserved" || !branchKey || !o.assignedToUid;
+    return isNew && !seenStaffOrderIds.has(o.id);
+  }).length;
+
+  if (count > 0) {
+    navBadge.textContent = count > 99 ? "99+" : String(count);
+    navBadge.style.display = "inline-block";
+  } else {
+    navBadge.style.display = "none";
+  }
+}
+
 function applyStaffOrdersFilter() {
+  updateStaffNavOrdersBadge();
   if (!ordersListEl) return;
 
   const q = staffOrdersSearchQuery.trim().toLowerCase();

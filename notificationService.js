@@ -213,9 +213,15 @@ export async function sendEmailAlert(payload) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({}));
+    if (data.emailSent) {
+      console.log("[Lanica Notification] ✅ Email alert sent successfully to:", data.recipient, "ID:", data.emailId);
+    } else {
+      console.warn("[Lanica Notification] ⚠️ Email alert status:", data.warning || data.error || data);
+    }
+    return data;
   } catch (err) {
-    // Non-blocking background attempt
+    console.warn("[Lanica Notification] ❌ Email dispatch failed:", err.message);
     return { success: false, error: err.message };
   }
 }

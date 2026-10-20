@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const outputDir = path.join(projectRoot, "public");
 
-const passthroughDirs = ["assets"];
+const passthroughDirs = ["assets", "functions"];
 const passthroughExtensions = new Set([".html", ".css", ".js"]);
 
 async function pathExists(targetPath) {

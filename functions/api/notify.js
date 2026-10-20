@@ -31,18 +31,19 @@ export async function onRequestPost(context) {
     const adminEmail = String(context.env?.ADMIN_NOTIFICATION_EMAIL || context.env?.ADMIN_EMAIL || "").trim();
 
     if (!apiKey) {
-      // Graceful response when API key is not yet configured in Cloudflare environment
+      console.warn("RESEND_API_KEY environment variable is not configured in Cloudflare Pages.");
       return buildJsonResponse({
-        success: true,
+        success: false,
         emailSent: false,
-        warning: "RESEND_API_KEY environment variable is not configured in Cloudflare. Web Push notification active.",
+        warning: "RESEND_API_KEY environment variable is not configured in Cloudflare Pages. Please set it in Settings > Environment variables and trigger a redeployment.",
       });
     }
 
-    const targetRecipient = recipientEmail || adminEmail;
+    const targetRecipient = (type === "new_order" || type === "new_chat") ? (adminEmail || recipientEmail) : (recipientEmail || adminEmail);
     if (!targetRecipient) {
+      console.warn("No recipient email configured. ADMIN_NOTIFICATION_EMAIL is missing.");
       return buildJsonResponse({
-        success: true,
+        success: false,
         emailSent: false,
         warning: "No recipient email configured. Set ADMIN_NOTIFICATION_EMAIL in Cloudflare environment variables.",
       });
@@ -139,9 +140,10 @@ export async function onRequestPost(context) {
     if (!resendRes.ok) {
       console.warn("Resend email delivery notice:", resendData);
       return buildJsonResponse({
-        success: true,
+        success: false,
         emailSent: false,
-        error: resendData.message || "Email gateway responded with error",
+        error: resendData.message || "Resend email gateway responded with error",
+        details: resendData,
       });
     }
 
@@ -149,6 +151,7 @@ export async function onRequestPost(context) {
       success: true,
       emailSent: true,
       emailId: resendData.id,
+      recipient: targetRecipient,
     });
   } catch (err) {
     console.error("Pages function notify error:", err);
