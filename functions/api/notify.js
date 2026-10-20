@@ -25,27 +25,35 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   try {
     const payload = await context.request.json().catch(() => ({}));
-    const { type, title, body, orderId, customerName, totalAmount, previewText, recipientEmail } = payload;
+    const { type, title, body, orderId, customerName, totalAmount, previewText, recipientEmail } =
+      payload;
 
     const apiKey = String(context.env?.RESEND_API_KEY || "").trim();
-    const adminEmail = String(context.env?.ADMIN_NOTIFICATION_EMAIL || context.env?.ADMIN_EMAIL || "").trim();
+    const adminEmail = String(
+      context.env?.ADMIN_NOTIFICATION_EMAIL || context.env?.ADMIN_EMAIL || ""
+    ).trim();
 
     if (!apiKey) {
       console.warn("RESEND_API_KEY environment variable is not configured in Cloudflare Pages.");
       return buildJsonResponse({
         success: false,
         emailSent: false,
-        warning: "RESEND_API_KEY environment variable is not configured in Cloudflare Pages. Please set it in Settings > Environment variables and trigger a redeployment.",
+        warning:
+          "RESEND_API_KEY environment variable is not configured in Cloudflare Pages. Please set it in Settings > Environment variables and trigger a redeployment.",
       });
     }
 
-    const targetRecipient = (type === "new_order" || type === "new_chat") ? (adminEmail || recipientEmail) : (recipientEmail || adminEmail);
+    const targetRecipient =
+      type === "new_order" || type === "new_chat"
+        ? adminEmail || recipientEmail
+        : recipientEmail || adminEmail;
     if (!targetRecipient) {
       console.warn("No recipient email configured. ADMIN_NOTIFICATION_EMAIL is missing.");
       return buildJsonResponse({
         success: false,
         emailSent: false,
-        warning: "No recipient email configured. Set ADMIN_NOTIFICATION_EMAIL in Cloudflare environment variables.",
+        warning:
+          "No recipient email configured. Set ADMIN_NOTIFICATION_EMAIL in Cloudflare environment variables.",
       });
     }
 
@@ -83,7 +91,7 @@ export async function onRequestPost(context) {
               </tr>
             </table>
             <div style="text-align: center; margin-top: 28px;">
-              <a href="https://lanica.pages.dev/admin.html" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Open Admin Orders Hub</a>
+              <a href="https://lanicafurniture.com/admin/admin.html" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Open Admin Orders Hub</a>
             </div>
           </div>
           <div style="background: #f8fafc; padding: 16px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
@@ -110,7 +118,7 @@ export async function onRequestPost(context) {
               "${previewText || "Sent a message / attachment"}"
             </div>
             <div style="text-align: center;">
-              <a href="https://lanica.pages.dev/admin.html" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Reply in Admin Chat</a>
+              <a href="https://lanicafurniture.com/admin/admin.html" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Reply in Admin Chat</a>
             </div>
           </div>
           <div style="background: #f8fafc; padding: 16px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
