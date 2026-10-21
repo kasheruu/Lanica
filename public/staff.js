@@ -1099,6 +1099,13 @@ function showStaffSection(name) {
 
   if (showDashboard) renderStaffDashboard(allStaffOrders);
   if (showWorkshop) renderStaffWorkshopQueue(allStaffOrders);
+  if (!showChats) {
+    if (activeStaffChatUnsubscribe) {
+      try { activeStaffChatUnsubscribe(); } catch (_) {}
+      activeStaffChatUnsubscribe = null;
+    }
+    activeStaffChatSessionId = null;
+  }
 }
 
 if (navStaffDashboard) {
@@ -5440,7 +5447,24 @@ function playStaffChatNotificationSound() {
   }
 }
 
-function showStaffChatNotificationToast(messageText, session) {
+function isStaffSender(name, role) {
+  if (role === "admin" || role === "staff" || role === "system" || role === "bot") return true;
+  if (role === "customer") return false;
+  if (!name || typeof name !== "string") return false;
+  const lower = name.toLowerCase().trim();
+  if (lower === "customer") return false;
+  return (
+    lower.includes("admin") ||
+    lower.includes("workshop") ||
+    lower === "lanica support" ||
+    lower === "lanica workshop" ||
+    lower === "support" ||
+    lower === "system" ||
+    lower === "bot"
+  );
+}
+
+function showStaffChatNotificationToast(messageText, session, senderNameOverride) {
   let container = document.getElementById("staff-chat-toast-container");
   if (!container) {
     container = document.createElement("div");
@@ -5450,14 +5474,56 @@ function showStaffChatNotificationToast(messageText, session) {
     document.body.appendChild(container);
   }
 
+  let customerDisplayName = senderNameOverride || session?.customerName || "Customer";
+  if (isStaffSender(customerDisplayName, null)) {
+    customerDisplayName =
+      session?.customerName && !isStaffSender(session.customerName, null)
+        ? session.customerName
+        : "Customer";
+  }
+
+  const isOrder =
+    session?.sessionType === "order" ||
+    (!session?.isUserSupport && !String(session?.id || "").startsWith("user_"));
+  const orderNum = String(session?.orderId || session?.id || "").slice(0, 8);
+  const toastCategoryTitle = isOrder
+    ? `Order #${escapeHtml(orderNum)} Message`
+    : "Live Support Message";
+
+  // Debounce/update existing toast for the same conversation thread instead of spamming stacked duplicate cards
+  const existingToast = container.querySelector(`[data-toast-session-id="${session.id}"]`);
+  if (existingToast) {
+    const textEl = existingToast.querySelector(".lanica-toast-preview-text");
+    if (textEl) {
+      textEl.innerHTML = `<strong>${escapeHtml(customerDisplayName)}:</strong> ${escapeHtml(messageText)}`;
+    }
+    if (existingToast._dismissTimer) clearTimeout(existingToast._dismissTimer);
+    existingToast._dismissTimer = setTimeout(() => {
+      if (existingToast.parentNode) existingToast.remove();
+    }, 7000);
+    existingToast.style.transform = "scale(1.03)";
+    setTimeout(() => {
+      if (existingToast) existingToast.style.transform = "scale(1)";
+    }, 150);
+    return;
+  }
+
+  // Cap maximum visible toast cards to 3
+  while (container.children.length >= 3) {
+    const oldest = container.firstElementChild;
+    if (oldest._dismissTimer) clearTimeout(oldest._dismissTimer);
+    oldest.remove();
+  }
+
   const toast = document.createElement("div");
+  toast.dataset.toastSessionId = session.id;
   toast.style.cssText =
     "background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-left: 4px solid #ef4444; transition: transform 0.2s, opacity 0.2s;";
   toast.innerHTML = `
     <div style="flex: 1; margin-right: 10px;">
-      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px; display: flex; align-items: center; gap: 5px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Customer Message</div>
-      <div style="color: #f3f4f6; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;">
-        <strong>${escapeHtml(session?.customerName || "Customer")}:</strong> ${escapeHtml(messageText)}
+      <div style="font-weight: 700; color: #f87171; font-size: 0.74rem; text-transform: uppercase; margin-bottom: 2px; display: flex; align-items: center; gap: 5px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> ${toastCategoryTitle}</div>
+      <div class="lanica-toast-preview-text" style="color: #f3f4f6; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;">
+        <strong>${escapeHtml(customerDisplayName)}:</strong> ${escapeHtml(messageText)}
       </div>
     </div>
     <button type="button" style="background: none; border: none; color: #9ca3af; font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 4px;">✕</button>
@@ -5477,28 +5543,53 @@ function showStaffChatNotificationToast(messageText, session) {
   });
 
   const closeBtn = toast.querySelector("button");
-  if (closeBtn) closeBtn.addEventListener("click", () => toast.remove());
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (toast._dismissTimer) clearTimeout(toast._dismissTimer);
+      toast.remove();
+    });
+  }
 
   container.appendChild(toast);
-  setTimeout(() => {
+  toast._dismissTimer = setTimeout(() => {
     if (toast.parentNode) toast.remove();
   }, 7000);
 }
 
 function updateStaffNavChatBadge() {
-  let totalUnread = 0;
-  staffSessionUnreadCounts.forEach((count) => {
-    totalUnread += count;
+  const unreadSessionIds = new Set();
+
+  staffSessionUnreadCounts.forEach((count, id) => {
+    if (count > 0) {
+      unreadSessionIds.add(id);
+    }
   });
 
+  allStaffChatSessions.forEach((s) => {
+    if (s.hasUnreadStaff) {
+      unreadSessionIds.add(s.id);
+    }
+  });
+
+  const unreadChatCount = unreadSessionIds.size;
+
   const navBadge = document.getElementById("staff-nav-chat-unread-badge");
+  const countStr = unreadChatCount > 99 ? "99+" : String(unreadChatCount);
   if (navBadge) {
-    if (totalUnread > 0) {
-      navBadge.textContent = totalUnread > 99 ? "99+" : String(totalUnread);
-      navBadge.style.display = "inline-block";
+    if (unreadChatCount > 0) {
+      navBadge.textContent = countStr;
+      navBadge.style.display = "inline-flex";
+      navBadge.style.alignItems = "center";
+      navBadge.style.justifyContent = "center";
     } else {
       navBadge.style.display = "none";
     }
+  }
+
+  const unreadFilterBadge = document.getElementById("staff-chat-unread-filter-badge");
+  if (unreadFilterBadge) {
+    unreadFilterBadge.textContent = String(unreadChatCount);
   }
 }
 
@@ -5582,6 +5673,7 @@ function setupStaffLiveChat() {
 
   let currentStaffChatFilter = "all";
   const filterAllBtn = document.getElementById("staff-chat-filter-all");
+  const filterUnreadBtn = document.getElementById("staff-chat-filter-unread");
   const filterSupportBtn = document.getElementById("staff-chat-filter-support");
   const filterOrdersBtn = document.getElementById("staff-chat-filter-orders");
   const filterClosedBtn = document.getElementById("staff-chat-filter-closed");
@@ -5644,14 +5736,16 @@ function setupStaffLiveChat() {
 
   function setStaffChatFilter(filter) {
     currentStaffChatFilter = filter;
-    [filterAllBtn, filterSupportBtn, filterOrdersBtn, filterClosedBtn].forEach((btn) => {
+    [filterAllBtn, filterUnreadBtn, filterSupportBtn, filterOrdersBtn, filterClosedBtn].forEach((btn) => {
       if (!btn) return;
       btn.style.background = "#fff";
       btn.style.color = "#374151";
       btn.style.border = "1px solid #d1d5db";
     });
     const activeBtn =
-      filter === "support"
+      filter === "unread"
+        ? filterUnreadBtn
+        : filter === "support"
         ? filterSupportBtn
         : filter === "orders"
         ? filterOrdersBtn
@@ -5667,6 +5761,7 @@ function setupStaffLiveChat() {
   }
 
   if (filterAllBtn) filterAllBtn.addEventListener("click", () => setStaffChatFilter("all"));
+  if (filterUnreadBtn) filterUnreadBtn.addEventListener("click", () => setStaffChatFilter("unread"));
   if (filterSupportBtn) filterSupportBtn.addEventListener("click", () => setStaffChatFilter("support"));
   if (filterOrdersBtn) filterOrdersBtn.addEventListener("click", () => setStaffChatFilter("orders"));
   if (filterClosedBtn) filterClosedBtn.addEventListener("click", () => setStaffChatFilter("closed"));
@@ -5677,29 +5772,37 @@ function setupStaffLiveChat() {
     renderStaffChatSessionsList(sessions);
   });
 
+  const staffSessionInitialSnapshotLoaded = new Map();
+
   function attachStaffMessageListeners(sessions) {
     sessions.forEach((s) => {
       if (staffSessionMessageUnsubs.has(s.id)) return;
 
-      const isSupport = s.sessionType === "support" || s.isUserSupport || String(s.id).startsWith("user_");
+      const isSupport =
+        s.sessionType === "support" || s.isUserSupport || String(s.id).startsWith("user_");
       const cleanUid = s.userId || s.actualId || String(s.id).replace(/^user_/, "");
-      const messagesColRef = isSupport
-        ? collection(db, "users", cleanUid, "messages")
-        : collection(db, "orders", s.id, "messages");
+      const sessionDocCache = new Map();
 
-      const unsub = onSnapshot(messagesColRef, (snapshot) => {
+      function processStaffSnapshotDocs(snapshot) {
+        snapshot.forEach((docSnap) => {
+          sessionDocCache.set(docSnap.id, docSnap.data());
+        });
+
         let unread = 0;
         let latestMsg = null;
         let latestTime = 0;
+        let latestCustomerMsg = null;
+        let latestCustomerTime = 0;
 
-        snapshot.forEach((docSnap) => {
-          const d = docSnap.data();
+        sessionDocCache.forEach((d) => {
           const isFromStaff =
             d.senderRole === "admin" ||
             d.senderRole === "staff" ||
-            d.senderId === "support_admin";
+            d.senderId === "support_admin" ||
+            (d.senderRole !== "customer" && isStaffSender(d.senderName, d.senderRole));
 
-          if (!isFromStaff && d.isRead === false) {
+          // Unread by staff if sent by customer and not marked as read
+          if (!isFromStaff && d.isRead !== true && d.read !== true) {
             unread++;
           }
 
@@ -5713,6 +5816,11 @@ function setupStaffLiveChat() {
           if (msgTime >= latestTime) {
             latestTime = msgTime;
             latestMsg = d;
+          }
+
+          if (!isFromStaff && msgTime >= latestCustomerTime) {
+            latestCustomerTime = msgTime;
+            latestCustomerMsg = d;
           }
         });
 
@@ -5730,28 +5838,81 @@ function setupStaffLiveChat() {
             isFromStaff:
               latestMsg.senderRole === "admin" ||
               latestMsg.senderRole === "staff" ||
-              latestMsg.senderId === "support_admin",
+              latestMsg.senderId === "support_admin" ||
+              (latestMsg.senderRole !== "customer" && isStaffSender(latestMsg.senderName, latestMsg.senderRole)),
           });
         }
 
-        if (unread > prevUnread && activeStaffChatSessionId !== s.id) {
-          playStaffChatNotificationSound();
-          const { mediaUrl, displayText } = parseChatMessageContent(latestMsg || {});
-          const preview = displayText || (mediaUrl ? "Sent a photo attachment" : "Sent a message");
-          showStaffChatNotificationToast(preview, s);
-          notifyNewChatMessage(preview, s, { role: "staff" });
+        // Customer name resolution - NEVER use staff or admin names as customer name
+        const latestCustomerSender =
+          latestCustomerMsg?.senderName &&
+          latestCustomerMsg.senderName !== "Customer" &&
+          !isStaffSender(latestCustomerMsg.senderName, latestCustomerMsg.senderRole)
+            ? latestCustomerMsg.senderName
+            : null;
+
+        const liveSession = allStaffChatSessions.find((cs) => cs.id === s.id);
+        const sessionName =
+          liveSession?.customerName &&
+          liveSession.customerName !== "Customer" &&
+          !isStaffSender(liveSession.customerName, null)
+            ? liveSession.customerName
+            : (s.customerName && s.customerName !== "Customer" && !isStaffSender(s.customerName, null)
+                ? s.customerName
+                : null);
+
+        const resolvedCustomerName =
+          latestCustomerSender ||
+          sessionName ||
+          (!isStaffSender(s.customerName, null) ? s.customerName : "Customer") ||
+          "Customer";
+
+        if (resolvedCustomerName !== "Customer" && !isStaffSender(resolvedCustomerName, null)) {
+          s.customerName = resolvedCustomerName;
+          if (liveSession) liveSession.customerName = resolvedCustomerName;
         }
 
-        if (activeStaffChatSessionId === s.id && unread > 0) {
-          markOrderMessagesAsRead(s.id, "staff", isSupport);
-          staffSessionUnreadCounts.set(s.id, 0);
+        const isInitialSnapshot = !staffSessionInitialSnapshotLoaded.has(s.id);
+        if (isInitialSnapshot) {
+          staffSessionInitialSnapshotLoaded.set(s.id, true);
+        }
+
+        // New unread customer message notification:
+        // Only trigger if:
+        // 1. Not the initial snapshot loading upon opening the page
+        // 2. Unread count has increased
+        // 3. Staff is not currently viewing this session
+        // 4. There is an actual customer message to preview
+        if (!isInitialSnapshot && unread > prevUnread && activeStaffChatSessionId !== s.id && latestCustomerMsg) {
+          playStaffChatNotificationSound();
+          const { mediaUrl, displayText } = parseChatMessageContent(latestCustomerMsg);
+          const preview = displayText || (mediaUrl ? "Sent a photo attachment" : "Sent a message");
+          showStaffChatNotificationToast(preview, s, resolvedCustomerName);
+          notifyNewChatMessage(preview, s, { role: "staff", customerName: resolvedCustomerName });
         }
 
         updateStaffNavChatBadge();
         renderStaffChatSessionsList(allStaffChatSessions);
-      });
+      }
 
-      staffSessionMessageUnsubs.set(s.id, unsub);
+      const unsubs = [];
+      if (isSupport) {
+        unsubs.push(
+          onSnapshot(collection(db, "users", cleanUid, "messages"), processStaffSnapshotDocs)
+        );
+      } else {
+        unsubs.push(
+          onSnapshot(collection(db, "orders", s.id, "messages"), processStaffSnapshotDocs)
+        );
+      }
+
+      staffSessionMessageUnsubs.set(s.id, () => {
+        unsubs.forEach((u) => {
+          try {
+            u();
+          } catch (_) {}
+        });
+      });
     });
   }
 
@@ -5793,6 +5954,8 @@ function setupStaffLiveChat() {
       }
       if (s.isClosed) return false;
 
+      const sUnread = (staffSessionUnreadCounts.get(s.id) || 0) > 0 || Boolean(s.hasUnreadStaff);
+      if (currentStaffChatFilter === "unread") return sUnread;
       if (currentStaffChatFilter === "support") return s.sessionType === "support";
       if (currentStaffChatFilter === "orders") return s.sessionType === "order";
       return true;
@@ -5835,10 +5998,10 @@ function setupStaffLiveChat() {
     }
 
     const sorted = [...filteredSessions].sort((a, b) => {
-      const unreadA = staffSessionUnreadCounts.get(a.id) || 0;
-      const unreadB = staffSessionUnreadCounts.get(b.id) || 0;
-      if (unreadA > 0 && unreadB === 0) return -1;
-      if (unreadB > 0 && unreadA === 0) return 1;
+      const isUnreadA = (staffSessionUnreadCounts.get(a.id) || 0) > 0 || Boolean(a.hasUnreadStaff);
+      const isUnreadB = (staffSessionUnreadCounts.get(b.id) || 0) > 0 || Boolean(b.hasUnreadStaff);
+      if (isUnreadA && !isUnreadB) return -1;
+      if (isUnreadB && !isUnreadA) return 1;
 
       const timeA =
         staffSessionLatestMessages.get(a.id)?.timeMs ||
@@ -5856,7 +6019,9 @@ function setupStaffLiveChat() {
     sessionsListEl.innerHTML = "";
     sorted.forEach((s) => {
       const isSelected = s.id === activeStaffChatSessionId;
-      const unreadCount = staffSessionUnreadCounts.get(s.id) || 0;
+      const msgUnread = staffSessionUnreadCounts.get(s.id) || 0;
+      const isUnread = msgUnread > 0 || Boolean(s.hasUnreadStaff);
+      const unreadCount = msgUnread > 0 ? msgUnread : (isUnread ? 1 : 0);
       const latestInfo = staffSessionLatestMessages.get(s.id);
       const displayMessage = latestInfo?.text || s.lastMessage || "No messages yet";
       const isSupport = s.sessionType === "support";
@@ -5867,23 +6032,18 @@ function setupStaffLiveChat() {
         : "";
 
       const item = document.createElement("div");
-      item.className = "chat-session-item";
+      item.className = `chat-session-item ${isSelected ? "is-selected" : ""} ${isUnread ? "has-unread" : ""}`;
       item.setAttribute("data-session-id", s.id);
-      item.style.cssText = `padding: 12px 14px; border-bottom: 1px solid #f3f4f6; cursor: pointer; background: ${
-        isSelected ? "#eff6ff" : unreadCount > 0 ? "#fef2f2" : "#fff"
-      }; border-left: ${
-        isSelected ? "4px solid #3b82f6" : unreadCount > 0 ? "4px solid #ef4444" : "4px solid transparent"
-      }; transition: background 0.15s;`;
 
       item.innerHTML = `
         <div style="display: flex; gap: 10px; align-items: flex-start;">
           ${renderAvatarHtml(s.photoURL, s.customerName, isSupport, 38)}
           <div style="flex: 1; min-width: 0;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-              <strong style="font-size: 0.85rem; color: ${unreadCount > 0 ? "#991b1b" : "#111827"}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 175px;">
+              <strong style="font-size: 0.85rem; color: ${isUnread ? "#991b1b" : "#111827"}; font-weight: ${isUnread ? "700" : "600"}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 175px;">
                 ${escapeHtml(s.customerName || "Customer")}
               </strong>
-              <span style="font-size: 0.70rem; color: #9ca3af; flex-shrink: 0;">${timeStr}</span>
+              <span style="font-size: 0.70rem; color: ${isUnread ? "#ef4444" : "#9ca3af"}; font-weight: ${isUnread ? "600" : "400"}; flex-shrink: 0;">${timeStr}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
               ${
@@ -5900,17 +6060,17 @@ function setupStaffLiveChat() {
                   : ""
               }
               ${
-                unreadCount > 0
-                  ? `<span style="margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount}</span>`
+                isUnread
+                  ? `<span class="chat-unread-indicator-badge" style="margin-left: auto; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; min-width: 18px; text-align: center; line-height: 1.2; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">${unreadCount > 99 ? "99+" : unreadCount}</span>`
                   : ""
               }
             </div>
             <div style="font-size: 0.78rem; color: ${
-              unreadCount > 0 ? "#111827" : "#6b7280"
+              isUnread ? "#0f172a" : "#6b7280"
             }; font-weight: ${
-              unreadCount > 0 ? "600" : "400"
+              isUnread ? "600" : "400"
             }; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-              ${unreadCount > 0 ? '<span style="color: #ef4444; margin-right: 4px;">●</span>' : ""}${escapeHtml(displayMessage)}
+              ${isUnread ? '<span style="color: #ef4444; margin-right: 4px; font-weight: bold;">●</span>' : ""}${escapeHtml(displayMessage)}
             </div>
           </div>
         </div>
@@ -5960,7 +6120,9 @@ function setupStaffLiveChat() {
     }
 
     staffSessionUnreadCounts.set(session.id, 0);
+    session.hasUnreadStaff = false;
     updateStaffNavChatBadge();
+    renderStaffChatSessionsList(allStaffChatSessions);
     markOrderMessagesAsRead(session.id, "staff", isSupport);
 
     // Header Avatar
@@ -6245,18 +6407,18 @@ function setupStaffLiveChat() {
       };
     }
 
-    activeStaffChatUnsubscribe = subscribeToMessages(session.id, (messages) => {
-      if (!messagesEl) return;
+    activeStaffChatUnsubscribe = subscribeToMessages(
+      session.id,
+      (messages) => {
+        if (!messagesEl) return;
+        allLoadedMessages = messages;
+        renderMessageBatch();
 
-      markOrderMessagesAsRead(session.id, "staff", isSupport);
-      staffSessionUnreadCounts.set(session.id, 0);
-      updateStaffNavChatBadge();
-
-      allLoadedMessages = messages;
-      renderMessageBatch();
-
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }, null, isSupport);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      null,
+      isSupport
+    );
   }
 
   if (chatForm) {
@@ -6307,6 +6469,13 @@ function setupStaffLiveChat() {
 
         if (chatInput) chatInput.value = "";
         setReplyingMessage(null);
+
+        // Sending a reply explicitly clears unread state for this active conversation
+        staffSessionUnreadCounts.set(activeStaffChatSessionId, 0);
+        if (activeSession) activeSession.hasUnreadStaff = false;
+        updateStaffNavChatBadge();
+        renderStaffChatSessionsList(allStaffChatSessions);
+        markOrderMessagesAsRead(activeStaffChatSessionId, "staff", isSupport);
       } catch (err) {
         console.error("Chat send error:", err);
         showToast(err.message || "Failed to send reply.", "error");

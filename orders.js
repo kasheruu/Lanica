@@ -54,6 +54,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-storage.js";
 import {
   doc,
+  getDoc,
   updateDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
@@ -1802,10 +1803,10 @@ function setupLiveChatWidget() {
       const isOpening = !drawer.classList.contains("active");
       drawer.classList.toggle("active");
       if (isOpening) {
-        if (unreadBadge) unreadBadge.style.display = "none";
         if (!chatScreen?.classList.contains("active")) {
           showScreen("menu");
         } else {
+          if (unreadBadge) unreadBadge.style.display = "none";
           setTimeout(() => {
             textInput?.focus();
             scrollChatToBottom();
@@ -1824,6 +1825,9 @@ function setupLiveChatWidget() {
   if (openLiveChatBtn) {
     openLiveChatBtn.addEventListener("click", () => {
       showScreen("chat");
+      if (unreadBadge) unreadBadge.style.display = "none";
+      const menuBadge = openLiveChatBtn.querySelector(".method-unread-badge");
+      if (menuBadge) menuBadge.style.display = "none";
       switchChannel("support");
       setTimeout(() => textInput?.focus(), 150);
     });
@@ -2256,20 +2260,34 @@ function setupLiveChatWidget() {
 
   let lastNotifiedStaffMsgId = null;
 
+  let customerDisplayName = "";
   function initUserChat(user) {
     if (!user) return;
+    customerDisplayName = user.displayName || "";
+    try {
+      getDoc(doc(db, "users", user.uid)).then((uSnap) => {
+        if (uSnap.exists()) {
+          const ud = uSnap.data();
+          customerDisplayName =
+            ud.displayName ||
+            ud.name ||
+            ud.fullName ||
+            (ud.firstName ? `${ud.firstName} ${ud.lastName || ""}`.trim() : "") ||
+            customerDisplayName;
+        }
+      }).catch(() => {});
+    } catch (_) {}
+
     initNotifications();
     renderChannelBar();
 
     if (supportUnreadUnsubscribe) supportUnreadUnsubscribe();
     supportUnreadUnsubscribe = subscribeToUserSupportMessages(user.uid, (messages) => {
-      let latestIncomingStaffMsg = null;
-      let hasUnread = false;
-
+      let unreadCount = 0;
       messages.forEach((m) => {
         const isFromStaff = m.senderRole === "admin" || m.senderRole === "staff" || m.senderId === "support_admin";
-        if (isFromStaff && m.isRead === false) {
-          hasUnread = true;
+        if (isFromStaff && m.isRead !== true && m.read !== true) {
+          unreadCount++;
           latestIncomingStaffMsg = m;
         }
       });
@@ -2280,8 +2298,32 @@ function setupLiveChatWidget() {
         notifyNewChatMessage(preview, { id: user.uid, customerName: "Lanica Support" }, { role: "customer" });
       }
 
-      if (hasUnread && unreadBadge && !drawer?.classList.contains("active")) {
-        unreadBadge.style.display = "block";
+      const isChatOpen = drawer?.classList.contains("active") && chatScreen?.classList.contains("active");
+      if (unreadBadge) {
+        if (unreadCount > 0 && !isChatOpen) {
+          unreadBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+          unreadBadge.style.display = "block";
+        } else if (isChatOpen) {
+          unreadBadge.style.display = "none";
+        }
+      }
+
+      if (openLiveChatBtn) {
+        let menuBadge = openLiveChatBtn.querySelector(".method-unread-badge");
+        if (unreadCount > 0 && !isChatOpen) {
+          if (!menuBadge) {
+            menuBadge = document.createElement("span");
+            menuBadge.className = "method-unread-badge";
+            menuBadge.style.cssText = "margin-left: auto; margin-right: 8px; background: #ef4444; color: #fff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; line-height: 1.2; box-shadow: 0 1px 3px rgba(239,68,68,0.4);";
+            const chevron = openLiveChatBtn.querySelector(".method-chevron");
+            if (chevron) openLiveChatBtn.insertBefore(menuBadge, chevron);
+            else openLiveChatBtn.appendChild(menuBadge);
+          }
+          menuBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+          menuBadge.style.display = "inline-block";
+        } else if (menuBadge) {
+          menuBadge.style.display = "none";
+        }
       }
     });
   }
@@ -2335,13 +2377,18 @@ function setupLiveChatWidget() {
             }
           : null;
 
+        const senderNameVal =
+          customerDisplayName ||
+          currentUser.displayName ||
+          (currentUser.email ? currentUser.email.split("@")[0] : "Customer");
+
         if (currentChannel === "support") {
           await sendChatMessage({
             userId: currentUser.uid,
             sessionType: "support",
             isUserSupport: true,
             senderId: currentUser.uid,
-            senderName: currentUser.displayName || currentUser.email || "Customer",
+            senderName: senderNameVal,
             senderRole: "customer",
             receiverId: "support_admin",
             text: text,
@@ -2357,7 +2404,7 @@ function setupLiveChatWidget() {
             orderId: activeChatOrderId,
             sessionType: "order",
             senderId: currentUser.uid,
-            senderName: currentUser.displayName || currentUser.email || "Customer",
+            senderName: senderNameVal,
             senderRole: "customer",
             receiverId: "staff",
             text: text,

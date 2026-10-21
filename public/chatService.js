@@ -101,6 +101,58 @@ export async function getOrCreateUserChatSession(orderIdOrUserId, userEmail = ""
 }
 
 /**
+ * Resolves the true customer display name from Firestore (users or orders collections)
+ * if senderName was omitted, empty, or defaulted to "Customer".
+ */
+async function resolveCustomerName(senderId, targetOrderId, providedName) {
+  let name = String(providedName || "").trim();
+  if (name && name.toLowerCase() !== "customer" && name.toLowerCase() !== "user") {
+    return name;
+  }
+
+  const cleanUserId = senderId ? String(senderId).replace(/^user_/, "") : "";
+  if (cleanUserId) {
+    try {
+      const uSnap = await getDoc(doc(db, "users", cleanUserId));
+      if (uSnap.exists()) {
+        const u = uSnap.data();
+        const found =
+          u.displayName ||
+          u.name ||
+          u.fullName ||
+          (u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : "") ||
+          u.customerName ||
+          u.customerDisplayName ||
+          (u.email ? u.email.split("@")[0] : "");
+        if (found && found.trim() && found.trim().toLowerCase() !== "customer") {
+          return found.trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (targetOrderId) {
+    try {
+      const oSnap = await getDoc(doc(db, "orders", targetOrderId));
+      if (oSnap.exists()) {
+        const o = oSnap.data();
+        const found =
+          o.address?.recipientName ||
+          o.userName ||
+          o.customerName ||
+          o.customerDisplayName ||
+          "";
+        if (found && found.trim() && found.trim().toLowerCase() !== "customer") {
+          return found.trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  return name || "Customer";
+}
+
+/**
  * Sends a message into users/{userId}/messages (Customer overall concern live support chat).
  * Stores all fields compatible with mobile app ('content', 'type', 'receiverId', 'timestamp', 'isRead', 'isUnsent')
  * and web app ('text', 'message', 'attachmentUrl', 'imageUrl', 'createdAt').
@@ -119,20 +171,29 @@ export async function sendUserSupportMessage({
   if (!senderId) throw new Error("Sender ID is required.");
   if (!text.trim() && !attachmentUrl) throw new Error("Cannot send an empty message.");
 
-  const messagesColRef = collection(db, "users", userId, "messages");
-  const userDocRef = doc(db, "users", userId);
+  const cleanUserId = userId.startsWith("user_") ? userId.replace(/^user_/, "") : userId;
+  const messagesColRef = collection(db, "users", cleanUserId, "messages");
+  const userDocRef = doc(db, "users", cleanUserId);
 
   const messageText = text.trim();
   const fileUrl = attachmentUrl || null;
   const isCustomer = senderRole === "customer";
-  const defaultReceiverId = isCustomer ? "support_admin" : userId;
+  const defaultReceiverId = isCustomer ? "support_admin" : cleanUserId;
+
+  let finalSenderName = senderName;
+  if (isCustomer && (!finalSenderName || finalSenderName.toLowerCase() === "customer")) {
+    finalSenderName = await resolveCustomerName(senderId || cleanUserId, null, senderName);
+  }
+  if (!finalSenderName) {
+    finalSenderName = isCustomer ? "Customer" : "Lanica Support";
+  }
 
   const messagePayload = {
     senderId,
-    senderName: senderName || (isCustomer ? "Customer" : "Lanica Support"),
+    senderName: finalSenderName,
     senderRole,
     receiverId: receiverId || defaultReceiverId,
-    userId: userId,
+    userId: cleanUserId,
 
     // Web fields
     text: messageText,
@@ -166,12 +227,15 @@ export async function sendUserSupportMessage({
     lastMessage: messageText || (fileUrl ? "[Photo Attachment]" : ""),
     lastMessageAt: serverTimestamp(),
     lastSenderRole: senderRole,
-    lastSenderName: senderName || (isCustomer ? "Customer" : "Lanica Support"),
+    lastSenderName: finalSenderName,
     hasUnreadStaff: isCustomer,
     hasUnreadCustomer: !isCustomer,
     isChatClosed: false,
     chatStatus: "open",
   };
+  if (isCustomer && finalSenderName && finalSenderName !== "Customer") {
+    summaryUpdate.displayName = finalSenderName;
+  }
 
   await setDoc(userDocRef, summaryUpdate, { merge: true }).catch(() => {});
 
@@ -229,7 +293,7 @@ export function subscribeToUserSupportMessages(userId, callback, errorCallback) 
           isSystem,
           receiverId: d.receiverId || "",
           type: d.type ?? (fileUrl ? 1 : 0),
-          isRead: d.isRead ?? true,
+          isRead: d.isRead === true || d.read === true,
           isEdited: Boolean(d.isEdited),
           isUnsent: Boolean(d.isUnsent),
           replyTo: d.replyTo || null,
@@ -277,9 +341,9 @@ export async function markUserSupportMessagesAsRead(userId, role = "admin") {
         data.senderRole === "staff" ||
         data.senderId === "support_admin";
 
-      if ((role === "admin" || role === "staff") && !isFromStaff && data.isRead === false) {
+      if ((role === "admin" || role === "staff") && !isFromStaff && data.isRead !== true && data.read !== true) {
         unreadDocs.push(d.ref);
-      } else if (role === "customer" && isFromStaff && data.isRead === false) {
+      } else if (role === "customer" && isFromStaff && data.isRead !== true && data.read !== true) {
         unreadDocs.push(d.ref);
       }
     });
@@ -353,9 +417,17 @@ export async function sendChatMessage({
   const isCustomer = senderRole === "customer";
   const defaultReceiverId = isCustomer ? "support_admin" : "customer";
 
+  let finalSenderName = senderName;
+  if (isCustomer && (!finalSenderName || finalSenderName.toLowerCase() === "customer")) {
+    finalSenderName = await resolveCustomerName(senderId, targetOrderId, senderName);
+  }
+  if (!finalSenderName) {
+    finalSenderName = isCustomer ? "Customer" : "Lanica Workshop";
+  }
+
   const messagePayload = {
     senderId,
-    senderName: senderName || (isCustomer ? "Customer" : "Lanica Workshop"),
+    senderName: finalSenderName,
     senderRole,
     receiverId: receiverId || defaultReceiverId,
     orderId: targetOrderId,
@@ -391,20 +463,33 @@ export async function sendChatMessage({
     lastMessage: messageText || (fileUrl ? "[Photo Attachment]" : ""),
     lastMessageAt: serverTimestamp(),
     lastSenderRole: senderRole,
-    lastSenderName: senderName || senderRole,
+    lastSenderName: finalSenderName,
     hasUnreadCustomer: !isCustomer,
     hasUnreadStaff: isCustomer,
     isChatClosed: false,
     chatStatus: "open",
   };
 
-  await updateDoc(orderDocRef, summaryUpdate).catch(() => {});
+  await setDoc(orderDocRef, summaryUpdate, { merge: true }).catch((err) => {
+    console.warn("Could not update order chat summary:", err);
+  });
+
+  // Cross-Platform Dual-Write: Mirror message to mobile app collection 'order_chats/{orderId}/messages'
+  try {
+    const mobileChatDocRef = doc(db, "order_chats", targetOrderId, "messages", docRef.id);
+    await setDoc(mobileChatDocRef, messagePayload);
+    await setDoc(doc(db, "order_chats", targetOrderId), summaryUpdate, { merge: true }).catch(() => {});
+  } catch (err) {
+    console.warn("Could not mirror chat message to order_chats collection:", err);
+  }
 
   return { id: docRef.id, ...messagePayload };
 }
 
 /**
  * Subscribes to real-time messages for either an order or a user support thread.
+ * Unified Dual-Listener: Listens to BOTH 'orders/{id}/messages' (web/app) AND 'order_chats/{id}/messages' (app)
+ * to ensure 100% real-time synchronization between the mobile application and website.
  */
 export function subscribeToMessages(targetId, callback, errorCallback, isUserSupport = false) {
   if (!targetId) {
@@ -416,77 +501,117 @@ export function subscribeToMessages(targetId, callback, errorCallback, isUserSup
     return subscribeToUserSupportMessages(targetId, callback, errorCallback);
   }
 
-  const messagesColRef = collection(db, "orders", targetId, "messages");
+  const ordersColRef = collection(db, "orders", targetId, "messages");
+  const orderChatsColRef = collection(db, "order_chats", targetId, "messages");
 
-  return onSnapshot(
-    messagesColRef,
+  const combinedMessagesMap = new Map();
+
+  function parseDoc(docSnap, sourceCol) {
+    const d = docSnap.data();
+    const textContent = d.content || d.text || d.message || "";
+    const fileUrl = d.attachmentUrl || d.imageUrl || (d.type === 1 ? d.content : "") || "";
+    const isSystem =
+      Boolean(d.isSystem) ||
+      d.senderRole === "system" ||
+      d.senderRole === "bot" ||
+      d.sender === "system" ||
+      d.senderId === "system" ||
+      (typeof d.senderName === "string" &&
+        (d.senderName.toLowerCase().includes("system") || d.senderName.toLowerCase().includes("bot")));
+
+    const isFromStaff =
+      !isSystem &&
+      (d.senderRole === "admin" ||
+        d.senderRole === "staff" ||
+        d.senderId === "support_admin");
+
+    return {
+      id: docSnap.id,
+      orderId: targetId,
+      sessionType: "order",
+      content: textContent,
+      text: textContent,
+      message: textContent,
+      attachmentUrl: fileUrl,
+      imageUrl: fileUrl,
+      senderId: d.senderId,
+      senderName: isSystem
+        ? d.senderName || "Lanica System"
+        : d.senderName || (isFromStaff ? "Lanica Workshop" : "Customer"),
+      senderRole: isSystem ? "system" : d.senderRole || (isFromStaff ? "admin" : "customer"),
+      isSystem,
+      receiverId: d.receiverId || "",
+      type: d.type ?? (fileUrl ? 1 : 0),
+      isRead: d.isRead === true || d.read === true,
+      isEdited: Boolean(d.isEdited),
+      isUnsent: Boolean(d.isUnsent),
+      replyTo: d.replyTo || null,
+      photoURL: d.photoURL || d.senderPhoto || d.senderPhotoURL || d.avatarUrl || d.senderAvatar || "",
+      createdAt: d.timestamp || d.createdAt,
+      timestamp: d.timestamp || d.createdAt,
+      sourceCol,
+    };
+  }
+
+  function emitUnified() {
+    const messages = Array.from(combinedMessagesMap.values());
+    messages.sort((a, b) => {
+      const getMs = (m) =>
+        m.timestamp?.toMillis?.() ||
+        m.createdAt?.toMillis?.() ||
+        (m.timestamp?.seconds ? m.timestamp.seconds * 1000 : 0) ||
+        (m.createdAt?.seconds ? m.createdAt.seconds * 1000 : 0) ||
+        0;
+      return getMs(a) - getMs(b);
+    });
+    callback(messages);
+  }
+
+  const unsubOrders = onSnapshot(
+    ordersColRef,
     (snapshot) => {
-      const messages = [];
       snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        const textContent = d.content || d.text || d.message || "";
-        const fileUrl = d.attachmentUrl || d.imageUrl || (d.type === 1 ? d.content : "") || "";
-        const isSystem =
-          Boolean(d.isSystem) ||
-          d.senderRole === "system" ||
-          d.senderRole === "bot" ||
-          d.sender === "system" ||
-          d.senderId === "system" ||
-          (typeof d.senderName === "string" && (d.senderName.toLowerCase().includes("system") || d.senderName.toLowerCase().includes("bot")));
-
-        const isFromStaff =
-          !isSystem &&
-          (d.senderRole === "admin" ||
-          d.senderRole === "staff" ||
-          d.senderId === "support_admin");
-
-        messages.push({
-          id: docSnap.id,
-          orderId: targetId,
-          sessionType: "order",
-          content: textContent,
-          text: textContent,
-          message: textContent,
-          attachmentUrl: fileUrl,
-          imageUrl: fileUrl,
-          senderId: d.senderId,
-          senderName: isSystem ? (d.senderName || "Lanica System") : (d.senderName || (isFromStaff ? "Lanica Workshop" : "Customer")),
-          senderRole: isSystem ? "system" : (d.senderRole || (isFromStaff ? "admin" : "customer")),
-          isSystem,
-          receiverId: d.receiverId || "",
-          type: d.type ?? (fileUrl ? 1 : 0),
-          isRead: d.isRead ?? true,
-          isEdited: Boolean(d.isEdited),
-          isUnsent: Boolean(d.isUnsent),
-          replyTo: d.replyTo || null,
-          photoURL: d.photoURL || d.senderPhoto || d.senderPhotoURL || d.avatarUrl || d.senderAvatar || "",
-          createdAt: d.timestamp || d.createdAt,
-          timestamp: d.timestamp || d.createdAt,
-        });
+        combinedMessagesMap.set(docSnap.id, parseDoc(docSnap, "orders"));
       });
-
-      // Robust client-side sort supporting timestamp (mobile) and createdAt (web)
-      messages.sort((a, b) => {
-        const getMs = (m) =>
-          m.timestamp?.toMillis?.() ||
-          m.createdAt?.toMillis?.() ||
-          (m.timestamp?.seconds ? m.timestamp.seconds * 1000 : 0) ||
-          (m.createdAt?.seconds ? m.createdAt.seconds * 1000 : 0) ||
-          0;
-        return getMs(a) - getMs(b);
-      });
-
-      callback(messages);
+      emitUnified();
     },
     (err) => {
       console.warn(`Error subscribing to orders/${targetId}/messages:`, err);
       if (errorCallback) errorCallback(err);
     }
   );
+
+  let unsubOrderChats = () => {};
+  try {
+    unsubOrderChats = onSnapshot(
+      orderChatsColRef,
+      (snapshot) => {
+        snapshot.forEach((docSnap) => {
+          combinedMessagesMap.set(docSnap.id, parseDoc(docSnap, "order_chats"));
+        });
+        emitUnified();
+      },
+      (err) => {
+        // order_chats might not exist yet for brand new orders, ignore gracefully
+      }
+    );
+  } catch (err) {
+    console.warn("Could not listen to order_chats:", err);
+  }
+
+  return () => {
+    try {
+      unsubOrders();
+    } catch (_) {}
+    try {
+      unsubOrderChats();
+    } catch (_) {}
+  };
 }
 
 /**
  * Marks messages in an order or user support thread as read.
+ * Checks both 'orders/{id}/messages' and 'order_chats/{id}/messages'.
  */
 export async function markOrderMessagesAsRead(targetId, role = "admin", isUserSupport = false) {
   if (!targetId) return;
@@ -496,23 +621,26 @@ export async function markOrderMessagesAsRead(targetId, role = "admin", isUserSu
   }
 
   try {
-    const messagesColRef = collection(db, "orders", targetId, "messages");
-    const snap = await getDocs(messagesColRef);
     const unreadDocs = [];
-
-    snap.forEach((d) => {
+    const checkDoc = (d) => {
       const data = d.data();
       const isFromStaff =
         data.senderRole === "admin" ||
         data.senderRole === "staff" ||
         data.senderId === "support_admin";
 
-      if ((role === "admin" || role === "staff") && !isFromStaff && data.isRead === false) {
+      if ((role === "admin" || role === "staff") && !isFromStaff && data.isRead !== true && data.read !== true) {
         unreadDocs.push(d.ref);
-      } else if (role === "customer" && isFromStaff && data.isRead === false) {
+      } else if (role === "customer" && isFromStaff && data.isRead !== true && data.read !== true) {
         unreadDocs.push(d.ref);
       }
-    });
+    };
+
+    const snapOrders = await getDocs(collection(db, "orders", targetId, "messages")).catch(() => ({ forEach: () => {} }));
+    const snapOrderChats = await getDocs(collection(db, "order_chats", targetId, "messages")).catch(() => ({ forEach: () => {} }));
+
+    snapOrders.forEach(checkDoc);
+    snapOrderChats.forEach(checkDoc);
 
     if (unreadDocs.length > 0) {
       await Promise.all(
@@ -520,11 +648,9 @@ export async function markOrderMessagesAsRead(targetId, role = "admin", isUserSu
       );
     }
 
-    if (role === "admin" || role === "staff") {
-      await updateDoc(doc(db, "orders", targetId), { hasUnreadStaff: false }).catch(() => {});
-    } else {
-      await updateDoc(doc(db, "orders", targetId), { hasUnreadCustomer: false }).catch(() => {});
-    }
+    const updatePayload = (role === "admin" || role === "staff") ? { hasUnreadStaff: false } : { hasUnreadCustomer: false };
+    await setDoc(doc(db, "orders", targetId), updatePayload, { merge: true }).catch(() => {});
+    await setDoc(doc(db, "order_chats", targetId), updatePayload, { merge: true }).catch(() => {});
   } catch (err) {
     console.warn("Could not mark order messages as read:", err);
   }
@@ -543,28 +669,51 @@ export function subscribeToAllChats(callback, errorCallback) {
   const userProfileMap = new Map();
   const scannedUserIds = new Set();
 
+  const orderChatsMap = new Map();
+
   function enrichOrderSessions() {
     orderSessions = rawOrdersDocs
       .filter((d) => !d.chatDeleted && !d.isChatDeleted)
       .map((d) => {
         const userProfile = userProfileMap.get(d.userId);
-        const isArch = Boolean(d.isArchived || d.chatStatus === "archived" || d.isChatClosed || d.chatStatus === "closed");
+        const oc = orderChatsMap.get(d.id) || orderChatsMap.get(d.orderId);
+        const isArch = Boolean(
+          d.isArchived ||
+          d.chatStatus === "archived" ||
+          d.isChatClosed ||
+          d.chatStatus === "closed" ||
+          oc?.isArchived ||
+          oc?.isChatClosed ||
+          oc?.chatStatus === "archived" ||
+          oc?.chatStatus === "closed"
+        );
+        const resolvedName =
+          d.address?.recipientName ||
+          d.userName ||
+          d.customerName ||
+          d.customerDisplayName ||
+          oc?.customerName ||
+          oc?.customerDisplayName ||
+          userProfile?.name ||
+          userProfile?.displayName ||
+          "Customer";
         return {
           id: d.id,
           sessionType: "order",
           orderId: d.orderId || d.id,
-          userId: d.userId,
-          photoURL: d.customerPhotoURL || d.photoURL || userProfile?.photoURL || "",
-          customerName: d.address?.recipientName || d.userName || d.customerName || userProfile?.name || "Customer",
-          customerEmail: d.customerEmail || d.email || userProfile?.email || "",
-          status: d.orderStatus || d.status || "Placed",
+          userId: d.userId || oc?.userId,
+          photoURL: d.customerPhotoURL || d.photoURL || oc?.customerPhotoURL || userProfile?.photoURL || "",
+          customerName: resolvedName,
+          customerEmail: d.customerEmail || d.email || oc?.customerEmail || userProfile?.email || "",
+          status: d.orderStatus || d.status || oc?.status || "Placed",
           isClosed: isArch,
           isArchived: isArch,
-          lastMessage: d.lastMessage || `Order #${d.orderId || d.id} placed`,
-          updatedAt: d.lastMessageAt || d.createdAt,
-          createdAt: d.createdAt,
+          lastMessage: d.lastMessage || oc?.lastMessage || `Order #${d.orderId || d.id} placed`,
+          updatedAt: d.lastMessageAt || oc?.lastMessageAt || d.createdAt || oc?.createdAt,
+          createdAt: d.createdAt || oc?.createdAt,
           totalAmount: d.totalAmount || 0,
           items: d.items || [],
+          hasUnreadStaff: Boolean(d.hasUnreadStaff || oc?.hasUnreadStaff),
         };
       });
   }
@@ -590,7 +739,7 @@ export function subscribeToAllChats(callback, errorCallback) {
     (snapshot) => {
       rawOrdersDocs = [];
       snapshot.forEach((docSnap) => {
-        rawOrdersDocs.push({ id: docSnap.id, ...docSnap.data() });
+        rawOrdersDocs.push({ ...docSnap.data(), id: docSnap.id });
       });
       enrichOrderSessions();
       emitCombined();
@@ -600,6 +749,28 @@ export function subscribeToAllChats(callback, errorCallback) {
       if (errorCallback) errorCallback(err);
     }
   );
+
+  // 2. Listen to order_chats (cross-platform real-time mobile app compatibility)
+  let unsubOrderChats = () => {};
+  try {
+    const orderChatsColRef = collection(db, "order_chats");
+    unsubOrderChats = onSnapshot(
+      orderChatsColRef,
+      (snapshot) => {
+        orderChatsMap.clear();
+        snapshot.forEach((docSnap) => {
+          orderChatsMap.set(docSnap.id, docSnap.data());
+        });
+        enrichOrderSessions();
+        emitCombined();
+      },
+      (err) => {
+        console.warn("Could not listen to order_chats:", err);
+      }
+    );
+  } catch (err) {
+    console.warn("Could not attach order_chats snapshot listener:", err);
+  }
 
   // 2. Listen to users for overall customer support chat and profile photos
   const usersColRef = collection(db, "users");
@@ -613,7 +784,14 @@ export function subscribeToAllChats(callback, errorCallback) {
         const uid = docSnap.id;
 
         const photo = d.photoURL || d.profilePic || d.avatarUrl || "";
-        const name = d.displayName || d.name || d.fullName || (d.email ? d.email.split("@")[0] : "Customer");
+        const name =
+          d.displayName ||
+          d.name ||
+          d.fullName ||
+          (d.firstName ? `${d.firstName} ${d.lastName || ""}`.trim() : "") ||
+          d.address?.recipientName ||
+          d.lastSenderName ||
+          (d.email ? d.email.split("@")[0] : "Customer");
         userProfileMap.set(uid, {
           photoURL: photo,
           name: name,
@@ -677,6 +855,9 @@ export function subscribeToAllChats(callback, errorCallback) {
   return () => {
     unsubOrders();
     unsubUsers();
+    try {
+      unsubOrderChats();
+    } catch (_) {}
   };
 }
 

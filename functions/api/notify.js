@@ -100,16 +100,17 @@ export async function onRequestPost(context) {
         </div>
       `;
     } else if (type === "new_chat") {
-      subject = `[Lanica] 💬 New Chat Message from ${customerName || "Customer"}`;
+      const chatHeading = orderId ? `Order #${(orderId || "").slice(0, 8)} Message` : "Live Support Message";
+      subject = `[Lanica] 💬 ${chatHeading} from ${customerName || "Customer"}`;
       htmlContent = `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
           <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 24px 32px; color: #ffffff;">
             <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #f8fafc;">Lanica Customer Support</h1>
-            <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">Live Chat Notification</p>
+            <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">${orderId ? `Order #${(orderId || "").slice(0, 8)} Chat Notification` : "Live Chat Notification"}</p>
           </div>
           <div style="padding: 32px;">
             <div style="display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; margin-bottom: 16px;">
-              New Customer Message
+              ${chatHeading}
             </div>
             <p style="margin: 0 0 16px; color: #0f172a; font-size: 15px;">
               <strong>${customerName || "Customer"}</strong> sent a message:

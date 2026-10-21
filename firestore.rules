@@ -70,15 +70,17 @@ service cloud.firestore {
         request.resource.data.totalAmount is number &&
         request.resource.data.totalAmount >= 0;
 
-      // Order update: Staff/Admin can update, or customer can update orderReceived/ratings/cancellation/refunds on their own order
+      // Order update: Staff/Admin can update, or customer can update orderReceived/ratings/cancellation/refunds or chat metadata on their own order
       allow update: if isSignedIn() && (
-        isStaff() || 
-        ((resource.data.userId == request.auth.uid || resource.data.customerId == request.auth.uid) && 
+        isStaff() ||
+        ((resource.data.userId == request.auth.uid || resource.data.customerId == request.auth.uid) &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-           'status', 'orderStatus', 'orderReceived', 'orderReceivedAt', 'completedAt', 
+           'status', 'orderStatus', 'orderReceived', 'orderReceivedAt', 'completedAt',
            'updatedAt', 'rating', 'feedback', 'proofUrl', 'paymentProofUrl',
-           'cancelledAt', 'cancellationReason', 'refundStatus', 'refundReason', 
-           'refundDetails', 'refundRequestedAt'
+           'cancelledAt', 'cancellationReason', 'refundStatus', 'refundReason',
+           'refundDetails', 'refundRequestedAt',
+           'hasUnreadStaff', 'hasUnreadCustomer', 'lastMessage', 'lastMessageAt',
+           'lastSenderRole', 'lastSenderName', 'chatStatus', 'isChatClosed'
          ]))
       );
 
@@ -94,6 +96,14 @@ service cloud.firestore {
     // Allow collection group queries on messages for order chat and notifications
     match /{path=**}/messages/{messageId} {
       allow read, write: if isSignedIn();
+    }
+
+    // Order chats collection (used by mobile app & website real-time sync)
+    match /order_chats/{orderId} {
+      allow read, write: if isSignedIn();
+      match /{allSubcollections=**} {
+        allow read, write: if isSignedIn();
+      }
     }
 
     // --- 4) VERIFICATION COLLECTIONS ---

@@ -207,6 +207,14 @@ export async function showWebPushNotification(title, options = {}) {
  * Sends transactional email alert in background via Cloudflare Pages / Express API.
  */
 export async function sendEmailAlert(payload) {
+  // If running locally under VS Code Live Server (typically ports 5500-5515) without backend routes, skip cleanly
+  if (
+    typeof window !== "undefined" &&
+    (/^55\d{2}$/.test(window.location.port) || window.location.protocol === "file:")
+  ) {
+    return { success: false, skipped: true, reason: "Local static server without backend" };
+  }
+
   try {
     const res = await fetch("/api/notify", {
       method: "POST",
@@ -271,8 +279,8 @@ export async function notifyNewOrder(order, { role = "admin" } = {}) {
  * High-Level Trigger: NEW CHAT MESSAGE NOTIFICATION
  * Called when a new unread message arrives from customer or staff.
  */
-export async function notifyNewChatMessage(messageText, session, { role = "admin" } = {}) {
-  const senderName = session.customerName || session.userName || "Customer";
+export async function notifyNewChatMessage(messageText, session, { role = "admin", customerName = "" } = {}) {
+  const senderName = customerName || session.customerName || session.userName || "Customer";
   const cleanPreview = String(messageText || "Sent a message").slice(0, 100);
   let targetUrl = "/admin.html";
   if (role === "staff") targetUrl = "/staff.html";

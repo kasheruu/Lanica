@@ -25,27 +25,35 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   try {
     const payload = await context.request.json().catch(() => ({}));
-    const { type, title, body, orderId, customerName, totalAmount, previewText, recipientEmail } = payload;
+    const { type, title, body, orderId, customerName, totalAmount, previewText, recipientEmail } =
+      payload;
 
     const apiKey = String(context.env?.RESEND_API_KEY || "").trim();
-    const adminEmail = String(context.env?.ADMIN_NOTIFICATION_EMAIL || context.env?.ADMIN_EMAIL || "").trim();
+    const adminEmail = String(
+      context.env?.ADMIN_NOTIFICATION_EMAIL || context.env?.ADMIN_EMAIL || ""
+    ).trim();
 
     if (!apiKey) {
       console.warn("RESEND_API_KEY environment variable is not configured in Cloudflare Pages.");
       return buildJsonResponse({
         success: false,
         emailSent: false,
-        warning: "RESEND_API_KEY environment variable is not configured in Cloudflare Pages. Please set it in Settings > Environment variables and trigger a redeployment.",
+        warning:
+          "RESEND_API_KEY environment variable is not configured in Cloudflare Pages. Please set it in Settings > Environment variables and trigger a redeployment.",
       });
     }
 
-    const targetRecipient = (type === "new_order" || type === "new_chat") ? (adminEmail || recipientEmail) : (recipientEmail || adminEmail);
+    const targetRecipient =
+      type === "new_order" || type === "new_chat"
+        ? adminEmail || recipientEmail
+        : recipientEmail || adminEmail;
     if (!targetRecipient) {
       console.warn("No recipient email configured. ADMIN_NOTIFICATION_EMAIL is missing.");
       return buildJsonResponse({
         success: false,
         emailSent: false,
-        warning: "No recipient email configured. Set ADMIN_NOTIFICATION_EMAIL in Cloudflare environment variables.",
+        warning:
+          "No recipient email configured. Set ADMIN_NOTIFICATION_EMAIL in Cloudflare environment variables.",
       });
     }
 
@@ -83,7 +91,7 @@ export async function onRequestPost(context) {
               </tr>
             </table>
             <div style="text-align: center; margin-top: 28px;">
-              <a href="https://lanica.pages.dev/admin.html" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Open Admin Orders Hub</a>
+              <a href="https://lanicafurniture.com/login" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Open Admin Orders Hub</a>
             </div>
           </div>
           <div style="background: #f8fafc; padding: 16px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
@@ -92,16 +100,17 @@ export async function onRequestPost(context) {
         </div>
       `;
     } else if (type === "new_chat") {
-      subject = `[Lanica] 💬 New Chat Message from ${customerName || "Customer"}`;
+      const chatHeading = orderId ? `Order #${(orderId || "").slice(0, 8)} Message` : "Live Support Message";
+      subject = `[Lanica] 💬 ${chatHeading} from ${customerName || "Customer"}`;
       htmlContent = `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
           <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 24px 32px; color: #ffffff;">
             <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #f8fafc;">Lanica Customer Support</h1>
-            <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">Live Chat Notification</p>
+            <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">${orderId ? `Order #${(orderId || "").slice(0, 8)} Chat Notification` : "Live Chat Notification"}</p>
           </div>
           <div style="padding: 32px;">
             <div style="display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; margin-bottom: 16px;">
-              New Customer Message
+              ${chatHeading}
             </div>
             <p style="margin: 0 0 16px; color: #0f172a; font-size: 15px;">
               <strong>${customerName || "Customer"}</strong> sent a message:
@@ -110,7 +119,7 @@ export async function onRequestPost(context) {
               "${previewText || "Sent a message / attachment"}"
             </div>
             <div style="text-align: center;">
-              <a href="https://lanica.pages.dev/admin.html" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Reply in Admin Chat</a>
+              <a href="https://lanicafurniture.com/login" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 600; font-size: 14px; border-radius: 8px; display: inline-block;">Reply in Admin Chat</a>
             </div>
           </div>
           <div style="background: #f8fafc; padding: 16px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
